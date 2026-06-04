@@ -35,7 +35,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -43,6 +44,7 @@ button,
 a,
 input,
 select,
+textarea,
 [tabindex] {
   outline-offset: 3px;
 }
@@ -132,13 +134,19 @@ pre {
 }
 
 select,
-input {
+input,
+textarea {
   min-width: 0;
   padding: 9px 10px;
   border: 1px solid #cbd5e1;
   border-radius: 7px;
   color: var(--ink);
   background: #fff;
+}
+
+textarea {
+  width: 100%;
+  resize: vertical;
 }
 
 input[type="search"] {

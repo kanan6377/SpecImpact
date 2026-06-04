@@ -292,6 +292,7 @@ async function loadOverview() {
   }
   if ($("#privacy-doctor")) $("#privacy-doctor").textContent = data.privacy_doctor;
   if ($("#project-pulse")) $("#project-pulse").innerHTML = renderProjectPulse(data);
+  if ($("#health-check")) $("#health-check").innerHTML = renderHealthCheck(data.health_check);
   if ($("#analysis-mode")) $("#analysis-mode").innerHTML = renderAnalysisMode(data);
   if ($("#llm-status")) {
     $("#llm-status").innerHTML = `<div class="status-card"><span>Provider</span><strong>${escapeHtml(
@@ -322,6 +323,32 @@ function renderProjectPulse(data) {
       data.embeddings.enabled ? data.embeddings.provider : "disabled",
       data.embeddings.provider === "openai" ? "外部送信確認あり" : "local retrieval",
     ],
+  ]
+    .map(
+      ([label, value, note]) =>
+        `<div class="pulse-row"><strong>${escapeHtml(label)}: ${escapeHtml(
+          value,
+        )}</strong><span>${escapeHtml(note)}</span></div>`,
+    )
+    .join("");
+}
+
+function renderHealthCheck(health) {
+  if (!health) return '<p class="empty-state">Excel ingest を実行すると表示されます。</p>';
+  const warnings = health.warnings?.length ? health.warnings.join(" / ") : "警告なし";
+  return [
+    ["Workbooks", health.workbooks ?? 0, `${health.sheets ?? 0} sheets`],
+    [
+      "Artifacts",
+      health.detected_artifacts ?? 0,
+      `${health.possible_relations ?? 0} relation candidates`,
+    ],
+    [
+      "Excel shape",
+      `${health.merged_cells ?? 0} merged cells`,
+      `${health.hidden_sheets ?? 0} hidden sheets`,
+    ],
+    ["Alias", `${health.alias_candidates?.length ?? 0} candidates`, warnings],
   ]
     .map(
       ([label, value, note]) =>

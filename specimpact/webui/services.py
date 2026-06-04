@@ -62,6 +62,7 @@ MUTATING_ACTIONS = {
     "ingest_csv",
     "ingest_excel",
     "analyze",
+    "analyze_text",
     "aliases_suggest",
     "alias_decide",
     "alias_remove",
@@ -98,6 +99,7 @@ def project_overview(project: Project) -> dict[str, Any]:
         "project": project.model_dump(),
         "initialized": initialized,
         "counts": counts,
+        "health_check": _health_check(store),
         "latest_run": latest,
         "privacy_doctor": doctor,
         "llm": llm_status(store),
@@ -359,6 +361,22 @@ def execute(project: Project, action: str, params: dict[str, Any]) -> dict[str, 
             confirm=confirm,
         )
         result = {"run_id": report.run_id, "candidates": len(report.impacts)}
+    elif action == "analyze_text":
+        body = str(params.get("body", "")).strip()
+        if not body:
+            raise ValueError("Change request text is required")
+        if not body.startswith("#"):
+            body = f"# GUI Change Request\n\n{body}\n"
+        change_path = store.root / "gui" / "change_request.md"
+        store.write_text(change_path, body)
+        report = analyze_change(
+            store,
+            change_path,
+            yes=approved,
+            no_llm=True,
+            confirm=confirm,
+        )
+        result = {"run_id": report.run_id, "candidates": len(report.impacts)}
     elif action == "aliases_suggest":
         result = {"suggestions": suggest_aliases(store)}
     elif action == "alias_decide":
@@ -487,6 +505,11 @@ def _counts(store: LocalStore) -> dict[str, int]:
 def _latest_run_id(store: LocalStore) -> str | None:
     path = store.root / "latest_run"
     return path.read_text(encoding="utf-8").strip() if path.exists() else None
+
+
+def _health_check(store: LocalStore) -> dict[str, Any] | None:
+    path = store.root / "health_check.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
 def _path(project: Project, params: dict[str, Any], name: str) -> Path:

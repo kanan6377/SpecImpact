@@ -99,6 +99,7 @@ $ specimpact why "カード入会申込API"
             <article class="panel"><h2>Markdown / text directory</h2><form data-job="ingest"><label>Docs directory<input name="path" required placeholder="docs"></label><label>Aliases YAML<input name="aliases" placeholder="aliases.yml"></label><label class="check"><input type="checkbox" name="no_llm"> LLM を一時的に使用しない</label><button class="button primary">Ingest</button></form></article>
             <article class="panel"><h2>Structured loaders</h2><form data-job="ingest_openapi"><label>OpenAPI<input name="path" required placeholder="structured/api.yml"></label><button class="button">OpenAPI ingest</button></form><form data-job="ingest_ddl"><label>DDL<input name="path" required placeholder="structured/schema.sql"></label><button class="button">DDL ingest</button></form><form data-job="ingest_csv"><label>CSV<input name="path" required placeholder="structured/table.csv"></label><button class="button">CSV ingest</button></form><form data-job="ingest_excel"><label>Excel<input name="path" required placeholder="docs または structured/table.xlsx"></label><label>Aliases YAML<input name="aliases" placeholder="aliases.yml"></label><button class="button">Excel ingest</button></form></article>
           </div>
+          <article class="panel"><h2>Excel Health Check</h2><div id="health-check" class="pulse-list"></div></article>
           <article class="panel"><h2>Managed upload</h2><p>ファイルは案件内の <code>.specimpact/uploads/</code> に新規保存されます。</p><form id="upload-form"><label>Workflow<select name="workflow"><option>docs</option><option>change</option><option>aliases</option><option>openapi</option><option>ddl</option><option>table</option><option>review</option><option>eval</option></select></label><label>Files<input type="file" name="files" multiple required></label><button class="button">Upload</button></form><pre id="upload-result"></pre></article>
         </section>
         <section class="page" data-view="analyze">
@@ -117,6 +118,7 @@ $ specimpact why "カード入会申込API"
             </div>
           </article>
           <article class="panel"><form data-job="analyze" class="inline-form"><label>Change request<input name="path" required placeholder="changes/change_credit_limit.md"></label><label class="check"><input type="checkbox" name="no_llm"> local-only / --no-llm</label><button class="button primary">Analyze impact</button></form><p class="field-help">LLM 有効時も候補は local graph から出発します。外部 provider を使う job は送信前に必ず確認します。</p></article>
+          <article class="panel"><h2>変更依頼テキスト</h2><form data-job="analyze_text"><label>Change request text<textarea name="body" required rows="6" placeholder="入会申込画面の「利用限度額」の上限を999万円から9999万円に変更する。"></textarea></label><button class="button primary">テキストから解析</button></form><p class="field-help">入力内容は案件内のローカルファイルに保存して解析します。外部送信は行いません。</p></article>
           <div class="grid report-layout"><article class="panel"><h2>Run history</h2><div id="run-history"></div></article><article class="panel"><h2>Latest report</h2><div id="report"></div></article></div>
         </section>
         <section class="page" data-view="graph">
