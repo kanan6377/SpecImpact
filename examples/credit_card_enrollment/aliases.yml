@@ -1,0 +1,49 @@
+aliases:
+  entity.application.requested_credit_limit:
+    canonical_type: BusinessField
+    aliases: [希望利用限度額, 希望限度額, 利用限度額, requestedCreditLimit, requested_credit_limit]
+  api.card_application.submit:
+    canonical_type: API
+    aliases: [カード入会申込API, 入会申込API, CardApplicationSubmitAPI]
+  api.credit_screening:
+    canonical_type: API
+    aliases: [信用審査API, credit screening api]
+  validation.requested_credit_limit:
+    canonical_type: ValidationRule
+    aliases: [希望利用限度額チェック, 利用限度額チェック]
+  column.card_application.requested_credit_limit:
+    canonical_type: Column
+    aliases: [CARD_APPLICATION.requested_credit_limit]
+  entity.application.annual_income:
+    canonical_type: BusinessField
+    aliases: [年収, annualIncome, annual_income]
+  entity.application.address:
+    canonical_type: BusinessField
+    aliases: [住所, address]
+  screen.application_entry:
+    canonical_type: Screen
+    aliases: [カード入会申込画面]
+  screen.application_confirm:
+    canonical_type: Screen
+    aliases: [入会申込確認画面]
+  validation.annual_income:
+    canonical_type: ValidationRule
+    aliases: [年収チェック]
+  external_if.identity_verification:
+    canonical_type: ExternalIF
+    aliases: [本人確認サービス, 本人確認外部IF]
+  external_if.credit_bureau:
+    canonical_type: ExternalIF
+    aliases: [信用情報照会サービス]
+  external_if.fraud_check:
+    canonical_type: ExternalIF
+    aliases: [不正検知サービス, 不正検知外部IF]
+  external_if.mail_notification:
+    canonical_type: ExternalIF
+    aliases: [メール通知サービス]
+  test.credit_limit_upper_bound:
+    canonical_type: TestCase
+    aliases: [希望利用限度額の上限超過]
+  test.credit_limit_income_ratio:
+    canonical_type: TestCase
+    aliases: [年収に対して希望利用限度額が高い場合]

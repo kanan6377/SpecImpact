@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:specimpact:schema:v1:impact",
+  "title": "SpecImpact Impact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifact_id", "display_name", "artifact_type", "review_priority", "evidence_strength", "match_type", "relation_distance", "rule_assessment", "reason", "relation_paths", "evidence_ids", "relation_statuses", "needs_review"],
+  "properties": {
+    "artifact_id": {"type": "string"},
+    "display_name": {"type": "string"},
+    "artifact_type": {"type": "string"},
+    "review_priority": {"enum": ["must_review", "should_review", "may_review", "hidden"]},
+    "evidence_strength": {"enum": ["strong", "medium", "weak", "none"]},
+    "match_type": {"enum": ["exact", "alias", "semantic", "inferred"]},
+    "relation_distance": {"type": "integer", "minimum": 0},
+    "rule_assessment": {"enum": ["direct_match", "explicit_relation", "alias_mention", "inferred_relation"]},
+    "reason": {"type": "string"},
+    "relation_paths": {"type": "array", "items": {"type": "string"}},
+    "evidence_ids": {"type": "array", "items": {"type": "string"}},
+    "relation_statuses": {"type": "array", "items": {"enum": ["confirmed", "unconfirmed", "rejected"]}},
+    "needs_review": {"type": "boolean"},
+    "llm_judgement": {"enum": ["impact", "possible", "unknown", "no_impact"]},
+    "llm_reason": {"type": "string"},
+    "selected_evidence_ids": {"type": "array", "items": {"type": "string"}}
+  }
+}

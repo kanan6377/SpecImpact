@@ -1,0 +1,12 @@
+[
+  {
+    "artifact_id": "api.card_application.submit",
+    "decision": "confirmed",
+    "note": "Review API request validation."
+  },
+  {
+    "artifact_id": "external_if.mail_notification",
+    "decision": "rejected",
+    "note": "No direct change required."
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "case_id": "change_address_required_rule",
+  "must_review": [
+    "entity.application.address",
+    "api.card_application.submit",
+    "external_if.identity_verification",
+    "external_if.credit_bureau",
+    "external_if.fraud_check"
+  ],
+  "should_review": [
+    "screen.application_entry",
+    "screen.application_confirm",
+    "test.credit_limit_upper_bound",
+    "test.item_81b227b404"
+  ],
+  "may_review": []
+}

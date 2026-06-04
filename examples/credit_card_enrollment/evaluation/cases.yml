@@ -1,0 +1,13 @@
+cases:
+  - case_id: change_credit_limit
+    category: golden
+    change: ../changes/change_credit_limit.md
+    expected: ../expected/change_credit_limit.expected.json
+  - case_id: change_income_review_threshold
+    category: evaluation
+    change: ../changes/change_income_review_threshold.md
+    expected: ../expected/change_income_review_threshold.expected.json
+  - case_id: change_address_required_rule
+    category: evaluation
+    change: ../changes/change_address_required_rule.md
+    expected: ../expected/change_address_required_rule.expected.json

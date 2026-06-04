@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:specimpact:schema:v1:evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["evidence_id", "document_id", "section_id", "chunk_id", "quote", "evidence_type", "supports", "source_location"],
+  "properties": {
+    "evidence_id": {"type": "string"},
+    "document_id": {"type": "string"},
+    "section_id": {"type": "string"},
+    "chunk_id": {"type": "string"},
+    "quote": {"type": "string"},
+    "evidence_type": {"type": "string"},
+    "supports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "id"],
+        "properties": {
+          "type": {"enum": ["entity", "relation", "artifact"]},
+          "id": {"type": "string"}
+        }
+      }
+    },
+    "source_location": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "line_start", "line_end"],
+      "properties": {
+        "file": {"type": "string"},
+        "line_start": {"type": "integer", "minimum": 1},
+        "line_end": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

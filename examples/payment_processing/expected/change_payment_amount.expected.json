@@ -1,0 +1,12 @@
+{
+  "case_id": "change_payment_amount",
+  "must_review": [
+    "entity.payment.amount",
+    "api.payment.submit",
+    "external_if.payment.fraud_gateway"
+  ],
+  "should_review": [
+    "screen.payment.entry"
+  ],
+  "may_review": []
+}

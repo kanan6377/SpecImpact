@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:specimpact:schema:v1:report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "change", "must_review", "should_review", "may_review", "hidden"],
+  "properties": {
+    "run_id": {"type": "string"},
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change_id", "title", "path", "body", "changed_entity_ids"],
+      "properties": {
+        "change_id": {"type": "string"},
+        "title": {"type": "string"},
+        "path": {"type": "string"},
+        "body": {"type": "string"},
+        "changed_entity_ids": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "must_review": {"type": "array", "items": {"$ref": "urn:specimpact:schema:v1:impact"}},
+    "should_review": {"type": "array", "items": {"$ref": "urn:specimpact:schema:v1:impact"}},
+    "may_review": {"type": "array", "items": {"$ref": "urn:specimpact:schema:v1:impact"}},
+    "hidden": {"type": "array", "items": {"$ref": "urn:specimpact:schema:v1:impact"}}
+  }
+}

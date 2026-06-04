@@ -1,0 +1,4 @@
+field_name,display_name,type
+application_id,申込ID,VARCHAR
+requested_credit_limit,希望利用限度額,INTEGER
+screening_status,審査状態,VARCHAR

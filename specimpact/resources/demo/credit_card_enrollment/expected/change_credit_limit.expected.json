@@ -1,0 +1,21 @@
+{
+  "case_id": "change_credit_limit",
+  "must_review": [
+    "entity.application.requested_credit_limit",
+    "entity.application.annual_income",
+    "validation.requested_credit_limit",
+    "validation.annual_income",
+    "api.card_application.submit",
+    "column.card_application.requested_credit_limit",
+    "external_if.fraud_check"
+  ],
+  "should_review": [
+    "screen.application_entry",
+    "screen.application_confirm",
+    "api.credit_screening",
+    "test.credit_limit_upper_bound",
+    "test.credit_limit_income_ratio",
+    "test.item_81b227b404"
+  ],
+  "may_review": []
+}

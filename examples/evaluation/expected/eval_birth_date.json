@@ -1,0 +1,1 @@
+{"must_review":["api.card_application.submit","entity.birthdate","external_if.credit_bureau","external_if.identity_verification"],"should_review":["screen.application_confirm","screen.application_entry","test.credit_limit_upper_bound","test.item_81b227b404"],"may_review":[]}

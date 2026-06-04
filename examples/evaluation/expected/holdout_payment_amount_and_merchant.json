@@ -1,0 +1,1 @@
+{"must_review":["api.payment.submit","entity.payment.amount","entity.payment.merchant_id","external_if.payment.fraud_gateway"],"should_review":["screen.payment.entry"],"may_review":[]}

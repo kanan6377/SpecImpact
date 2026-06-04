@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:specimpact:schema:v1:relation",
+  "title": "SpecImpact Relation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["relation_id", "relation_type", "source_id", "target_id", "evidence_ids", "extraction_method", "polarity", "status", "match_type", "source_document_ids"],
+  "properties": {
+    "relation_id": {"type": "string"},
+    "relation_type": {"type": "string"},
+    "source_id": {"type": "string"},
+    "target_id": {"type": "string"},
+    "evidence_ids": {"type": "array", "items": {"type": "string"}},
+    "extraction_method": {"enum": ["rule", "llm", "manual"]},
+    "polarity": {"enum": ["explicit", "inferred"]},
+    "status": {"enum": ["confirmed", "unconfirmed", "rejected"]},
+    "match_type": {"enum": ["exact", "alias", "semantic", "inferred"]},
+    "source_document_ids": {"type": "array", "items": {"type": "string"}}
+  }
+}

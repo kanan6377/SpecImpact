@@ -1,0 +1,16 @@
+aliases:
+  entity.payment.amount:
+    canonical_type: BusinessField
+    aliases: [paymentAmount, payment_amount, 決済金額]
+  entity.payment.merchant_id:
+    canonical_type: BusinessField
+    aliases: [merchantId, merchant_id, 加盟店ID]
+  api.payment.submit:
+    canonical_type: API
+    aliases: [Payment Submit API]
+  screen.payment.entry:
+    canonical_type: Screen
+    aliases: [Payment Entry Screen]
+  external_if.payment.fraud_gateway:
+    canonical_type: ExternalIF
+    aliases: [Fraud Gateway]

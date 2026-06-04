@@ -1,0 +1,4 @@
+aliases:
+  entity.application.address:
+    canonical_type: BusinessField
+    aliases: [住所, address]

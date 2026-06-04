@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:specimpact:schema:v1:aliases",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["aliases"],
+  "properties": {
+    "aliases": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["canonical_type", "aliases"],
+        "properties": {
+          "canonical_type": {"enum": ["API", "Screen", "Table", "Column", "ValidationRule", "ExternalIF", "TestCase", "Batch", "Document", "BusinessField"]},
+          "aliases": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

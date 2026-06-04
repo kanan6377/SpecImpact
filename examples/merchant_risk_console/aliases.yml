@@ -1,0 +1,4 @@
+aliases:
+  entity.application.annual_income:
+    canonical_type: BusinessField
+    aliases: [年収, annualIncome]

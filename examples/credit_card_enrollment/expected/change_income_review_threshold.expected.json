@@ -1,0 +1,21 @@
+{
+  "case_id": "change_income_review_threshold",
+  "must_review": [
+    "entity.application.annual_income",
+    "entity.application.requested_credit_limit",
+    "api.card_application.submit",
+    "validation.annual_income",
+    "validation.requested_credit_limit",
+    "column.card_application.requested_credit_limit",
+    "external_if.fraud_check"
+  ],
+  "should_review": [
+    "screen.application_entry",
+    "api.credit_screening",
+    "screen.application_confirm",
+    "test.credit_limit_upper_bound",
+    "test.credit_limit_income_ratio",
+    "test.item_81b227b404"
+  ],
+  "may_review": []
+}

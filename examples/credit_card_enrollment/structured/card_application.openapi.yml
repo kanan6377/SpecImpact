@@ -1,0 +1,27 @@
+openapi: 3.0.3
+info:
+  title: Aurora Card Enrollment API
+  version: 1.0.0
+paths:
+  /api/card-applications:
+    post:
+      operationId: submitCardApplication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                applicantName: {type: string}
+                requestedCreditLimit: {type: integer}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                properties:
+                  applicationId: {type: string}
+                  screeningStatus: {type: string}
+components:
+  schemas:
+    CardApplication:
+      type: object
