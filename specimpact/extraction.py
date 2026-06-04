@@ -59,6 +59,48 @@ RELATION_HEADINGS = {
     "covers": "COVERS",
     "asserts": "ASSERTS",
 }
+SECTION_ALIASES = {
+    "request fields": [
+        "input items",
+        "input fields",
+        "inputs",
+        "api parameters",
+        "request parameters",
+        "req fields",
+        "入力項目",
+        "リクエスト項目",
+        "リクエストパラメータ",
+    ],
+    "response fields": [
+        "output items",
+        "output fields",
+        "outputs",
+        "response parameters",
+        "レスポンス項目",
+        "応答項目",
+        "出力項目",
+    ],
+    "fields": ["items", "画面項目", "表示項目", "項目"],
+    "reads": ["read tables", "参照", "参照テーブル"],
+    "writes": ["write tables", "更新", "更新テーブル", "登録テーブル"],
+    "calls": ["dependencies", "call api", "呼び出し", "呼出", "連携先"],
+    "displays": ["shows", "表示"],
+    "validates": ["validation", "checks", "チェック", "入力チェック"],
+    "sends": ["send fields", "送信", "送信項目"],
+    "receives": ["receive fields", "受信", "受信項目"],
+    "covers": ["coverage", "対象", "確認対象"],
+    "asserts": ["expectations", "期待結果", "検証内容"],
+}
+SECTION_HEADING_INDEX = {
+    heading.casefold(): relation for heading, relation in RELATION_HEADINGS.items()
+}
+SECTION_HEADING_INDEX.update(
+    {
+        alias.casefold(): RELATION_HEADINGS[canonical]
+        for canonical, aliases in SECTION_ALIASES.items()
+        for alias in [canonical, *aliases]
+    }
+)
 FIELD_RELATIONS = {
     "REQUEST_FIELD",
     "RESPONSE_FIELD",
@@ -184,13 +226,13 @@ def extract_markdown(
                 relation_type = "DEFINES" if named.artifact_type == "Table" else None
                 graph.artifacts.append(named)
                 continue
-            relation_type = RELATION_HEADINGS.get(text.lower())
+            relation_type = relation_type_for_heading(text)
             if not relation_type and root:
                 current = root
             continue
-        inline = re.match(r"^([A-Za-z ]+):\s*(.+)$", line)
-        if inline and inline.group(1).strip().lower() in RELATION_HEADINGS:
-            relation_type = RELATION_HEADINGS[inline.group(1).strip().lower()]
+        inline = re.match(r"^([^:：]{1,80})[:：]\s*(.+)$", line)
+        if inline and relation_type_for_heading(inline.group(1).strip()):
+            relation_type = relation_type_for_heading(inline.group(1).strip())
             for value in _split_values(inline.group(2)):
                 _add_relation(
                     graph,
@@ -235,6 +277,11 @@ def extract_markdown(
                 support.id = relation_aliases[support.id]
     graph.evidence = _dedupe(graph.evidence, "evidence_id")
     return graph
+
+
+def relation_type_for_heading(text: str) -> str | None:
+    normalized = re.sub(r"\s+", " ", text.strip()).casefold()
+    return SECTION_HEADING_INDEX.get(normalized)
 
 
 def make_document(

@@ -413,6 +413,12 @@ def render_markdown(report: Report, store: LocalStore) -> str:
     lines = [
         f"# SpecImpact Report: {report.change.title}",
         "",
+        "> This report lists review candidates, not confirmed impacts.",
+        '> `must_review` means "must be checked", not "confirmed affected".',
+        "",
+        "> このレポートは影響確定結果ではなく、レビュー候補です。",
+        "> `must_review` は「影響あり」ではなく「必ず確認すべき」です。",
+        "",
         "## Change",
         "",
         report.change.body,

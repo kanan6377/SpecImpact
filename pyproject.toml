@@ -15,7 +15,7 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://example.invalid/specimpact"
+Repository = "https://github.com/kanan6377/SpecImpact"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.8"]

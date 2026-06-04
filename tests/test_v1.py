@@ -30,13 +30,13 @@ def test_three_sample_projects_exist() -> None:
 
 def test_release_validation(tmp_path: Path) -> None:
     result = release_validate(ready_store(tmp_path), RELEASE_CASES)
-    assert result["status"] == "fail"
+    assert result["status"] == "pass"
     assert result["case_count"] == 21
     assert result["category_counts"] == {"golden": 4, "evaluation": 13, "holdout": 4}
     assert result["evaluation_must_review_recall"] >= 0.9
     assert result["checks"]["no_confidence_field"]
-    assert not result["checks"]["repository_url_configured"]
-    assert not result["checks"]["security_contact_configured"]
+    assert result["checks"]["repository_url_configured"]
+    assert result["checks"]["security_contact_configured"]
     assert result["unique_expected"] == 20
     assert result["checks"]["unique_expected_at_least_20"]
 
@@ -48,6 +48,6 @@ def test_release_check_cli(tmp_path: Path, monkeypatch) -> None:
         ["ingest", str(ENROLLMENT / "docs"), "--aliases", str(ENROLLMENT / "aliases.yml")],
     )
     result = runner.invoke(app, ["release-check", str(RELEASE_CASES)])
-    assert result.exit_code == 1
+    assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["status"] == "fail"
+    assert payload["status"] == "pass"

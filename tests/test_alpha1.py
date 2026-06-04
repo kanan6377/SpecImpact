@@ -84,6 +84,9 @@ def test_store_and_graph_analysis(tmp_path: Path) -> None:
     assert resolve_name(store, "希望利用限度額") == ENTITY_ID
     assert FakeLLMClient().judge("x", "y") == "unknown"
     run_dir = latest_run_dir(store)
+    assert "This report lists review candidates" in (run_dir / "report.md").read_text(
+        encoding="utf-8"
+    )
     assert {
         "change_request.json",
         "candidates.jsonl",
@@ -112,3 +115,23 @@ def test_cli_smoke(tmp_path: Path, monkeypatch) -> None:
     why = runner.invoke(app, ["why", "カード入会申込API"])
     assert why.exit_code == 0
     assert 'Resolved "カード入会申込API" to artifact_id: api.card_application.submit' in why.stdout
+
+
+def test_section_heading_synonyms_extract_request_fields(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "api.md").write_text(
+        "# API: Payment API\n\n"
+        "## 入力項目\n"
+        "- paymentAmount\n\n"
+        "API Parameters: merchantId\n",
+        encoding="utf-8",
+    )
+    store = LocalStore(tmp_path / ".specimpact")
+    ingest_documents(store, docs)
+    relations = store.read("relations", Relation)
+    assert {item.relation_type for item in relations} == {"REQUEST_FIELD"}
+    assert {item.target_id for item in relations} == {
+        "entity.paymentamount",
+        "entity.merchantid",
+    }

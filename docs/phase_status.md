@@ -151,7 +151,7 @@ Notes: 23 tests passed. Manual diff completed and backend was reset to local.
 
 ## v1.0.0
 
-Status: blocked_publication_metadata
+Status: complete
 
 Scope:
 - stable CLI/schema/local backend
@@ -176,10 +176,12 @@ Completion checklist:
 - [x] External review remediation implemented
 - [x] Convention-based generic parser verified
 - [x] Quality release checks pass
-- [ ] Replace placeholder repository URL
-- [ ] Configure security contact
+- [x] Configure repository URL
+- [x] Configure security contact
 
-Notes: 66 tests pass. Quality release checks pass with 21 changes and 20 distinct normalized oracle
+Notes: 118 tests pass. Quality release checks pass with 21 changes and 20 distinct normalized oracle
 contents. Cross-type alias rejection, failed-ingest state preservation, schema mirror packaging,
 source policy contact checks, exact privacy backend parsing, and CLI input errors are verified.
-Publication remains blocked until repository URL and security contact placeholders are replaced.
+The release metrics validate review-candidate recall and evidence coverage for the bundled
+Golden/Evaluation/Holdout cases. They do not claim final impact correctness on arbitrary enterprise
+documents.

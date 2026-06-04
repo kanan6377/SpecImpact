@@ -22,6 +22,9 @@ row is required. Excel supports ordinary worksheets only; arbitrary layouts and 
 interpretation are intentionally unsupported.
 Corrupt workbooks are rejected as input errors without a traceback.
 
+For legacy spreadsheets, free-layout Excel, merged cells, and mixed wiki exports, reshape the source
+first. See [input_preparation.md](input_preparation.md) for the migration checklist.
+
 Individual structured and tabular ingest commands use stable filename-based document IDs. If a
 second source with the same filename resolves to a different path, ingest fails with a document-ID
 collision instead of replacing graph records silently.

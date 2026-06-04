@@ -651,8 +651,10 @@ def test_wheel_install_release_check_has_packaged_resources(tmp_path: Path) -> N
             capture_output=True,
             text=True,
         )
-        assert result.returncode == 1
+        assert result.returncode == 0
         assert json.loads(result.stdout)["checks"]["unique_expected_at_least_20"]
+        assert json.loads(result.stdout)["checks"]["repository_url_configured"]
+        assert json.loads(result.stdout)["checks"]["security_contact_configured"]
         assert "Traceback" not in result.stderr
     finally:
         shutil.rmtree(ROOT / "build", ignore_errors=True)

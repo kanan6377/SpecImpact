@@ -11,11 +11,9 @@ specimpact release-check ./examples/evaluation/release_cases.yml
 
 The command checks the 20-30 case range, unique changes, normalized oracle content hashes, category
 presence, Evaluation Must Review Recall >= 90%, visible precision >= 70%, evidence coverage,
-report size, candidate expansion ratio, and absence of `confidence` and legacy `llm_judgement`
-fields.
+report size, candidate expansion ratio, configured repository metadata, matching security contact,
+and absence of `confidence` and legacy `llm_judgement` fields.
 
-Publication also requires replacing the placeholder repository URL in `pyproject.toml` and the
-`SECURITY-CONTACT-TODO` marker in `SECURITY.md` and `specimpact/resources/publication.json`.
-Generate release wheels only after those values are configured and `release-check` passes.
-Source-tree validation requires the contact in `SECURITY.md` to match the packaged publication
-metadata.
+The release gate validates review-candidate recall, not final impact correctness. Publish release
+wheels only after `release-check`, `pytest -q`, `ruff check .`, and
+`python -m compileall -q specimpact` pass from a clean environment.

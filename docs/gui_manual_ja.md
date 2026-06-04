@@ -17,12 +17,12 @@ LLM を切っても local graph だけで分析できます。
 - job 履歴、trace、privacy doctor で「何を保存したか」を確認できる
 
 SpecImpact は最終判断を自動化しません。レビュー候補を作り、根拠を集め、人間が判断するための
-ツールです。
+ツールです。`must_review` は「影響あり」ではなく「必ず確認すべき」という意味です。
 
 ## 2. 起動
 
 ```powershell
-cd C:\Users\kanan3525\SpecImpact
+cd <repo-dir>
 python -m pip install -e ".[gui]"
 specimpact gui
 ```
@@ -77,6 +77,15 @@ Dashboard は Launchpad です。
 - Privacy doctor
 - 最近の Jobs
 
+標準状態は以下です。
+
+```text
+LLM: disabled
+External transmission: none
+Backend: local JSONL
+Embeddings: local
+```
+
 `Project pulse` では、graph が作れているか、最新 run があるか、外部 LLM 送信が発生する設定かを
 まとめて確認できます。
 
@@ -119,6 +128,9 @@ batch rerank は候補をまとめて LLM に渡すため、Codex CLI provider �
 - evidence ID
 - ファイル、行番号、quote
 - LLM judgement と LLM reason
+
+レポートは影響確定結果ではなくレビュー候補です。priority は確認順序の目安であり、業務影響を
+自動確定するものではありません。
 
 ![Report and evidence](images/gui/report-evidence.png)
 
@@ -218,11 +230,10 @@ modal には provider、model、用途、送信対象数が表示されます。
 | Tools | `specimpact eval`, `release-check`, `review import`, `baseline create`, `graph diff`, `export-obsidian` |
 | Privacy doctor | `specimpact doctor --privacy` |
 
-## 13. OSS 公開前チェック
+## 13. OSS リリースチェック
 
-- README に quickstart と GUI screenshot を載せる
-- `pyproject.toml` の repository URL を本物にする
-- `SECURITY.md` の連絡先を埋める
+- README に quickstart、出力例、GUI screenshot を載せる
+- `pyproject.toml` の repository URL が実リポジトリを指すことを確認する
+- `SECURITY.md` と packaged publication metadata の連絡先が一致することを確認する
 - サンプルが synthetic data であることを明記する
 - `pytest -q`、`ruff check .`、`python -m compileall -q specimpact` を通す
-

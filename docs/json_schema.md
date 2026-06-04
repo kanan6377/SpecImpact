@@ -4,8 +4,8 @@ The v1.0 JSON contract has one source of truth under `schemas/v1/`. Development 
 against that directory. Wheel builds copy the same files into package data, and installed wheels
 validate generated reports, relations, and evidence records against the packaged copy.
 
-Schema identifiers use stable `urn:specimpact:schema:v1:*` values. They do not depend on a
-placeholder repository URL.
+Schema identifiers use stable `urn:specimpact:schema:v1:*` values. They do not depend on the
+GitHub repository URL.
 
 Required impact fields are `artifact_id`, `display_name`, `artifact_type`, `review_priority`,
 `evidence_strength`, `match_type`, `relation_distance`, `rule_assessment`, `reason`,

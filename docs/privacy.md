@@ -4,6 +4,15 @@ SpecImpact defaults to the local JSONL backend. Document chunks remain on the lo
 No external LLM provider is configured or called. Use `specimpact doctor --privacy` to inspect
 the active defaults.
 
+Default mode:
+
+```text
+LLM: disabled
+External transmission: none
+Backend: local JSONL
+Embeddings: local unless explicitly rebuilt with a remote provider
+```
+
 The doctor parses `config.yml` and treats only the exact `backend: local` value as the local
 backend.
 

@@ -18,7 +18,7 @@ SpecImpact は影響範囲を自動決定しません。出力はレビュー候
 - Python 3.11 以上
 - PowerShell またはコマンドプロンプト
 - SpecImpact のソースコード:
-  `C:\Users\kanan3525\SpecImpact`
+  `<repo-dir>`
 
 以下の例は PowerShell 用です。
 
@@ -27,7 +27,7 @@ SpecImpact は影響範囲を自動決定しません。出力はレビュー候
 PowerShell を開き、SpecImpact のディレクトリへ移動します。
 
 ```powershell
-cd C:\Users\kanan3525\SpecImpact
+cd <repo-dir>
 python -m pip install -e .
 ```
 
@@ -48,7 +48,7 @@ python -m specimpact --help
 最初に同梱サンプルで一連の操作を確認します。
 
 ```powershell
-cd C:\Users\kanan3525\SpecImpact
+cd <repo-dir>
 specimpact init
 specimpact ingest .\examples\credit_card_enrollment\docs `
   --aliases .\examples\credit_card_enrollment\aliases.yml
@@ -139,6 +139,9 @@ specimpact report --format json
 
 Markdown レポートには `must_review` と `should_review` が表示されます。JSON レポートには
 `may_review` と `hidden` も含まれます。
+
+このレポートは影響確定結果ではなく、レビュー候補です。`must_review` は「影響あり」
+ではなく「必ず確認すべき」という意味です。
 
 ## 6. レポートの読み方
 
@@ -269,6 +272,11 @@ SpecImpact は見出しと箇条書きを使った、確認しやすい Markdown
 - `Covers`
 - `Asserts`
 
+一部の同義見出しも扱えます。たとえば `入力項目`、`リクエスト項目`、`API Parameters`、
+`request parameters` は `Request fields` と同じ関係として扱われます。artifact や項目名の
+表記揺れは `aliases.yml`、section heading の同義語は parser の section alias として扱うため、
+両者を混同しないでください。
+
 ## 9. alias を設定する
 
 表記揺れがある場合は `aliases.yml` を用意します。
@@ -396,6 +404,9 @@ specimpact ingest-excel .\fields.xlsx
 - 個別 ingest では、別ディレクトリに同名ファイルを置くと document ID が衝突します。
   ファイル名を変更してから読み込んでください。
 
+自由レイアウト Excel や古い設計書を取り込む前の整形ルールは
+[input_preparation.md](input_preparation.md) を参照してください。
+
 ## 12. 状態とプライバシーを確認する
 
 現在の状態:
@@ -428,7 +439,7 @@ specimpact doctor --privacy
 以下を実行してください。
 
 ```powershell
-cd C:\Users\kanan3525\SpecImpact
+cd <repo-dir>
 python -m pip install -e .
 ```
 

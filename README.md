@@ -18,6 +18,46 @@ interfaces, and tests. SpecImpact makes that blast radius inspectable:
 - optional LLM extraction and batch reranking
 - privacy checks before external transmission
 
+## What You Get
+
+Input change request:
+
+```md
+# Change: requestedCreditLimit upper bound
+
+requestedCreditLimit の上限を変更する。
+```
+
+SpecImpact output:
+
+```md
+must_review:
+- カード入会申込API
+  reason: request field として requestedCreditLimit を使っている
+  path: change -> requestedCreditLimit <- REQUEST_FIELD - api.card_application.submit
+  evidence: docs/05_card_application_api.md:6-15
+
+should_review:
+- 希望利用限度額チェック
+  reason: requestedCreditLimit を validation で参照している
+  path: change -> requestedCreditLimit <- VALIDATES - validation.credit_limit
+  evidence: docs/07_validation_rules.md:4-7
+```
+
+Reports list review candidates, not confirmed impacts. `must_review` means "must be checked",
+not "confirmed affected".
+
+![Graph Explorer](docs/images/gui/graph-explorer.png)
+
+Default mode:
+
+```text
+LLM: disabled
+External transmission: none
+Backend: local JSONL
+Embeddings: local unless explicitly rebuilt with a remote provider
+```
+
 Japanese user manual: [docs/user_manual_ja.md](docs/user_manual_ja.md)
 
 Local GUI manual: [docs/gui_manual_ja.md](docs/gui_manual_ja.md)
@@ -71,7 +111,8 @@ Markdown extraction is convention-based and inspectable. Headings such as `API:`
 as conservative mentions.
 
 Structured loaders cover straightforward OpenAPI, DDL, CSV, and Excel definitions. See
-[docs/structured_loaders.md](docs/structured_loaders.md).
+[docs/structured_loaders.md](docs/structured_loaders.md). For messy enterprise spreadsheets and
+legacy design documents, start with [docs/input_preparation.md](docs/input_preparation.md).
 
 ## Optional AI
 
@@ -134,10 +175,15 @@ specimpact release-check ./examples/evaluation/release_cases.yml
 See [docs/roadmap.md](docs/roadmap.md), [docs/phase_status.md](docs/phase_status.md), and
 [docs/release.md](docs/release.md).
 
-## Before Public Publication
+## Evaluation Scope
 
-- Replace placeholder repository URLs in `pyproject.toml`.
-- Add a real maintainer security contact in `SECURITY.md`.
-- Confirm the synthetic sample data is acceptable for public release.
-- Re-run the development checks above from a clean environment.
+The release dataset is useful for regression control, not a claim of final impact correctness.
+
+Known evaluation limits:
+
+- synthetic sample heavy
+- no large legacy Excel corpus yet
+- no real enterprise design document benchmark
+- metrics are for review-candidate recall, not final impact correctness
+- dirty input, false positives, and alias collisions should be tracked separately during adoption
 
