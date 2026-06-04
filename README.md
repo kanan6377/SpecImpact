@@ -1,10 +1,37 @@
 # SpecImpact
 
-Evidence-backed design change impact review for software teams.
+Excel設計書の仕様変更で、見直すべき画面・API・DB・外部IF・入力チェック・テストを、
+根拠つきで洗い出すローカルファーストOSSです。
 
-SpecImpact reads design documents and a change request, builds a local knowledge graph, and proposes
-review candidates with relation paths and quotes. It is a review assistant, not an automatic final
-decision maker.
+Excel設計書を捨てなくても、変更影響レビューは構造化できます。SpecImpact は設計書と
+変更依頼をローカル knowledge graph に変換し、レビュー候補、relation path、Excel上の
+根拠行を出します。これは影響確定ツールではなく、レビュー会で使うための候補表です。
+
+## Excel Demo
+
+```powershell
+python -m pip install -e .
+specimpact init
+specimpact ingest-excel ./examples/japanese_sier_excel/docs --aliases ./examples/japanese_sier_excel/aliases.yml
+specimpact analyze ./examples/japanese_sier_excel/changes/利用限度額_上限変更.md --no-llm
+specimpact report --format markdown
+specimpact report --format excel
+```
+
+変更依頼:
+
+> 入会申込画面の「利用限度額」の上限を999万円から9999万円に変更する。
+
+SpecImpact は以下をレビュー候補として出します。
+
+- 入会申込画面
+- 入会申込API
+- REQUESTED_CREDIT_LIMIT カラム
+- 利用限度額入力チェック
+- 外部与信IF
+- 境界値テスト
+
+それぞれについて、Excelのファイル名・シート名・行番号・セル位置を根拠として表示します。
 
 ## Why
 

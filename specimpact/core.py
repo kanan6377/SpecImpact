@@ -423,8 +423,21 @@ def render_markdown(report: Report, store: LocalStore) -> str:
         "",
         report.change.body,
         "",
+        "## Summary",
+        "",
+        "- must_review: "
+        f"{sum(1 for item in report.impacts if item.review_priority == 'must_review')}",
+        "- should_review: "
+        f"{sum(1 for item in report.impacts if item.review_priority == 'should_review')}",
+        "- may_review: "
+        f"{sum(1 for item in report.impacts if item.review_priority == 'may_review')}",
+        "",
     ]
-    for priority, heading in (("must_review", "Must Review"), ("should_review", "Should Review")):
+    for priority, heading in (
+        ("must_review", "Must Review"),
+        ("should_review", "Should Review"),
+        ("may_review", "May Review"),
+    ):
         lines.extend([f"## {heading}", ""])
         for impact in (item for item in report.impacts if item.review_priority == priority):
             lines.extend(

@@ -1,0 +1,34 @@
+aliases:
+  api.enrollment_application:
+    aliases:
+    - 入会申込API
+    canonical_type: API
+  column.requested_credit_limit:
+    aliases:
+    - CREDIT_APPLICATION.REQUESTED_CREDIT_LIMIT
+    canonical_type: Column
+  entity.application.requested_credit_limit:
+    aliases:
+    - 利用限度額
+    - requestedCreditLimit
+    - requested_credit_limit
+    - REQUESTED_CREDIT_LIMIT
+    - 申込限度額
+    canonical_type: BusinessField
+  external_if.credit_screening:
+    aliases:
+    - 外部与信IF
+    canonical_type: ExternalIF
+  screen.enrollment_application:
+    aliases:
+    - 入会申込画面
+    canonical_type: Screen
+  test.credit_limit_boundary:
+    aliases:
+    - 境界値テスト
+    - 入会申込境界値テスト
+    canonical_type: TestCase
+  validation.credit_limit_upper_bound:
+    aliases:
+    - 利用限度額入力チェック
+    canonical_type: ValidationRule

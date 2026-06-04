@@ -341,7 +341,15 @@ def execute(project: Project, action: str, params: dict[str, Any]) -> dict[str, 
     elif action == "ingest_csv":
         result = {"tables": len(ingest_csv(store, _path(project, params, "path")))}
     elif action == "ingest_excel":
-        result = {"sheets": len(ingest_excel(store, _path(project, params, "path")))}
+        result = {
+            "sheets": len(
+                ingest_excel(
+                    store,
+                    _path(project, params, "path"),
+                    _optional_path(project, params, "aliases"),
+                )
+            )
+        }
     elif action == "analyze":
         report = analyze_change(
             store,

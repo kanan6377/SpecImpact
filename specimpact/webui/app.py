@@ -19,6 +19,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from specimpact.core import latest_run_dir
+from specimpact.reports import export_report_excel
 from specimpact.webui.jobs import JobManager
 from specimpact.webui.registry import Project, ProjectRegistry
 from specimpact.webui.services import (
@@ -309,8 +310,11 @@ def create_app(
             run_dir = latest_run_dir(store_for(project))
         except ValueError as error:
             raise HTTPException(status_code=404, detail=str(error)) from error
-        if format not in {"markdown", "json"}:
-            raise HTTPException(status_code=400, detail="format must be markdown or json")
+        if format not in {"markdown", "json", "excel"}:
+            raise HTTPException(status_code=400, detail="format must be markdown, json, or excel")
+        if format == "excel":
+            path = export_report_excel(store_for(project))
+            return FileResponse(path, filename="report.xlsx")
         name = "report.md" if format == "markdown" else "report.json"
         return FileResponse(run_dir / name, filename=name)
 

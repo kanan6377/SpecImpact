@@ -41,9 +41,10 @@ from specimpact.operations import (
     project_status,
     release_validate,
 )
+from specimpact.reports import export_report_excel
 from specimpact.store import LocalStore
 from specimpact.structured_loaders import ingest_ddl, ingest_openapi
-from specimpact.tabular_loaders import ingest_csv, ingest_excel
+from specimpact.tabular_loaders import ingest_csv, ingest_excel, inspect_excel_folder
 
 app = typer.Typer(help="Evidence-first software design change impact review CLI.")
 aliases_app = typer.Typer(help="Review manual and suggested aliases.")
@@ -55,6 +56,7 @@ graph_app = typer.Typer(help="Compare graph state.")
 review_app = typer.Typer(help="Import reviewer decisions.")
 llm_app = typer.Typer(help="Configure optional LLM extraction and reranking.")
 embeddings_app = typer.Typer(help="Build and inspect local-first semantic embeddings.")
+excel_app = typer.Typer(help="Inspect and lint Excel design workbooks.")
 app.add_typer(aliases_app, name="aliases")
 app.add_typer(inspect_app, name="inspect")
 app.add_typer(relations_app, name="relations")
@@ -64,6 +66,7 @@ app.add_typer(graph_app, name="graph")
 app.add_typer(review_app, name="review")
 app.add_typer(llm_app, name="llm")
 app.add_typer(embeddings_app, name="embeddings")
+app.add_typer(excel_app, name="excel")
 
 
 @app.command()
@@ -142,9 +145,12 @@ def ingest_csv_command(path: Path) -> None:
 
 
 @app.command("ingest-excel")
-def ingest_excel_command(path: Path) -> None:
-    """Ingest simple header-row Excel sheets."""
-    typer.echo(f"Ingested {len(_call(ingest_excel, LocalStore(), path))} Excel sheets.")
+def ingest_excel_command(
+    path: Path,
+    aliases: Path | None = typer.Option(None, help="Manual aliases.yml file."),
+) -> None:
+    """Ingest Excel workbooks or a directory of SIer Excel design documents."""
+    typer.echo(f"Ingested {len(_call(ingest_excel, LocalStore(), path, aliases))} Excel sheets.")
 
 
 @app.command()
@@ -166,7 +172,7 @@ def analyze(
 
 
 @app.command("report")
-def show_report(format: str = typer.Option("markdown", help="markdown or json")) -> None:
+def show_report(format: str = typer.Option("markdown", help="markdown, json, or excel")) -> None:
     """Print the latest report."""
     run_dir = _call(latest_run_dir, LocalStore())
     if format == "markdown":
@@ -174,8 +180,10 @@ def show_report(format: str = typer.Option("markdown", help="markdown or json"))
     elif format == "json":
         data = json.loads((run_dir / "report.json").read_text(encoding="utf-8"))
         typer.echo(json.dumps(data, ensure_ascii=False, indent=2))
+    elif format == "excel":
+        typer.echo(str(_call(export_report_excel, LocalStore())))
     else:
-        raise typer.BadParameter("format must be markdown or json")
+        raise typer.BadParameter("format must be markdown, json, or excel")
 
 
 @app.command()
@@ -382,6 +390,21 @@ def embeddings_rebuild(
         confirm=typer.confirm,
     )
     typer.echo(f"Rebuilt {count} embeddings.")
+
+
+@excel_app.command("inspect")
+def excel_inspect(path: Path) -> None:
+    """Show an Excel Health Check for a workbook or workbook directory."""
+    typer.echo(json.dumps(_call(inspect_excel_folder, path), ensure_ascii=False, indent=2))
+
+
+@excel_app.command("lint")
+def excel_lint(path: Path) -> None:
+    """Return non-zero when Excel Health Check warnings are present."""
+    health = _call(inspect_excel_folder, path)
+    typer.echo(json.dumps(health, ensure_ascii=False, indent=2))
+    if health.get("warnings"):
+        raise typer.Exit(code=1)
 
 
 def _call(function, *args, **kwargs):
