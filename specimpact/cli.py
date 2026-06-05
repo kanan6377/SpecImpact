@@ -14,16 +14,32 @@ from specimpact.core import (
     ingest_documents,
     latest_run_dir,
 )
+from specimpact.dirty_excel.ingestion import (
+    decide_graph_proposal,
+    ingest_dirty_excel,
+    inspect_dirty_excel,
+    list_graph_proposals,
+)
 from specimpact.embeddings import rebuild_embeddings
 from specimpact.graphrag import configure_llm, disable_llm, llm_status
+from specimpact.impact_management.change_atoms import (
+    list_changes,
+    parse_change_atoms,
+    show_change,
+)
+from specimpact.impact_management.decision_store import list_impacts, set_impact_status
+from specimpact.impact_management.review_session import analyze_change_llm_first
 from specimpact.inspection import (
+    confirm_alias_candidate,
     decide_alias,
     inspect_artifact,
     inspect_evidence,
     inspect_graph,
     list_aliases,
     list_relations,
+    reject_alias_candidate,
     remove_alias,
+    review_alias_candidates,
     set_relation_status,
     suggest_aliases,
 )
@@ -54,20 +70,28 @@ relations_app = typer.Typer(help="Review extracted relation status.")
 backend_app = typer.Typer(help="Configure optional graph backend.")
 baseline_app = typer.Typer(help="Create graph baselines.")
 graph_app = typer.Typer(help="Compare graph state.")
+graph_proposals_app = typer.Typer(help="Review LLM graph proposals.")
 review_app = typer.Typer(help="Import reviewer decisions.")
 llm_app = typer.Typer(help="Configure optional LLM extraction and reranking.")
 embeddings_app = typer.Typer(help="Build and inspect local-first semantic embeddings.")
 excel_app = typer.Typer(help="Inspect and lint Excel design workbooks.")
+change_app = typer.Typer(help="Parse and inspect structured change atoms.")
+changes_app = typer.Typer(help="List parsed changes.")
+impacts_app = typer.Typer(help="Manage impact review decisions.")
 app.add_typer(aliases_app, name="aliases")
 app.add_typer(inspect_app, name="inspect")
 app.add_typer(relations_app, name="relations")
 app.add_typer(backend_app, name="backend")
 app.add_typer(baseline_app, name="baseline")
 app.add_typer(graph_app, name="graph")
+graph_app.add_typer(graph_proposals_app, name="proposals")
 app.add_typer(review_app, name="review")
 app.add_typer(llm_app, name="llm")
 app.add_typer(embeddings_app, name="embeddings")
 app.add_typer(excel_app, name="excel")
+app.add_typer(change_app, name="change")
+app.add_typer(changes_app, name="changes")
+app.add_typer(impacts_app, name="impacts")
 
 
 @app.command()
@@ -110,11 +134,26 @@ def init() -> None:
 @app.command()
 def ingest(
     docs_dir: Path,
+    mode: str = typer.Option("markdown", help="markdown or dirty-excel."),
     aliases: Path | None = typer.Option(None, help="Manual aliases.yml file."),
     yes: bool = typer.Option(False, "--yes", help="Approve external transmission."),
     no_llm: bool = typer.Option(False, "--no-llm", help="Temporarily disable LLM calls."),
 ) -> None:
-    """Ingest Markdown and text design documents."""
+    """Ingest Markdown/text documents or dirty Excel workbooks."""
+    if mode == "dirty-excel":
+        summary = _call(
+            ingest_dirty_excel,
+            LocalStore(),
+            docs_dir,
+            aliases,
+            use_llm=not no_llm,
+            yes=yes,
+            confirm=typer.confirm,
+        )
+        typer.echo(f"Ingested {summary.workbooks} dirty Excel workbooks.")
+        return
+    if mode != "markdown":
+        raise typer.BadParameter("mode must be markdown or dirty-excel")
     count = _call(
         ingest_documents,
         LocalStore(),
@@ -157,13 +196,42 @@ def ingest_excel_command(
     )
 
 
+@app.command("ingest-dirty-excel")
+def ingest_dirty_excel_command(
+    path: Path,
+    llm: bool = typer.Option(False, "--llm", help="Use configured LLM for region extraction."),
+    aliases: Path | None = typer.Option(None, help="Manual aliases.yml file."),
+    yes: bool = typer.Option(False, "--yes", help="Approve external transmission."),
+) -> None:
+    """Ingest messy SIer Excel workbooks with cell-level evidence."""
+    summary = _call(
+        ingest_dirty_excel,
+        LocalStore(),
+        path,
+        aliases,
+        use_llm=llm,
+        yes=yes,
+        confirm=typer.confirm,
+    )
+    typer.echo(
+        "Ingested "
+        f"{summary.workbooks} workbooks, {summary.regions} regions, "
+        f"{summary.proposals} graph proposals."
+    )
+
+
 @app.command()
 def analyze(
     change_request: Path,
     yes: bool = typer.Option(False, "--yes", help="Approve external transmission."),
     no_llm: bool = typer.Option(False, "--no-llm", help="Temporarily disable LLM calls."),
+    llm_first: bool = typer.Option(False, "--llm-first", help="Use v2 Change Atom impact flow."),
 ) -> None:
     """Analyze a change request and write a new review run."""
+    if llm_first:
+        report = _call(analyze_change_llm_first, LocalStore(), change_request)
+        typer.echo(f"Created run {report.run_id} with {len(report.impacts)} candidates.")
+        return
     report = _call(
         analyze_change,
         LocalStore(),
@@ -247,9 +315,31 @@ def release_check(dataset: Path) -> None:
 
 
 @aliases_app.command("suggest")
-def aliases_suggest() -> None:
+def aliases_suggest(
+    llm: bool = typer.Option(False, "--llm", help="Use v2 alias inference."),
+) -> None:
     """Generate inspectable local alias suggestions."""
-    typer.echo(f"Created {_call(suggest_aliases, LocalStore())} alias suggestions.")
+    typer.echo(f"Created {_call(suggest_aliases, LocalStore(), use_llm=llm)} alias suggestions.")
+
+
+@aliases_app.command("review")
+def aliases_review() -> None:
+    """List v2 alias candidates."""
+    typer.echo(_call(review_alias_candidates, LocalStore()))
+
+
+@aliases_app.command("confirm")
+def aliases_confirm(candidate_id: str) -> None:
+    """Confirm a v2 alias candidate."""
+    candidate = _call(confirm_alias_candidate, LocalStore(), candidate_id)
+    typer.echo(f"Confirmed {candidate.candidate_id}.")
+
+
+@aliases_app.command("reject-candidate")
+def aliases_reject_candidate(candidate_id: str) -> None:
+    """Reject a v2 alias candidate."""
+    candidate = _call(reject_alias_candidate, LocalStore(), candidate_id)
+    typer.echo(f"Rejected {candidate.candidate_id}.")
 
 
 @aliases_app.command("list")
@@ -266,8 +356,12 @@ def aliases_approve(target_id: str, alias: str) -> None:
 
 
 @aliases_app.command("reject")
-def aliases_reject(target_id: str, alias: str) -> None:
-    """Reject an alias suggestion."""
+def aliases_reject(target_id: str, alias: str | None = typer.Argument(None)) -> None:
+    """Reject an alias suggestion or v2 alias candidate."""
+    if alias is None:
+        candidate = _call(reject_alias_candidate, LocalStore(), target_id)
+        typer.echo(f"Rejected {candidate.candidate_id}.")
+        return
     _call(decide_alias, LocalStore(), target_id, alias, "rejected")
     typer.echo(f"Rejected {alias} for {target_id}.")
 
@@ -354,6 +448,26 @@ def graph_diff_command(name: str) -> None:
     typer.echo(json.dumps(_call(graph_diff, LocalStore(), name), indent=2))
 
 
+@graph_proposals_app.command("list")
+def graph_proposals_list() -> None:
+    """List graph extraction proposals."""
+    typer.echo(_call(list_graph_proposals, LocalStore()))
+
+
+@graph_proposals_app.command("accept")
+def graph_proposals_accept(proposal_id: str) -> None:
+    """Accept a graph extraction proposal."""
+    proposal = _call(decide_graph_proposal, LocalStore(), proposal_id, "accepted")
+    typer.echo(f"Accepted {proposal.proposal_id}.")
+
+
+@graph_proposals_app.command("reject")
+def graph_proposals_reject(proposal_id: str) -> None:
+    """Reject a graph extraction proposal."""
+    proposal = _call(decide_graph_proposal, LocalStore(), proposal_id, "rejected")
+    typer.echo(f"Rejected {proposal.proposal_id}.")
+
+
 @llm_app.command("configure")
 def llm_configure(
     provider: str = typer.Option(..., help="openai, ollama, codex, or fake"),
@@ -402,6 +516,12 @@ def excel_inspect(path: Path) -> None:
     typer.echo(_render_health_check(_call(inspect_excel_folder, path)))
 
 
+@excel_app.command("classify")
+def excel_classify(path: Path) -> None:
+    """Inspect dirty Excel sheet and region classification."""
+    typer.echo(json.dumps(_call(inspect_dirty_excel, path), ensure_ascii=False, indent=2))
+
+
 @excel_app.command("lint")
 def excel_lint(path: Path) -> None:
     """Return non-zero when Excel Health Check warnings are present."""
@@ -409,6 +529,44 @@ def excel_lint(path: Path) -> None:
     typer.echo(json.dumps(health, ensure_ascii=False, indent=2))
     if health.get("warnings"):
         raise typer.Exit(code=1)
+
+
+@change_app.command("parse")
+def change_parse(path: Path) -> None:
+    """Parse a change request into Change Atoms."""
+    extraction = _call(parse_change_atoms, LocalStore(), path)
+    typer.echo(json.dumps(extraction.model_dump(), ensure_ascii=False, indent=2))
+
+
+@changes_app.command("list")
+def changes_list() -> None:
+    """List parsed changes."""
+    typer.echo(_call(list_changes, LocalStore()))
+
+
+@changes_app.command("show")
+def changes_show(change_id: str) -> None:
+    """Show parsed Change Atoms for a change."""
+    typer.echo(_call(show_change, LocalStore(), change_id))
+
+
+@impacts_app.command("list")
+def impacts_list(
+    change: str | None = typer.Option(None, "--change", help="Filter by change ID."),
+) -> None:
+    """List persisted impact review decisions."""
+    typer.echo(_call(list_impacts, LocalStore(), change))
+
+
+@impacts_app.command("set-status")
+def impacts_set_status(
+    impact_id: str,
+    status: str,
+    reason: str = typer.Option("", help="Reviewer reason."),
+) -> None:
+    """Set impact review status."""
+    decision = _call(set_impact_status, LocalStore(), impact_id, status, reason)
+    typer.echo(f"Set {decision.impact_id} to {decision.status}.")
 
 
 def _call(function, *args, **kwargs):

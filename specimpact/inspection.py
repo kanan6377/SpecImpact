@@ -6,11 +6,18 @@ import yaml
 
 from specimpact.core import resolve_name
 from specimpact.extraction import AliasCatalog
+from specimpact.llm_graph.entity_resolution import (
+    decide_alias_candidate,
+    list_alias_candidates,
+    suggest_alias_candidates,
+)
 from specimpact.models import Artifact, Entity, Evidence, Relation
 from specimpact.store import LocalStore
 
 
-def suggest_aliases(store: LocalStore) -> int:
+def suggest_aliases(store: LocalStore, *, use_llm: bool = False) -> int:
+    if use_llm:
+        return suggest_alias_candidates(store, use_llm=True)
     path = store.root / "alias_suggestions.jsonl"
     rows = [
         {"target_id": item.artifact_id, "alias": item.display_name, "status": "pending"}
@@ -22,6 +29,18 @@ def suggest_aliases(store: LocalStore) -> int:
         "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
     )
     return len(rows)
+
+
+def review_alias_candidates(store: LocalStore) -> str:
+    return list_alias_candidates(store)
+
+
+def confirm_alias_candidate(store: LocalStore, candidate_id: str):
+    return decide_alias_candidate(store, candidate_id, "confirmed")
+
+
+def reject_alias_candidate(store: LocalStore, candidate_id: str):
+    return decide_alias_candidate(store, candidate_id, "rejected")
 
 
 def list_aliases(store: LocalStore) -> str:

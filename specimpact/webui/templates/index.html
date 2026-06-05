@@ -33,7 +33,9 @@
           <a href="/ui/dashboard" data-nav="dashboard">概要</a>
           <a href="/ui/demo" data-nav="demo">ガイド付きサンプル</a>
           <a href="/ui/ingest" data-nav="ingest">Ingest</a>
+          <a href="/ui/dirty-excel" data-nav="dirty-excel">Dirty Excel</a>
           <a href="/ui/analyze" data-nav="analyze">Analyze / Report</a>
+          <a href="/ui/impact-board" data-nav="impact-board">Impact Board</a>
           <a href="/ui/graph" data-nav="graph">Graph Explorer</a>
           <a href="/ui/aliases" data-nav="aliases">Aliases</a>
           <a href="/ui/settings" data-nav="settings">Settings</a>
@@ -102,6 +104,12 @@ $ specimpact why "カード入会申込API"
           <article class="panel"><h2>Excel Health Check</h2><div id="health-check" class="pulse-list"></div></article>
           <article class="panel"><h2>Managed upload</h2><p>ファイルは案件内の <code>.specimpact/uploads/</code> に新規保存されます。</p><form id="upload-form"><label>Workflow<select name="workflow"><option>docs</option><option>change</option><option>aliases</option><option>openapi</option><option>ddl</option><option>table</option><option>review</option><option>eval</option></select></label><label>Files<input type="file" name="files" multiple required></label><button class="button">Upload</button></form><pre id="upload-result"></pre></article>
         </section>
+        <section class="page" data-view="dirty-excel">
+          <div class="page-head"><div><p class="eyebrow">DIRTY EXCEL REVIEW CONSOLE</p><h1>Dirty Excel</h1><p>セル番地、region、LLM/ルール抽出提案を確認します。</p></div></div>
+          <article class="panel"><form data-job="ingest_dirty_excel" class="inline-form"><label>Excel path<input name="path" required placeholder="docs または workbook.xlsx"></label><label>Aliases YAML<input name="aliases" placeholder="aliases.yml"></label><label class="check"><input type="checkbox" name="llm"> configured LLM で region 抽出</label><button class="button primary">Dirty Excel ingest</button></form></article>
+          <div class="grid two"><article class="panel"><h2>Summary</h2><pre id="dirty-summary"></pre></article><article class="panel"><h2>Graph proposals</h2><div id="dirty-proposals"></div></article></div>
+          <article class="panel"><h2>Regions</h2><div id="dirty-regions"></div></article>
+        </section>
         <section class="page" data-view="analyze">
           <div class="page-head"><div><p class="eyebrow">CHANGE REVIEW COCKPIT</p><h1>Analyze / Report</h1><p>変更要求を local graph に照合し、任意の LLM で候補をまとめて精査します。</p></div><div><a class="button ghost download" data-format="markdown">Markdown</a><a class="button ghost download" data-format="json">JSON</a><a class="button ghost download" data-format="excel">Excel</a></div></div>
           <article class="panel analysis-cockpit">
@@ -118,9 +126,15 @@ $ specimpact why "カード入会申込API"
             </div>
           </article>
           <article class="panel"><form data-job="analyze" class="inline-form"><label>Change request<input name="path" required placeholder="changes/change_credit_limit.md"></label><label class="check"><input type="checkbox" name="no_llm"> local-only / --no-llm</label><button class="button primary">Analyze impact</button></form><p class="field-help">LLM 有効時も候補は local graph から出発します。外部 provider を使う job は送信前に必ず確認します。</p></article>
+          <article class="panel"><form data-job="analyze_llm_first" class="inline-form"><label>Change request<input name="path" required placeholder="changes/利用限度額上限変更.md"></label><button class="button">LLM-first / Change Atom 解析</button></form><p class="field-help">Dirty Excel 由来 graph と Change Atom から evidence 付き候補を作ります。</p></article>
           <article class="panel"><h2>変更依頼テキスト</h2><form data-job="analyze_text"><label>Change request text<textarea name="body" required rows="6" placeholder="入会申込画面の「利用限度額」の上限を999万円から9999万円に変更する。"></textarea></label><button class="button primary">テキストから解析</button></form><p class="field-help">入力内容は案件内のローカルファイルに保存して解析します。外部送信は行いません。</p></article>
           <article class="panel notice"><strong>このレポートは影響確定結果ではなく、レビュー候補です。</strong><span>must_review は「影響あり」ではなく「必ず確認すべき」です。</span></article>
           <div class="grid report-layout"><article class="panel"><h2>Run history</h2><div id="run-history"></div></article><article class="panel"><h2>Latest report</h2><div id="report"></div></article></div>
+        </section>
+        <section class="page" data-view="impact-board">
+          <div class="page-head"><div><p class="eyebrow">IMPACT REVIEW BOARD</p><h1>Impact Board</h1><p>影響候補の人間判断を保存します。</p></div></div>
+          <article class="panel"><form data-job="impact_status" class="inline-form"><label>Impact ID<input name="impact_id" required placeholder="impact.change.xxx.artifact.id"></label><label>Status<select name="status"><option>accepted</option><option>rejected</option><option>needs_investigation</option><option>implemented</option><option>tested</option><option>closed</option><option>unreviewed</option></select></label><label>Reason<input name="reason"></label><button class="button primary">Status 更新</button></form></article>
+          <article class="panel"><h2>Decisions</h2><pre id="impact-decisions"></pre></article>
         </section>
         <section class="page" data-view="graph">
           <div class="page-head"><div><p class="eyebrow">LOCAL KNOWLEDGE GRAPH</p><h1>Graph Explorer</h1><p>node、relation、evidence を確認し、relation status を更新します。</p></div></div>

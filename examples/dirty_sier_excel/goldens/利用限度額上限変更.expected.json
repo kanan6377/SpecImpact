@@ -1,0 +1,10 @@
+{
+  "must_review": [
+    "screen.enrollment_application",
+    "api.enrollment_application",
+    "column.requested_credit_limit",
+    "validation.credit_limit_upper_bound",
+    "test.credit_limit_boundary"
+  ],
+  "should_review": []
+}

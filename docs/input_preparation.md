@@ -26,7 +26,8 @@ rename section headings; section aliases and artifact aliases are separate conce
 
 ## Spreadsheet Migration Rules
 
-Before loading CSV or Excel, reshape the source into a simple logical table:
+For `ingest-csv` and the compatibility `ingest-excel` command, reshape the source into a simple
+logical table:
 
 - one worksheet per logical table
 - one header row
@@ -44,8 +45,16 @@ Recommended columns:
 artifact_type, artifact_name, item_name, item_type, description, relation, target
 ```
 
-If a legacy workbook cannot be reshaped safely, export the relevant sheet to Markdown and keep the
-original workbook as a source attachment outside SpecImpact.
+If a legacy workbook cannot be reshaped safely, use the v2 dirty Excel path instead:
+
+```powershell
+specimpact ingest-dirty-excel ./docs --aliases ./aliases.yml
+specimpact analyze ./changes/change.md --llm-first
+```
+
+The dirty path preserves originals under `.specimpact/sources/original`, writes normalized cell
+JSONL, renders sheet Markdown/HTML, detects logical regions, and keeps evidence IDs tied to
+workbook/sheet/cell/range.
 
 ## Dirty Input Checklist
 
@@ -69,5 +78,6 @@ Excel取り込み前に、以下を確認してください。
 - 非表示シートを確認する
 - 古い定義は削除するか obsolete と明記する
 
-These rules are intentionally conservative. SpecImpact should miss less because the input structure
-is explicit, not because a parser guessed aggressively.
+These rules remain useful for clean loaders. For dirty Excel, the goal is different: keep the
+original workbook, let the tool infer regions and proposals, then make humans reviewers rather than
+spreadsheet janitors.

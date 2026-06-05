@@ -264,6 +264,8 @@ async function refresh() {
   try {
     await Promise.all([loadOverview(), loadJobs()]);
     if (page === "analyze") await loadReport();
+    if (page === "dirty-excel") await loadDirtyExcel();
+    if (page === "impact-board") await loadImpactDecisions();
     if (page === "graph") await loadGraph();
     if (page === "aliases") await loadAliases();
   } catch (error) {
@@ -294,6 +296,9 @@ async function loadOverview() {
   if ($("#project-pulse")) $("#project-pulse").innerHTML = renderProjectPulse(data);
   if ($("#health-check")) $("#health-check").innerHTML = renderHealthCheck(data.health_check);
   if ($("#analysis-mode")) $("#analysis-mode").innerHTML = renderAnalysisMode(data);
+  if ($("#dirty-summary") && data.dirty_excel) {
+    $("#dirty-summary").textContent = JSON.stringify(data.dirty_excel, null, 2);
+  }
   if ($("#llm-status")) {
     $("#llm-status").innerHTML = `<div class="status-card"><span>Provider</span><strong>${escapeHtml(
       data.llm.enabled ? data.llm.provider : "disabled",
@@ -446,6 +451,55 @@ async function loadReport() {
           .join("")}</section>`,
     )
     .join("");
+}
+
+async function loadDirtyExcel() {
+  const data = await api(withProject("/dirty-excel"));
+  $("#dirty-summary").textContent = JSON.stringify(data.summary, null, 2);
+  $("#dirty-proposals").innerHTML = data.proposals.length
+    ? data.proposals
+        .map(
+          (proposal) =>
+            `<details><summary>${escapeHtml(proposal.proposal_id)} <span class="status ${escapeHtml(
+              proposal.status,
+            )}">${escapeHtml(proposal.status)}</span></summary><p>${escapeHtml(
+              proposal.region_id,
+            )}</p><p>${proposal.result.nodes.length} nodes / ${
+              proposal.result.edges.length
+            } edges</p><button class="button ghost" data-proposal-id="${escapeHtml(
+              proposal.proposal_id,
+            )}" data-proposal-status="accepted">承認</button><button class="button ghost" data-proposal-id="${escapeHtml(
+              proposal.proposal_id,
+            )}" data-proposal-status="rejected">却下</button><pre>${escapeHtml(
+              JSON.stringify(proposal.result, null, 2),
+            )}</pre></details>`,
+        )
+        .join("")
+    : '<p class="empty-state">proposal はまだありません。</p>';
+  $("#dirty-regions").innerHTML = data.regions.length
+    ? data.regions
+        .map(
+          (region) =>
+            `<details><summary>${escapeHtml(region.sheet_name)} ${escapeHtml(
+              region.range,
+            )} <span>${escapeHtml(region.region_type)}</span></summary><pre>${escapeHtml(
+              region.rendered_text,
+            )}</pre></details>`,
+        )
+        .join("")
+    : '<p class="empty-state">region はまだありません。</p>';
+  $$("[data-proposal-id]").forEach((button) => {
+    button.onclick = () =>
+      enqueue("graph_proposal_decide", {
+        proposal_id: button.dataset.proposalId,
+        status: button.dataset.proposalStatus,
+      });
+  });
+}
+
+async function loadImpactDecisions() {
+  const data = await api(withProject("/impact-decisions"));
+  $("#impact-decisions").textContent = JSON.stringify(data.decisions, null, 2);
 }
 
 async function loadGraph() {
@@ -783,7 +837,8 @@ async function relationStatus(relationId, status) {
 }
 
 async function loadAliases() {
-  $("#aliases-result").textContent = JSON.stringify(await api(withProject("/aliases")), null, 2);
+  const data = await api(withProject("/aliases"));
+  $("#aliases-result").textContent = JSON.stringify(data, null, 2);
 }
 
 function escapeHtml(value) {
