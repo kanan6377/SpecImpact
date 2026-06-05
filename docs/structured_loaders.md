@@ -18,12 +18,18 @@ table definition.
 ## CSV And Excel
 
 `specimpact ingest-csv <csv>` and `specimpact ingest-excel <xlsx>` extract simple tables. A header
-row is required. Excel supports ordinary worksheets only; arbitrary layouts and merged-cell
-interpretation are intentionally unsupported.
+row is required. Excel supports ordinary worksheets and table-like SIer sheets.
 Corrupt workbooks are rejected as input errors without a traceback.
 
-For legacy spreadsheets, free-layout Excel, merged cells, and mixed wiki exports, reshape the source
-first. See [input_preparation.md](input_preparation.md) for the migration checklist.
+For legacy spreadsheets, free-layout Excel, merged cells, and mixed logical regions, use:
+
+```powershell
+specimpact ingest-dirty-excel <workbook-or-directory>
+```
+
+The dirty path preserves original files, normalizes cells with styles and merged ranges, renders
+cell-addressed Markdown/HTML, detects regions, and writes graph proposals before analysis.
+See [input_preparation.md](input_preparation.md).
 
 Individual structured and tabular ingest commands use stable filename-based document IDs. If a
 second source with the same filename resolves to a different path, ingest fails with a document-ID

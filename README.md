@@ -1,11 +1,13 @@
 # SpecImpact
 
-Excel設計書の仕様変更で、見直すべき画面・API・DB・外部IF・入力チェック・テストを、
-根拠つきで洗い出すローカルファーストOSSです。
+SIerのExcel地獄な設計書から、変更影響を証拠つきで管理する
+ローカルファーストOSSです。
 
-Excel設計書を捨てなくても、変更影響レビューは構造化できます。SpecImpact は設計書と
-変更依頼をローカル knowledge graph に変換し、レビュー候補、relation path、Excel上の
-根拠行を出します。これは影響確定ツールではなく、レビュー会で使うための候補表です。
+SpecImpact は、結合セル、表記揺れ、複数表混在、別紙参照を含む legacy Excel を
+セル番地つき evidence と region に分解し、LLMまたはローカルルールで
+画面・API・DB・外部IF・入力チェック・テストの関係候補を抽出します。
+出力は影響確定ではなく、証拠つきレビュー仮説です。人間の採否判断を蓄積し、
+次回以降の影響分析に活用します。
 
 ## Excel Demo
 
@@ -16,6 +18,19 @@ specimpact ingest-excel ./examples/japanese_sier_excel/docs --profile sier --ali
 specimpact analyze ./examples/japanese_sier_excel/changes/利用限度額_上限変更.md
 specimpact report --format markdown
 specimpact report --format excel
+```
+
+Dirty Excel v2 flow:
+
+```powershell
+python -m pip install -e .
+specimpact init
+specimpact ingest-dirty-excel ./examples/dirty_sier_excel/docs --aliases ./examples/dirty_sier_excel/aliases.yml
+specimpact graph proposals list
+specimpact aliases suggest --llm
+specimpact change parse ./examples/dirty_sier_excel/changes/利用限度額上限変更.md
+specimpact analyze ./examples/dirty_sier_excel/changes/利用限度額上限変更.md --llm-first
+specimpact impacts list
 ```
 
 Latest release: [v0.1.0-alpha](https://github.com/kanan6377/SpecImpact/releases/tag/v0.1.0-alpha)
@@ -177,9 +192,10 @@ Markdown extraction is convention-based and inspectable. Headings such as `API:`
 `Reads`, `Writes`, `Displays`, `Sends`, and `Covers` define relations. Plain text matches are kept
 as conservative mentions.
 
-Structured loaders cover straightforward OpenAPI, DDL, CSV, and Excel definitions. See
+Structured loaders cover straightforward OpenAPI, DDL, CSV, and clean Excel definitions. See
 [docs/structured_loaders.md](docs/structured_loaders.md). For messy enterprise spreadsheets and
-legacy design documents, start with [docs/input_preparation.md](docs/input_preparation.md).
+legacy design documents, use `ingest-dirty-excel` and start with
+[docs/input_preparation.md](docs/input_preparation.md).
 
 ## Optional AI
 
@@ -250,19 +266,25 @@ The release dataset is useful for regression control, not a claim of final impac
 
 SpecImpact does not try to fully understand every Excel layout.
 
-Current MVP works best with:
+Current v1 loader works best with:
 
 - Table-like Excel design documents
 - Clear header rows
 - One logical table per sheet
 - Japanese SIer-style screen/API/DB/IF/test definition sheets
 
-Not yet supported well:
+Use `ingest-dirty-excel` for:
 
-- Heavily merged grid layouts
+- Merged-cell workbook layouts
+- Revision history and tables in the same sheet
+- Multiple logical regions per sheet
+- Japanese labels mixed with API/DB physical names
+- Evidence review before accepting LLM or inferred graph proposals
+
+Still not supported well:
+
 - Diagrams and arrows
 - ER diagrams as images
-- Complex free-form Excel sheets
 - Completely unstructured documents
 
 ## 制限事項

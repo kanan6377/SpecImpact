@@ -1,0 +1,8 @@
+aliases:
+  entity.application.requested_credit_limit:
+    canonical_type: BusinessField
+    aliases:
+      - 利用限度額
+      - 希望利用限度額
+      - requestedCreditLimit
+      - REQUESTED_CREDIT_LIMIT

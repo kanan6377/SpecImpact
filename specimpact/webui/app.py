@@ -27,10 +27,12 @@ from specimpact.webui.services import (
     aliases_data,
     copy_demo,
     demo_source,
+    dirty_excel_data,
     evidence_data,
     execute,
     external_preview,
     graph_data,
+    impact_decisions_data,
     project_overview,
     report_data,
     run_history,
@@ -39,7 +41,19 @@ from specimpact.webui.services import (
 )
 from specimpact.webui.uploads import save_uploads
 
-PAGES = {"dashboard", "demo", "ingest", "analyze", "graph", "aliases", "settings", "tools", "jobs"}
+PAGES = {
+    "dashboard",
+    "demo",
+    "ingest",
+    "dirty-excel",
+    "analyze",
+    "impact-board",
+    "graph",
+    "aliases",
+    "settings",
+    "tools",
+    "jobs",
+}
 STATIC_DIR = Path(__file__).parent / "static"
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 
@@ -295,6 +309,14 @@ def create_app(
     @app.get("/api/projects/{project_id}/aliases")
     def aliases(project_id: str):
         return aliases_data(_project(app, project_id))
+
+    @app.get("/api/projects/{project_id}/dirty-excel")
+    def dirty_excel(project_id: str):
+        return dirty_excel_data(_project(app, project_id))
+
+    @app.get("/api/projects/{project_id}/impact-decisions")
+    def impact_decisions(project_id: str, change_id: str | None = None):
+        return {"decisions": impact_decisions_data(_project(app, project_id), change_id)}
 
     @app.post("/api/projects/{project_id}/tool")
     def read_only_tool(project_id: str, body: ToolRequest):

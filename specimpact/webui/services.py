@@ -19,6 +19,12 @@ from specimpact.core import (
     ingest_documents,
     latest_run_dir,
 )
+from specimpact.dirty_excel.ingestion import (
+    decide_graph_proposal,
+    ingest_dirty_excel,
+    inspect_dirty_excel,
+    list_graph_proposals,
+)
 from specimpact.embeddings import rebuild_embeddings
 from specimpact.graphrag import (
     configure_llm,
@@ -26,9 +32,15 @@ from specimpact.graphrag import (
     is_external_llm,
     llm_status,
 )
+from specimpact.impact_management.change_atoms import parse_change_atoms
+from specimpact.impact_management.decision_store import list_impacts, set_impact_status
+from specimpact.impact_management.review_session import analyze_change_llm_first
 from specimpact.inspection import (
+    confirm_alias_candidate,
     decide_alias,
+    reject_alias_candidate,
     remove_alias,
+    review_alias_candidates,
     set_relation_status,
     suggest_aliases,
 )
@@ -61,12 +73,19 @@ MUTATING_ACTIONS = {
     "ingest_ddl",
     "ingest_csv",
     "ingest_excel",
+    "ingest_dirty_excel",
     "analyze",
     "analyze_text",
+    "analyze_llm_first",
+    "change_parse",
     "aliases_suggest",
+    "alias_confirm",
+    "alias_reject_candidate",
     "alias_decide",
     "alias_remove",
     "relation_status",
+    "graph_proposal_decide",
+    "impact_status",
     "llm_configure",
     "llm_disable",
     "embeddings_rebuild",
@@ -100,6 +119,7 @@ def project_overview(project: Project) -> dict[str, Any]:
         "initialized": initialized,
         "counts": counts,
         "health_check": _health_check(store),
+        "dirty_excel": inspect_dirty_excel(store) if initialized else None,
         "latest_run": latest,
         "privacy_doctor": doctor,
         "llm": llm_status(store),
@@ -258,7 +278,37 @@ def aliases_data(project: Project) -> dict[str, Any]:
         if suggestions_path.exists()
         else []
     )
-    return {"aliases": aliases or {}, "suggestions": suggestions}
+    candidates_path = store.root / "alias_candidates.jsonl"
+    candidates = (
+        [
+            json.loads(line)
+            for line in candidates_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        if candidates_path.exists()
+        else []
+    )
+    return {"aliases": aliases or {}, "suggestions": suggestions, "candidates": candidates}
+
+
+def dirty_excel_data(project: Project) -> dict[str, Any]:
+    store = store_for(project)
+    regions_path = store.root / "dirty_regions.jsonl"
+    proposals = json.loads(list_graph_proposals(store))
+    regions = (
+        [
+            json.loads(line)
+            for line in regions_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        if regions_path.exists()
+        else []
+    )
+    return {"summary": inspect_dirty_excel(store), "regions": regions, "proposals": proposals}
+
+
+def impact_decisions_data(project: Project, change_id: str | None = None) -> list[dict[str, Any]]:
+    return json.loads(list_impacts(store_for(project), change_id))
 
 
 def external_preview(project: Project, action: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -268,7 +318,9 @@ def external_preview(project: Project, action: str, params: dict[str, Any]) -> d
     no_llm = bool(params.get("no_llm"))
     dataset_case_count = _dataset_case_count(project, action, params)
     llm = config["llm"]
-    if action in {"ingest", "analyze"} and not no_llm and is_external_llm(llm):
+    dirty_llm = action == "ingest_dirty_excel" and bool(params.get("llm"))
+    graph_llm = action in {"ingest", "analyze", "analyze_llm_first"} and not no_llm
+    if (dirty_llm or graph_llm) and is_external_llm(llm):
         if action == "ingest":
             purposes.append(
                 {
@@ -276,6 +328,15 @@ def external_preview(project: Project, action: str, params: dict[str, Any]) -> d
                     "model": llm.get("model"),
                     "purpose": "文書 chunk 抽出",
                     "item_count": _ingest_chunk_count(project, params),
+                }
+            )
+        elif action == "ingest_dirty_excel":
+            purposes.append(
+                {
+                    "provider": llm.get("provider"),
+                    "model": llm.get("model"),
+                    "purpose": "Dirty Excel region extraction",
+                    "item_count": 1,
                 }
             )
         else:
@@ -353,6 +414,16 @@ def execute(project: Project, action: str, params: dict[str, Any]) -> dict[str, 
                 )
             )
         }
+    elif action == "ingest_dirty_excel":
+        summary = ingest_dirty_excel(
+            store,
+            _path(project, params, "path"),
+            _optional_path(project, params, "aliases"),
+            use_llm=bool(params.get("llm")),
+            yes=approved,
+            confirm=confirm,
+        )
+        result = summary.model_dump()
     elif action == "analyze":
         report = analyze_change(
             store,
@@ -361,6 +432,9 @@ def execute(project: Project, action: str, params: dict[str, Any]) -> dict[str, 
             no_llm=bool(params.get("no_llm")),
             confirm=confirm,
         )
+        result = {"run_id": report.run_id, "candidates": len(report.impacts)}
+    elif action == "analyze_llm_first":
+        report = analyze_change_llm_first(store, _path(project, params, "path"))
         result = {"run_id": report.run_id, "candidates": len(report.impacts)}
     elif action == "analyze_text":
         body = str(params.get("body", "")).strip()
@@ -378,8 +452,15 @@ def execute(project: Project, action: str, params: dict[str, Any]) -> dict[str, 
             confirm=confirm,
         )
         result = {"run_id": report.run_id, "candidates": len(report.impacts)}
+    elif action == "change_parse":
+        extraction = parse_change_atoms(store, _path(project, params, "path"))
+        result = extraction.model_dump()
     elif action == "aliases_suggest":
-        result = {"suggestions": suggest_aliases(store)}
+        result = {"suggestions": suggest_aliases(store, use_llm=bool(params.get("llm")))}
+    elif action == "alias_confirm":
+        result = confirm_alias_candidate(store, params["candidate_id"]).model_dump()
+    elif action == "alias_reject_candidate":
+        result = reject_alias_candidate(store, params["candidate_id"]).model_dump()
     elif action == "alias_decide":
         decide_alias(store, params["target_id"], params["alias"], params["status"])
         result = {"target_id": params["target_id"], "status": params["status"]}
@@ -389,6 +470,15 @@ def execute(project: Project, action: str, params: dict[str, Any]) -> dict[str, 
     elif action == "relation_status":
         set_relation_status(store, params["relation_id"], params["status"])
         result = {"relation_id": params["relation_id"], "status": params["status"]}
+    elif action == "graph_proposal_decide":
+        result = decide_graph_proposal(store, params["proposal_id"], params["status"]).model_dump()
+    elif action == "impact_status":
+        result = set_impact_status(
+            store,
+            params["impact_id"],
+            params["status"],
+            params.get("reason", ""),
+        ).model_dump()
     elif action == "llm_configure":
         configure_llm(store, params["provider"], params["model"], params.get("base_url"))
         result = llm_status(store)
@@ -452,6 +542,8 @@ def tool_result(project: Project, tool: str, params: dict[str, Any]) -> str:
         return project_status(store)
     if tool == "privacy":
         return privacy_doctor(store)
+    if tool == "alias_candidates":
+        return review_alias_candidates(store)
     raise ValueError(f"Unknown read-only tool: {tool}")
 
 

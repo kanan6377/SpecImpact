@@ -48,3 +48,13 @@
 - Stable report format
 - documented limitations
 - real-world sample coverage
+
+## v2.0.0: Dirty Excel Impact Management
+
+- Dirty Excel workbook normalization with original preservation
+- Sheet classification and logical region detection
+- LLM/heuristic region proposals with evidence validation
+- Alias inference and review from observed graph data
+- Change Atom parsing and LLM-first impact retrieval
+- Impact decision board with accepted/rejected/implemented/tested/closed states
+- Dirty SIer Excel benchmark under `examples/dirty_sier_excel`
