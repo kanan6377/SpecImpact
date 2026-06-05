@@ -46,6 +46,9 @@ def export_report_excel(store: LocalStore, output_path: Path | None = None) -> P
         "sheet",
         "row",
         "cell",
+        "primary_evidence",
+        "evidence_count",
+        "evidence_ids",
         "relation_path",
         "status",
         "owner",
@@ -55,6 +58,7 @@ def export_report_excel(store: LocalStore, output_path: Path | None = None) -> P
         for impact in report[priority]:
             first = _first_evidence(impact, evidence)
             location = _location(first)
+            evidence_ids = impact.get("evidence_ids", [])
             candidate_rows.append(
                 [
                     priority,
@@ -65,6 +69,9 @@ def export_report_excel(store: LocalStore, output_path: Path | None = None) -> P
                     location["sheet"],
                     location["row"],
                     location["cell"],
+                    _primary_evidence(first),
+                    len(evidence_ids),
+                    ", ".join(evidence_ids),
                     "\n".join(impact.get("relation_paths", [])),
                     "",
                     "",
@@ -148,6 +155,16 @@ def _location(evidence: Evidence | None) -> dict[str, Any]:
         "row": evidence.source_location.line_start,
         "cell": match.group(2) if match else "",
     }
+
+
+def _primary_evidence(evidence: Evidence | None) -> str:
+    if evidence is None:
+        return ""
+    location = _location(evidence)
+    return (
+        f"{location['file']} / {location['sheet']} / "
+        f"row {location['row']} / {location['cell']}"
+    )
 
 
 def _read_json(path: Path, default: Any) -> Any:

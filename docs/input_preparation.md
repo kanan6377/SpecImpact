@@ -49,14 +49,25 @@ original workbook as a source attachment outside SpecImpact.
 
 ## Dirty Input Checklist
 
-Run a quick cleanup before ingest:
+Before ingesting Excel files, check:
 
-- duplicated headers are renamed
-- blank columns are removed
--途中空行 inside the table are removed
-- Japanese, English, snake_case, and camelCase aliases are registered
--同名項目 that refer to different concepts have distinct aliases
-- rejected relations from prior review are preserved before re-ingest
+- Blank columns are removed
+- Empty rows in the middle of tables are minimized
+- Merged cells are avoided where possible
+- Header rows are clear
+- One logical table is placed in one sheet where possible
+- Hidden sheets are reviewed
+- Old definitions are removed or marked as obsolete
+
+Excel取り込み前に、以下を確認してください。
+
+- 空列を削除する
+- 表の途中にある空行を減らす
+- 可能なら結合セルを避ける
+- ヘッダー行を明確にする
+- 1シート1論理表に近づける
+- 非表示シートを確認する
+- 古い定義は削除するか obsolete と明記する
 
 These rules are intentionally conservative. SpecImpact should miss less because the input structure
 is explicit, not because a parser guessed aggressively.

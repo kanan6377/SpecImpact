@@ -4,6 +4,7 @@ import json
 import threading
 import webbrowser
 from pathlib import Path
+from typing import Any
 
 import typer
 
@@ -147,10 +148,13 @@ def ingest_csv_command(path: Path) -> None:
 @app.command("ingest-excel")
 def ingest_excel_command(
     path: Path,
+    profile: str | None = typer.Option(None, help="Excel profile, e.g. sier."),
     aliases: Path | None = typer.Option(None, help="Manual aliases.yml file."),
 ) -> None:
     """Ingest Excel workbooks or a directory of SIer Excel design documents."""
-    typer.echo(f"Ingested {len(_call(ingest_excel, LocalStore(), path, aliases))} Excel sheets.")
+    typer.echo(
+        f"Ingested {len(_call(ingest_excel, LocalStore(), path, aliases, profile))} Excel sheets."
+    )
 
 
 @app.command()
@@ -395,7 +399,7 @@ def embeddings_rebuild(
 @excel_app.command("inspect")
 def excel_inspect(path: Path) -> None:
     """Show an Excel Health Check for a workbook or workbook directory."""
-    typer.echo(json.dumps(_call(inspect_excel_folder, path), ensure_ascii=False, indent=2))
+    typer.echo(_render_health_check(_call(inspect_excel_folder, path)))
 
 
 @excel_app.command("lint")
@@ -412,3 +416,28 @@ def _call(function, *args, **kwargs):
         return function(*args, **kwargs)
     except (OSError, ValueError) as error:
         raise typer.BadParameter(str(error)) from error
+
+
+def _render_health_check(health: dict[str, Any]) -> str:
+    warning_lines = [
+        f"- merged cells: {health.get('merged_cells', 0)}",
+        f"- hidden sheets: {health.get('hidden_sheets', 0)}",
+        f"- revision history sheets: {len(health.get('revision_history_sheets', []))}",
+        f"- duplicate item names: {len(health.get('duplicate_field_names', []))}",
+        f"- alias candidates: {len(health.get('alias_candidates', []))}",
+    ]
+    extra = [f"- {item}" for item in health.get("warnings", [])]
+    return "\n".join(
+        [
+            "Excel Health Check",
+            "",
+            f"Workbooks: {health.get('workbooks', 0)}",
+            f"Sheets: {health.get('sheets', 0)}",
+            f"Detected artifacts: {health.get('detected_artifacts', 0)}",
+            f"Possible relations: {health.get('possible_relations', 0)}",
+            "",
+            "Warnings:",
+            *warning_lines,
+            *extra,
+        ]
+    )

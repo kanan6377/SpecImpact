@@ -12,11 +12,13 @@ Excel設計書を捨てなくても、変更影響レビューは構造化でき
 ```powershell
 python -m pip install -e .
 specimpact init
-specimpact ingest-excel ./examples/japanese_sier_excel/docs --aliases ./examples/japanese_sier_excel/aliases.yml
-specimpact analyze ./examples/japanese_sier_excel/changes/利用限度額_上限変更.md --no-llm
+specimpact ingest-excel ./examples/japanese_sier_excel/docs --profile sier --aliases ./examples/japanese_sier_excel/aliases.yml
+specimpact analyze ./examples/japanese_sier_excel/changes/利用限度額_上限変更.md
 specimpact report --format markdown
 specimpact report --format excel
 ```
+
+Latest release: [v0.1.0-alpha](https://github.com/kanan6377/SpecImpact/releases/tag/v0.1.0-alpha)
 
 変更依頼:
 
@@ -32,6 +34,31 @@ SpecImpact は以下をレビュー候補として出します。
 - 境界値テスト
 
 それぞれについて、Excelのファイル名・シート名・行番号・セル位置を根拠として表示します。
+
+Excelを取り込む前に、状態診断だけを見ることもできます。
+
+```powershell
+specimpact excel inspect ./examples/japanese_sier_excel/docs
+```
+
+出力例:
+
+```text
+Excel Health Check
+
+Workbooks: 6
+Sheets: 6
+Detected artifacts: 14
+Possible relations: 14
+
+Warnings:
+- merged cells: 0
+- hidden sheets: 0
+- revision history sheets: 0
+- duplicate item names: 10
+- alias candidates: 4
+- 複数のヘッダー候補があるシートがあります。
+```
 
 ## Why
 
@@ -90,6 +117,19 @@ Japanese user manual: [docs/user_manual_ja.md](docs/user_manual_ja.md)
 Local GUI manual: [docs/gui_manual_ja.md](docs/gui_manual_ja.md)
 
 ## Quickstart
+
+Excel Impact Review MVP の最短デモ:
+
+```powershell
+python -m pip install -e .
+specimpact init
+specimpact ingest-excel ./examples/japanese_sier_excel/docs --profile sier --aliases ./examples/japanese_sier_excel/aliases.yml
+specimpact analyze ./examples/japanese_sier_excel/changes/利用限度額_上限変更.md
+specimpact report --format markdown
+specimpact report --format excel
+```
+
+従来のMarkdown設計書サンプル:
 
 ```powershell
 python -m pip install -e .
@@ -205,6 +245,44 @@ See [docs/roadmap.md](docs/roadmap.md), [docs/phase_status.md](docs/phase_status
 ## Evaluation Scope
 
 The release dataset is useful for regression control, not a claim of final impact correctness.
+
+## Limitations
+
+SpecImpact does not try to fully understand every Excel layout.
+
+Current MVP works best with:
+
+- Table-like Excel design documents
+- Clear header rows
+- One logical table per sheet
+- Japanese SIer-style screen/API/DB/IF/test definition sheets
+
+Not yet supported well:
+
+- Heavily merged grid layouts
+- Diagrams and arrows
+- ER diagrams as images
+- Complex free-form Excel sheets
+- Completely unstructured documents
+
+## 制限事項
+
+SpecImpact は、あらゆるExcel方眼紙を完全解析するツールではありません。
+
+現在のMVPが得意なもの:
+
+- 表形式に近いExcel設計書
+- ヘッダー行が明確なシート
+- 1シート1論理表に近い構成
+- 日本SIerでよくある画面/API/DB/IF/テスト定義書
+
+まだ苦手なもの:
+
+- 結合セルだらけの自由レイアウト
+- 図形や矢印の意味理解
+- 画像として貼られたER図
+- 複雑な方眼紙レイアウト
+- 完全に非構造なExcel
 
 Known evaluation limits:
 

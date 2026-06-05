@@ -371,7 +371,10 @@ def relation_with_evidence(
     match_type: str = "exact",
     target_support_type: str = "entity",
 ) -> tuple[Relation, Evidence]:
-    key = f"{source_id}|{relation_type}|{target_id}|{document.document_id}|{line_number}"
+    key = (
+        f"{source_id}|{relation_type}|{target_id}|"
+        f"{document.document_id}|{line_number}|{quote.strip()}"
+    )
     suffix = _short_hash(key)
     relation_id = f"rel.{_slug(source_id)}.{relation_type.lower()}.{_slug(target_id)}.{suffix}"
     evidence_id = f"ev.{suffix}"

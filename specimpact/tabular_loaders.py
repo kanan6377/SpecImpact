@@ -9,6 +9,7 @@ from xml.etree.ElementTree import ParseError
 from zipfile import BadZipFile
 
 from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 from openpyxl.utils.exceptions import InvalidFileException
 
 from specimpact.extraction import (
@@ -38,6 +39,7 @@ def ingest_excel(
     store: LocalStore,
     path: Path,
     aliases_path: Path | None = None,
+    profile: str | None = None,
 ) -> list[dict[str, Any]]:
     store.init()
     if aliases_path:
@@ -53,12 +55,19 @@ def ingest_excel(
         records: list[dict[str, Any]] = []
         health = inspect_excel_folder(path)
         for workbook in workbooks:
-            records.extend(_ingest_excel_workbook(store, workbook, source_key=workbook.name))
+            records.extend(
+                _ingest_excel_workbook(
+                    store,
+                    workbook,
+                    source_key=workbook.name,
+                    force_sier=profile == "sier",
+                )
+            )
         health["detected_artifacts"] = len(store.read("artifacts", Artifact))
         health["possible_relations"] = len(store.read("relations", Relation))
         store.write_json(store.root / "health_check.json", health)
         return records
-    return _ingest_excel_workbook(store, path, source_key=path.name)
+    return _ingest_excel_workbook(store, path, source_key=path.name, force_sier=profile == "sier")
 
 
 def inspect_excel_folder(path: Path) -> dict[str, Any]:
@@ -120,6 +129,9 @@ def inspect_excel_folder(path: Path) -> dict[str, Any]:
             merged_count = len(sheet.merged_cells.ranges)
             health["merged_cells"] += merged_count
             rows_with_values = sum(1 for row in rows if any(value is not None for value in row))
+            data_rows = max(0, rows_with_values - 1)
+            health["detected_artifacts"] += data_rows
+            health["possible_relations"] += data_rows
             for row in rows[1:]:
                 values = [str(value) for value in row if value not in (None, "")]
                 for value in values:
@@ -158,6 +170,7 @@ def _ingest_excel_workbook(
     path: Path,
     *,
     source_key: str,
+    force_sier: bool = False,
 ) -> list[dict[str, Any]]:
     if not path.is_file():
         raise ValueError(f"Excel source does not exist: {path}")
@@ -167,7 +180,7 @@ def _ingest_excel_workbook(
         raise ValueError(f"Invalid Excel source: {path}") from error
     sheet_text = _workbook_text(workbook)
     aliases = AliasCatalog.load(store.root / "aliases.yml")
-    if _looks_like_sier_workbook(path.name):
+    if force_sier or _looks_like_sier_workbook(path.name, workbook):
         return _ingest_sier_workbook(store, path, workbook, aliases, sheet_text, source_key)
     tables = []
     for sheet in workbook.worksheets:
@@ -260,6 +273,11 @@ def _ingest_sier_workbook(
         if not values or not any(values[0]):
             continue
         headers = [str(value).strip() if value is not None else "" for value in values[0]]
+        header_columns = {
+            header: index + 1
+            for index, header in enumerate(headers)
+            if header
+        }
         rows = [
             {headers[index]: value for index, value in enumerate(row) if index < len(headers)}
             for row in values[1:]
@@ -275,6 +293,7 @@ def _ingest_sier_workbook(
                 sheet.title,
                 row_number,
                 row,
+                header_columns,
                 aliases,
             )
             if kind == "screen":
@@ -302,7 +321,17 @@ def _ingest_sier_workbook(
     return records
 
 
-def _add_screen_row(graph, document, section_id, chunk_id, sheet, row_number, row, aliases) -> None:
+def _add_screen_row(
+    graph,
+    document,
+    section_id,
+    chunk_id,
+    sheet,
+    row_number,
+    row,
+    header_columns,
+    aliases,
+) -> None:
     screen_name = _cell(row, "画面名") or _cell(row, "screen_name")
     item_name = _cell(row, "項目名") or _cell(row, "item_name")
     physical_name = _cell(row, "物理名") or _cell(row, "physical_name")
@@ -314,19 +343,32 @@ def _add_screen_row(graph, document, section_id, chunk_id, sheet, row_number, ro
     screen = _append_artifact(graph, screen_name, "Screen", document.document_id, aliases)
     for value in [item_name, physical_name]:
         if value:
+            header = "項目名" if value == item_name else "物理名"
             _append_entity_relation(
                 graph, screen.artifact_id, value, relation_type, document, section_id, chunk_id,
-                sheet, row_number, _row_quote(row), aliases, "screen_field_definition"
+                sheet, row_number, _row_quote(row), aliases, "screen_field_definition",
+                header_columns, header
             )
     if api_name:
         api = _append_artifact(graph, api_name, "API", document.document_id, aliases)
         _append_artifact_relation(
             graph, screen.artifact_id, api.artifact_id, "CALLS", document, section_id,
-            chunk_id, sheet, row_number, _row_quote(row), "screen_api_call"
+            chunk_id, sheet, row_number, _row_quote(row), "screen_api_call",
+            header_columns, "呼び出すAPI"
         )
 
 
-def _add_api_row(graph, document, section_id, chunk_id, sheet, row_number, row, aliases) -> None:
+def _add_api_row(
+    graph,
+    document,
+    section_id,
+    chunk_id,
+    sheet,
+    row_number,
+    row,
+    header_columns,
+    aliases,
+) -> None:
     api_name = _cell(row, "API名") or _cell(row, "api_name")
     field_name = _cell(row, "物理名") or _cell(row, "項目名") or _cell(row, "field")
     direction = str(_cell(row, "区分") or _cell(row, "direction") or "request").lower()
@@ -338,13 +380,25 @@ def _add_api_row(graph, document, section_id, chunk_id, sheet, row_number, row, 
         if "response" in direction or "レスポンス" in direction
         else "REQUEST_FIELD"
     )
+    header = "物理名" if _cell(row, "物理名") else "項目名"
     _append_entity_relation(
         graph, api.artifact_id, field_name, relation_type, document, section_id, chunk_id,
-        sheet, row_number, _row_quote(row), aliases, "api_request_definition"
+        sheet, row_number, _row_quote(row), aliases, "api_request_definition",
+        header_columns, header
     )
 
 
-def _add_table_row(graph, document, section_id, chunk_id, sheet, row_number, row, aliases) -> None:
+def _add_table_row(
+    graph,
+    document,
+    section_id,
+    chunk_id,
+    sheet,
+    row_number,
+    row,
+    header_columns,
+    aliases,
+) -> None:
     table_name = _cell(row, "テーブル名") or _cell(row, "table_name") or sheet
     column_name = _cell(row, "カラム名") or _cell(row, "column_name")
     logical_name = _cell(row, "カラム論理名") or _cell(row, "logical_name")
@@ -356,9 +410,11 @@ def _add_table_row(graph, document, section_id, chunk_id, sheet, row_number, row
     )
     for value in [column_name, logical_name]:
         if value:
+            header = "カラム名" if value == column_name else "カラム論理名"
             _append_entity_relation(
                 graph, column.artifact_id, value, "DEFINES", document, section_id,
-                chunk_id, sheet, row_number, _row_quote(row), aliases, "db_column_definition"
+                chunk_id, sheet, row_number, _row_quote(row), aliases, "db_column_definition",
+                header_columns, header
             )
 
 
@@ -370,6 +426,7 @@ def _add_validation_row(
     sheet,
     row_number,
     row,
+    header_columns,
     aliases,
 ) -> None:
     name = _cell(row, "チェック名") or _cell(row, "チェックID")
@@ -377,9 +434,11 @@ def _add_validation_row(
     if not name or not target:
         return
     validation = _append_artifact(graph, name, "ValidationRule", document.document_id, aliases)
+    header = "対象項目" if _cell(row, "対象項目") else "物理名"
     _append_entity_relation(
         graph, validation.artifact_id, target, "VALIDATES", document, section_id, chunk_id,
-        sheet, row_number, _row_quote(row), aliases, "validation_rule_definition"
+        sheet, row_number, _row_quote(row), aliases, "validation_rule_definition",
+        header_columns, header
     )
 
 
@@ -391,6 +450,7 @@ def _add_external_if_row(
     sheet,
     row_number,
     row,
+    header_columns,
     aliases,
 ) -> None:
     if_name = _cell(row, "IF名") or _cell(row, "if_name")
@@ -398,21 +458,35 @@ def _add_external_if_row(
     if not if_name or not field_name:
         return
     external_if = _append_artifact(graph, if_name, "ExternalIF", document.document_id, aliases)
+    header = "物理名" if _cell(row, "物理名") else "項目名"
     _append_entity_relation(
         graph, external_if.artifact_id, field_name, "SENDS", document, section_id, chunk_id,
-        sheet, row_number, _row_quote(row), aliases, "external_mapping_definition"
+        sheet, row_number, _row_quote(row), aliases, "external_mapping_definition",
+        header_columns, header
     )
 
 
-def _add_test_row(graph, document, section_id, chunk_id, sheet, row_number, row, aliases) -> None:
+def _add_test_row(
+    graph,
+    document,
+    section_id,
+    chunk_id,
+    sheet,
+    row_number,
+    row,
+    header_columns,
+    aliases,
+) -> None:
     test_name = _cell(row, "テスト名") or _cell(row, "テストケースID")
     target = _cell(row, "対象項目") or _cell(row, "確認観点")
     if not test_name or not target:
         return
     test = _append_artifact(graph, test_name, "TestCase", document.document_id, aliases)
+    header = "対象項目" if _cell(row, "対象項目") else "確認観点"
     _append_entity_relation(
         graph, test.artifact_id, target, "VALIDATES", document, section_id, chunk_id,
-        sheet, row_number, _row_quote(row), aliases, "test_coverage_definition"
+        sheet, row_number, _row_quote(row), aliases, "test_coverage_definition",
+        header_columns, header
     )
 
 
@@ -441,6 +515,8 @@ def _append_entity_relation(
     quote: str,
     aliases: AliasCatalog,
     evidence_type: str,
+    header_columns: dict[str, int],
+    evidence_header: str,
 ) -> None:
     entity = entity_for(str(target_name), document.document_id, aliases)
     graph.entities.append(entity)
@@ -452,7 +528,7 @@ def _append_entity_relation(
         section_id=section_id,
         chunk_id=chunk_id,
         line_number=row_number,
-        quote=f"[{sheet}!{_best_cell(row_number, quote)}] {quote}",
+        quote=f"[{sheet}!{_best_cell(row_number, header_columns, evidence_header)}] {quote}",
         evidence_type=evidence_type,
     )
     graph.relations.append(relation)
@@ -471,6 +547,8 @@ def _append_artifact_relation(
     row_number: int,
     quote: str,
     evidence_type: str,
+    header_columns: dict[str, int],
+    evidence_header: str,
 ) -> None:
     relation, evidence = relation_with_evidence(
         source_id=source_id,
@@ -480,7 +558,7 @@ def _append_artifact_relation(
         section_id=section_id,
         chunk_id=chunk_id,
         line_number=row_number,
-        quote=f"[{sheet}!{_best_cell(row_number, quote)}] {quote}",
+        quote=f"[{sheet}!{_best_cell(row_number, header_columns, evidence_header)}] {quote}",
         evidence_type=evidence_type,
         target_support_type="artifact",
     )
@@ -497,11 +575,41 @@ def _workbook_text(workbook) -> str:
     return "\n".join(lines)
 
 
-def _looks_like_sier_workbook(name: str) -> bool:
-    return any(
+def _looks_like_sier_workbook(name: str, workbook) -> bool:
+    if any(
         token in name
         for token in ("画面", "API", "テーブル", "入力チェック", "外部IF", "試験")
-    )
+    ):
+        return True
+    keywords = {
+        "画面ID",
+        "画面名",
+        "項目名",
+        "物理名",
+        "API名",
+        "endpoint",
+        "エンドポイント",
+        "テーブル名",
+        "カラム名",
+        "チェック内容",
+        "外部IF",
+        "IF名",
+        "送信項目",
+        "受信項目",
+        "テストケースID",
+        "期待結果",
+    }
+    for sheet in workbook.worksheets:
+        rows = list(sheet.iter_rows(min_row=1, max_row=3, values_only=True))
+        visible_values = {
+            str(value).strip()
+            for row in rows
+            for value in row
+            if value not in (None, "")
+        }
+        if sheet.title in keywords or len(visible_values & keywords) >= 2:
+            return True
+    return False
 
 
 def _estimate_sheet_type(file_name: str, sheet_name: str, headers: list[str]) -> str:
@@ -543,14 +651,9 @@ def _row_quote(row: dict[str, Any]) -> str:
     return " / ".join(f"{key}={value}" for key, value in row.items() if value not in (None, ""))
 
 
-def _best_cell(row_number: int, quote: str) -> str:
-    if "物理名=" in quote:
-        return f"D{row_number}"
-    if "対象項目=" in quote:
-        return f"C{row_number}"
-    if "カラム名=" in quote:
-        return f"C{row_number}"
-    return f"A{row_number}"
+def _best_cell(row_number: int, header_columns: dict[str, int], evidence_header: str) -> str:
+    column = header_columns.get(evidence_header, 1)
+    return f"{get_column_letter(column)}{row_number}"
 
 
 def _looks_like_field(value: str) -> bool:

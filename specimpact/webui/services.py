@@ -349,6 +349,7 @@ def execute(project: Project, action: str, params: dict[str, Any]) -> dict[str, 
                     store,
                     _path(project, params, "path"),
                     _optional_path(project, params, "aliases"),
+                    params.get("profile"),
                 )
             )
         }

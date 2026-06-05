@@ -414,6 +414,13 @@ p {
   box-shadow: var(--shadow);
 }
 
+.notice {
+  display: grid;
+  gap: 4px;
+  border-color: #f59e0b;
+  background: var(--amber-soft);
+}
+
 .grid {
   display: grid;
   gap: 16px;

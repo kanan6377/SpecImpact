@@ -1,15 +1,50 @@
-# SpecImpact Roadmap
+# Roadmap
 
-SpecImpact advances in gated releases. Each release must pass `pytest` and `ruff check`
-before work starts on the next release.
+## v0.1.0-alpha: Excel Impact Review MVP
 
-| Phase | Scope |
-| --- | --- |
-| v0.1.0-alpha-1 | Local Markdown/txt ingest, aliases, JSONL graph, analyze, report, why |
-| v0.1.0-alpha-2 | Alias workflow and inspect commands, additional change cases |
-| v0.1.0-alpha-3 | Trace, why-not, status, privacy doctor, evaluation |
-| v0.2.0 | Schema stabilization, relation workflow, evaluation expansion |
-| v0.3.0 | OpenAPI and SQL DDL loaders |
-| v0.4.0 | CSV and simple Excel loaders |
-| v0.5.0 | Optional Neo4j backend, Obsidian export, review import, graph diff |
-| v1.0.0 | Stable CLI/schema/backend, 3 samples, 20-30 separated evaluation cases |
+- Japanese SIer-style sample Excel project
+- Excel folder ingestion
+- Excel Health Check
+- Change request analysis
+- Evidence-backed reports
+- Markdown / Excel / JSON output
+
+## v0.2.0: Better Excel Profiling
+
+- Improved sheet classification
+- Header row detection
+- Revision history extraction
+- Alias candidate review
+- Better warnings for dirty Excel files
+
+## v0.3.0: SIer Excel Profiles
+
+- Screen design profile
+- API definition profile
+- Table definition profile
+- Validation rule profile
+- External IF profile
+- Test case profile
+
+## v0.4.0: Excel Diff Impact
+
+- before/after Excel comparison
+- semantic design diff
+- graph diff
+- impact review from Excel changes
+
+## v0.5.0: Review Board GUI
+
+- Impact Review Board
+- Evidence viewer
+- Alias review UI
+- relation confirmation/rejection
+- Excel report export from GUI
+
+## v1.0.0: Stable Local-first Excel Impact Review
+
+- Stable schema
+- Stable CLI
+- Stable report format
+- documented limitations
+- real-world sample coverage
