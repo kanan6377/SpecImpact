@@ -6,16 +6,27 @@ build-backend = "setuptools.build_meta"
 name = "specimpact"
 version = "1.1.0"
 description = "Evidence-first design change impact review CLI"
+readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 dependencies = ["pydantic>=2", "typer>=0.12", "PyYAML>=6", "openpyxl>=3.1", "jsonschema>=4.20"]
+keywords = ["impact-analysis", "requirements", "excel", "sier", "local-first"]
 classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Information Technology",
   "License :: OSI Approved :: Apache Software License",
+  "Natural Language :: Japanese",
+  "Operating System :: OS Independent",
   "Programming Language :: Python :: 3.11",
+  "Topic :: Software Development :: Documentation",
+  "Topic :: Software Development :: Quality Assurance",
 ]
 
 [project.urls]
 Repository = "https://github.com/kanan6377/SpecImpact"
+Documentation = "https://github.com/kanan6377/SpecImpact/blob/main/docs/user_manual_ja.md"
+Issues = "https://github.com/kanan6377/SpecImpact/issues"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.8"]
