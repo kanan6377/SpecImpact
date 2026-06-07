@@ -171,14 +171,23 @@ function formValues(form) {
 async function enqueue(action, params) {
   try {
     if (!state.projectId) throw new Error("案件を選択してください。");
-    const preview = await api(
-      withProject(
-        `/external-preview?action=${encodeURIComponent(action)}&params=${encodeURIComponent(
-          JSON.stringify(params),
-        )}`,
-      ),
-    );
+    const query = new URLSearchParams({
+      action,
+      params: JSON.stringify(params),
+    });
+    let preview;
+    try {
+      preview = await api(withProject(`/external-preview?${query.toString()}`));
+    } catch (error) {
+      throw new Error(
+        `External preview failed: action=${action}, params=${safeParams(params)}, error=${error.message}`,
+      );
+    }
     const approved = preview.required ? await confirmExternal(preview.transmissions) : false;
+    if (preview.required && !approved) {
+      toast("外部送信をキャンセルしました。Job は実行していません。");
+      return;
+    }
     const result = await api(withProject("/jobs"), {
       method: "POST",
       body: JSON.stringify({ action, params, external_approved: approved, input_kind: "path" }),
@@ -188,6 +197,14 @@ async function enqueue(action, params) {
   } catch (error) {
     toast(error.message);
   }
+}
+
+function safeParams(params) {
+  const redacted = {};
+  Object.entries(params || {}).forEach(([key, value]) => {
+    redacted[key] = /key|token|secret|password/i.test(key) ? "[redacted]" : value;
+  });
+  return JSON.stringify(redacted);
 }
 
 function confirmExternal(rows) {
