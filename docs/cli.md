@@ -8,6 +8,7 @@
 | コマンド | 用途 |
 | --- | --- |
 | `specimpact init` | 現在のディレクトリに `.specimpact/` を作成する |
+| `specimpact onboard <docs>` | LLM provider設定、設計書投入、graph構築、任意のObsidian出力をまとめて実行する |
 | `specimpact status` | 取り込み件数、最新run、設定状態を表示する |
 | `specimpact doctor --privacy` | 外部送信やbackend設定を確認する |
 | `specimpact analyze <change.md>` | 変更依頼を解析し、レビュー候補を作成する |
@@ -28,6 +29,15 @@
 | OpenAPI | `specimpact ingest-openapi .\openapi.yml` |
 | SQL DDL | `specimpact ingest-ddl .\schema.sql` |
 | CSV | `specimpact ingest-csv .\fields.csv` |
+
+`onboard` は `.xlsx` を含む入力を dirty Excel、それ以外を Markdown/text として自動判定します。
+標準providerは Codex CLI です。
+
+```powershell
+specimpact onboard .\docs --provider codex --model default --aliases .\aliases.yml
+specimpact onboard .\docs --no-llm --aliases .\aliases.yml
+specimpact onboard .\docs --obsidian-vault .\vault --aliases .\aliases.yml
+```
 
 `ingest-excel` は1行ヘッダーの表形式Excel向けです。結合セル、複数表混在、改版履歴ブロック、
 別紙参照、同上表記がある場合は `ingest-dirty-excel` を使います。
@@ -79,6 +89,8 @@ specimpact aliases reject <target_id> <alias>
 
 ```powershell
 specimpact change parse .\changes\change.md
+specimpact change analyze "利用限度額の上限を999万円から9999万円に変更"
+specimpact change analyze .\changes\change.md
 specimpact changes list
 specimpact changes show <change_id>
 specimpact analyze .\changes\change.md --llm-first
@@ -111,20 +123,30 @@ specimpact inspect evidence <evidence_id>
 
 relation status は `confirmed`、`unconfirmed`、`rejected` です。
 
-## 任意のLLMとembeddings
+## LLM provider と embeddings
 
 ```powershell
+specimpact llm configure --provider codex --model default
 specimpact llm configure --provider openai --model <model>
 specimpact llm configure --provider ollama --model <model> --base-url http://localhost:11434
-specimpact llm configure --provider codex --model default
 specimpact llm configure --provider fake --model fake
 specimpact llm status
 specimpact llm disable
 specimpact embeddings rebuild --provider local
 ```
 
-外部プロバイダは標準で無効です。OpenAI、Codex CLI、remote Ollama、OpenAI embeddings は
-外部送信確認が必要です。
+LLM-firstが標準導線です。OpenAI、Codex CLI、remote Ollama、OpenAI embeddings は外部送信確認が
+必要です。秘匿性の強い案件、CI、debugでは `--no-llm` を使います。
+
+## Obsidian
+
+```powershell
+specimpact export-obsidian .\vault
+specimpact export-obsidian .\vault --report-only
+```
+
+通常の `export-obsidian` は `SpecImpact/Artifacts`、`Evidence`、`Changes`、`Canvases`、
+`Dashboard.md` を含むreview vaultを生成します。`--report-only` は旧形式のMarkdownレポートコピーです。
 
 ## GUI
 

@@ -16,7 +16,8 @@ Embeddings: local unless explicitly rebuilt with a remote provider
 The doctor parses `config.yml` and treats only the exact `backend: local` value as the local
 backend.
 
-Optional OpenAI, Codex CLI, and remote Ollama calls require per-command confirmation or `--yes`.
+LLM-first is the standard workflow, but OpenAI, Codex CLI, and remote Ollama calls require
+per-command confirmation or `--yes`.
 The Codex provider sends only the requested extraction or batched candidate-reranking payload
 through the logged-in `codex exec` subprocess. It uses an ephemeral session, an empty temporary
 working directory, and a read-only sandbox. Localhost Ollama and local embeddings do not require

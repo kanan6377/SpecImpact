@@ -48,8 +48,8 @@ artifact_type, artifact_name, item_name, item_type, description, relation, targe
 If a legacy workbook cannot be reshaped safely, use the v2 dirty Excel path instead:
 
 ```powershell
-specimpact ingest-dirty-excel ./docs --aliases ./aliases.yml
-specimpact analyze ./changes/change.md --llm-first
+specimpact onboard ./docs --provider codex --model default --aliases ./aliases.yml
+specimpact change analyze "利用限度額の上限を999万円から9999万円に変更"
 ```
 
 The dirty path preserves originals under `.specimpact/sources/original`, writes normalized cell

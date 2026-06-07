@@ -54,7 +54,7 @@ def ingest_dirty_excel(
         client = llm_client or client_from_config(store)
         if client is None:
             raise ValueError(
-                "LLM provider not configured; run specimpact llm configure or omit --llm"
+                "LLM provider not configured; run specimpact llm configure or pass --no-llm"
             )
         ensure_llm_consent(
             client,

@@ -6,15 +6,16 @@
 
 ## 1. SpecImpactとは
 
-SpecImpact は、設計書と変更依頼から「確認したほうがよい影響候補」を evidence 付きで出す
-ローカルファーストのCLI/GUIツールです。
+SpecImpact は、LLMで設計書を evidence graph / GraphRAG に変換し、変更依頼から
+「確認したほうがよい影響候補」を evidence 付きで出すローカルファーストのCLI/GUIツールです。
 
 SpecImpact が出す結果は影響確定ではありません。`must_review` も「影響あり確定」ではなく、
 「直接証拠や関係経路があるので必ず確認する」という意味です。最終判断は設計者、開発者、
 テスト担当者が行います。
 
-標準設定では外部サービスへ設計書を送信しません。解析データは作業ディレクトリの
-`.specimpact/` に保存されます。
+標準導線はLLM-firstです。Codex CLIを第一候補にし、OpenAI APIやOllamaも利用できます。
+外部サービスへ設計書を送る場合は、provider設定と送信承認が必要です。解析データは作業
+ディレクトリの `.specimpact/` に保存されます。
 
 ## 2. 動作環境
 
@@ -49,6 +50,7 @@ python -m pip install -e ".[gui]"
 
 | 入力の状態 | 使うコマンド |
 | --- | --- |
+| 初期導入をまとめて実行 | `specimpact onboard` |
 | Markdown / text の設計書 | `specimpact ingest` |
 | OpenAPI | `specimpact ingest-openapi` |
 | SQL DDL | `specimpact ingest-ddl` |
@@ -69,13 +71,14 @@ specimpact excel classify .\docs
 
 ```powershell
 cd <repo-dir>
-specimpact init
-specimpact ingest-dirty-excel .\examples\dirty_sier_excel\docs `
+specimpact onboard .\examples\dirty_sier_excel\docs `
+  --provider codex `
+  --model default `
   --aliases .\examples\dirty_sier_excel\aliases.yml
-specimpact change parse .\examples\dirty_sier_excel\changes\利用限度額上限変更.md
-specimpact analyze .\examples\dirty_sier_excel\changes\利用限度額上限変更.md --llm-first
+specimpact change analyze .\examples\dirty_sier_excel\changes\利用限度額上限変更.md
 specimpact impacts list
 specimpact report --format markdown
+specimpact export-obsidian .\vault
 ```
 
 期待する流れ:
@@ -84,6 +87,15 @@ specimpact report --format markdown
 - Change Atom に `利用限度額`、`requestedCreditLimit`、`REQUESTED_CREDIT_LIMIT` などが出る
 - 画面項目、API項目、チェック仕様、DB項目、外部IF、境界値テストなどがレビュー候補になる
 - 各候補に workbook、sheet、cell/range の evidence が付く
+- `.\vault` をObsidianで開くと依存関係noteとCanvasを確認できる
+
+LLMなしで挙動だけ確認する場合:
+
+```powershell
+specimpact onboard .\examples\dirty_sier_excel\docs `
+  --no-llm `
+  --aliases .\examples\dirty_sier_excel\aliases.yml
+```
 
 詳細は [../examples/dirty_sier_excel/README.md](../examples/dirty_sier_excel/README.md) を参照してください。
 
@@ -122,10 +134,13 @@ mkdir C:\work\my-system-impact
 cd C:\work\my-system-impact
 mkdir docs
 mkdir changes
-specimpact init
+specimpact onboard .\docs --provider codex --model default --aliases .\aliases.yml
 ```
 
-`docs\` に設計書を置きます。dirty Excel の場合:
+`onboard` は `.xlsx` を含む入力を dirty Excel、それ以外を Markdown/text として自動判定します。
+外部送信したくない場合は `--no-llm` を付けます。
+
+個別コマンドで進める場合、`docs\` に設計書を置きます。dirty Excel の場合:
 
 ```powershell
 specimpact excel inspect .\docs
@@ -172,6 +187,12 @@ specimpact ingest-excel .\docs --profile sier --aliases .\aliases.yml
 specimpact change parse .\changes\change_example.md
 specimpact analyze .\changes\change_example.md --llm-first
 specimpact report --format markdown
+```
+
+自然言語を直接渡す場合:
+
+```powershell
+specimpact change analyze "入会申込画面の利用限度額上限を999万円から9999万円に変更"
 ```
 
 LLMを使わない通常解析にしたい場合:
@@ -346,20 +367,21 @@ Markdown設計書は、1つのartifactを1つのトップレベル見出しで�
 artifact名や項目名の表記揺れは `aliases.yml`、section heading の同義語はparser側のsection aliasです。
 両者を混同しないでください。
 
-## 14. LLM利用
+## 14. LLM provider
 
-LLMは標準で無効です。
+LLM-firstが標準導線です。Codex CLIを第一候補にし、OpenAI APIやOllamaも利用できます。
 
 ```powershell
 specimpact llm status
+specimpact llm configure --provider codex --model default
 specimpact llm configure --provider openai --model <model>
 specimpact llm configure --provider ollama --model <model> --base-url http://localhost:11434
-specimpact llm configure --provider codex --model default
 specimpact llm disable
 ```
 
 OpenAI、Codex CLI、remote Ollama、OpenAI embeddings は外部送信確認が必要です。
-localhost Ollama と local embeddings はローカルで動作します。
+localhost Ollama と local embeddings はローカルで動作します。CI、debug、秘匿性の強い案件では
+`--no-llm` を使います。
 
 ## 15. よくあるエラー
 
@@ -410,11 +432,15 @@ specimpact doctor --privacy
 
 ## 17. 補助機能
 
-Obsidian export:
+Obsidian review vault:
 
 ```powershell
 specimpact export-obsidian .\vault
+specimpact export-obsidian .\vault --report-only
 ```
+
+通常の `export-obsidian` は `SpecImpact/Dashboard.md`、`Artifacts`、`Evidence`、`Changes`、
+`Canvases` を生成します。`--report-only` は旧形式のMarkdownレポートコピーです。
 
 graph baseline:
 

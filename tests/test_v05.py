@@ -33,7 +33,11 @@ def test_optional_backend_obsidian_and_review_import(tmp_path: Path) -> None:
     configure_backend(store, "neo4j", "bolt://localhost:7687")
     config = yaml.safe_load((store.root / "config.yml").read_text(encoding="utf-8"))
     assert config["backend"] == "neo4j"
-    assert export_obsidian(store, tmp_path / "vault").exists()
+    dashboard = export_obsidian(store, tmp_path / "vault")
+    assert dashboard.exists()
+    assert (tmp_path / "vault" / "SpecImpact" / "Artifacts").is_dir()
+    assert (tmp_path / "vault" / "SpecImpact" / "Evidence").is_dir()
+    assert list((tmp_path / "vault" / "SpecImpact" / "Canvases").glob("*.canvas"))
     count = import_review_results(store, SAMPLE / "reviews" / "change_credit_limit.review.json")
     assert count == 2
 
@@ -54,6 +58,21 @@ def test_v05_cli_smoke(tmp_path: Path, monkeypatch) -> None:
     backend = runner.invoke(app, ["backend", "set", "neo4j", "--uri", "bolt://localhost"])
     assert backend.exit_code == 0
     assert runner.invoke(app, ["export-obsidian", str(tmp_path / "vault")]).exit_code == 0
+    onboard_vault = tmp_path / "onboard-vault"
+    onboard = runner.invoke(
+        app,
+        [
+            "onboard",
+            str(SAMPLE / "docs"),
+            "--no-llm",
+            "--aliases",
+            str(SAMPLE / "aliases.yml"),
+            "--obsidian-vault",
+            str(onboard_vault),
+        ],
+    )
+    assert onboard.exit_code == 0
+    assert (onboard_vault / "SpecImpact" / "Dashboard.md").is_file()
     review = SAMPLE / "reviews" / "change_credit_limit.review.json"
     assert runner.invoke(app, ["review", "import", str(review)]).exit_code == 0
     assert runner.invoke(app, ["baseline", "create", "before"]).exit_code == 0

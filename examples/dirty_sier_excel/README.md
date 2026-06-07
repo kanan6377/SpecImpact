@@ -35,13 +35,14 @@ SpecImpact v2 の dirty Excel 動作確認用サンプルです。日本のSIer�
 
 ```powershell
 python -m pip install -e .
-specimpact init
-specimpact ingest-dirty-excel .\examples\dirty_sier_excel\docs `
+specimpact onboard .\examples\dirty_sier_excel\docs `
+  --provider codex `
+  --model default `
   --aliases .\examples\dirty_sier_excel\aliases.yml
-specimpact change parse .\examples\dirty_sier_excel\changes\利用限度額上限変更.md
-specimpact analyze .\examples\dirty_sier_excel\changes\利用限度額上限変更.md --llm-first
+specimpact change analyze .\examples\dirty_sier_excel\changes\利用限度額上限変更.md
 specimpact impacts list
 specimpact report --format markdown
+specimpact export-obsidian .\vault
 ```
 
 取り込みに成功すると、概ね次のような件数が表示されます。
@@ -50,8 +51,8 @@ specimpact report --format markdown
 Ingested 5 workbooks, 12 regions, 7 graph proposals.
 ```
 
-`--llm-first` は、LLMプロバイダ未設定でもローカルで使える範囲の処理を実行します。
-外部LLMを使う場合は、事前に `specimpact llm configure ...` を実行してください。
+Codex CLIを使う場合は送信前に確認が入ります。ローカルfallbackだけで試す場合は `onboard` に
+`--no-llm` を付けます。
 
 ## Excelの中身を確認する
 
@@ -103,16 +104,24 @@ specimpact impacts set-status <impact_id> accepted --reason "上限値変更の�
 specimpact impacts set-status <impact_id> needs_investigation --reason "別紙参照先の確認が必要"
 ```
 
+## Obsidianで見る
+
+```powershell
+specimpact export-obsidian .\vault
+```
+
+`.\vault` をObsidianで開くと、`SpecImpact/Dashboard.md`、artifact note、evidence note、
+変更単位の `.canvas` を確認できます。SpecImpactのJSONLが正本で、Obsidianはレビュー用の
+探索ワークベンチです。
+
 ## ほかの変更シナリオ
 
 同じExcel群に対して、以下の変更依頼も用意しています。
 
 ```powershell
-specimpact change parse .\examples\dirty_sier_excel\changes\電話番号桁数変更.md
-specimpact analyze .\examples\dirty_sier_excel\changes\電話番号桁数変更.md --llm-first
+specimpact change analyze .\examples\dirty_sier_excel\changes\電話番号桁数変更.md
 
-specimpact change parse .\examples\dirty_sier_excel\changes\本人確認方式変更.md
-specimpact analyze .\examples\dirty_sier_excel\changes\本人確認方式変更.md --llm-first
+specimpact change analyze .\examples\dirty_sier_excel\changes\本人確認方式変更.md
 ```
 
 ## 期待結果ファイル
