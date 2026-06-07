@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from specimpact.graphrag import LLMClient, client_from_config
 from specimpact.impact_management.change_atoms import ChangeAtom
+from specimpact.impact_management.decision_store import ImpactDecision
 from specimpact.impact_management.impact_retrieval import RetrievedPath
 from specimpact.llm_graph.schemas import ImpactHypothesisLLMResult
 from specimpact.llm_graph.verifier import classify_impact
@@ -27,6 +28,7 @@ def build_impact_hypotheses(
 ) -> list[Impact]:
     artifacts = {item.artifact_id: item for item in store.read("artifacts", Artifact)}
     evidence = {item.evidence_id: item for item in store.read("evidence", Evidence)}
+    prior_decisions = _prior_decisions(store)
     client = llm_client or (client_from_config(store) if use_llm else None)
     impacts = []
     for path in retrieved:
@@ -45,6 +47,7 @@ def build_impact_hypotheses(
         )
         if priority == "hidden":
             continue
+        priority = _apply_prior_decision(priority, prior_decisions.get(artifact.artifact_id))
         llm_result = _llm_hypothesis(client, artifact, atom, path, evidence)
         evidence_ids = (
             [evidence_id for evidence_id in llm_result.evidence_ids if evidence_id in evidence]
@@ -89,6 +92,24 @@ def build_impact_hypotheses(
 
 def _best_atom(atoms: list[ChangeAtom], _path: RetrievedPath) -> ChangeAtom:
     return atoms[0]
+
+
+def _prior_decisions(store: LocalStore) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for decision in store.read("impact_decisions", ImpactDecision):
+        if decision.status in {"accepted", "rejected"}:
+            result[decision.candidate_node_id] = decision.status
+    return result
+
+
+def _apply_prior_decision(priority: str, status: str | None) -> str:
+    if status == "accepted" and priority == "may_review":
+        return "should_review"
+    if status == "rejected" and priority == "must_review":
+        return "should_review"
+    if status == "rejected" and priority == "should_review":
+        return "may_review"
+    return priority
 
 
 def _reason(atom: ChangeAtom, verifier_reason: str, path: RetrievedPath) -> str:

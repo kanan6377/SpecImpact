@@ -47,6 +47,7 @@ from specimpact.inspection import (
 from specimpact.integrations import (
     configure_backend,
     create_baseline,
+    export_neo4j_cypher,
     export_obsidian,
     graph_diff,
     import_review_results,
@@ -512,6 +513,12 @@ def export_obsidian_command(
     typer.echo(
         f"Exported {_call(export_obsidian, LocalStore(), output_dir, report_only=report_only)}"
     )
+
+
+@app.command("export-neo4j")
+def export_neo4j_command(output_path: Path) -> None:
+    """Export graph layers as Neo4j Cypher."""
+    typer.echo(f"Exported {_call(export_neo4j_cypher, LocalStore(), output_path)}")
 
 
 @review_app.command("import")

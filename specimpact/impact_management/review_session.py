@@ -69,9 +69,50 @@ def analyze_change_llm_first(
     report_json = {"run_id": run_id, "change": change.model_dump(), **report.grouped()}
     validate_report(report_json)
     store.write_json(run_dir / "report.json", report_json)
+    store.write_json(
+        run_dir / "review_replay.json",
+        {
+            "run_id": run_id,
+            "change_id": change.change_id,
+            "llm_provider": getattr(client, "provider", None),
+            "llm_model": getattr(client, "model", None),
+            "atom_ids": [atom.atom_id for atom in atoms],
+            "retrieved_paths": [
+                {
+                    "node_id": path.node_id,
+                    "relation_ids": [relation.relation_id for relation in path.relations],
+                    "evidence_ids": path.evidence_ids,
+                }
+                for path in retrieved
+            ],
+            "impact_ids": [impact.artifact_id for impact in impacts],
+        },
+    )
     from specimpact.core import render_markdown
 
     store.write_text(run_dir / "report.md", render_markdown(report, store))
     ensure_decisions_for_report(store, change.change_id, [impact.artifact_id for impact in impacts])
     store.write_text(store.root / "latest_run", run_id)
+    _append_review_session(store, run_id, change.change_id, client, len(retrieved), len(impacts))
     return report
+
+
+def _append_review_session(
+    store: LocalStore,
+    run_id: str,
+    change_id: str,
+    client,
+    retrieved_count: int,
+    impact_count: int,
+) -> None:
+    path = store.root / "review_sessions.jsonl"
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    row = {
+        "run_id": run_id,
+        "change_id": change_id,
+        "llm_provider": getattr(client, "provider", None),
+        "llm_model": getattr(client, "model", None),
+        "retrieved_count": retrieved_count,
+        "impact_count": impact_count,
+    }
+    store.write_text(path, existing + json.dumps(row, ensure_ascii=False) + "\n")

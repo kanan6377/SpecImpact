@@ -145,6 +145,8 @@ def export_obsidian(store: LocalStore, output_dir: Path, *, report_only: bool = 
             "",
             f"- File: `{item.source_location.file}`",
             f"- Lines: `{item.source_location.line_start}-{item.source_location.line_end}`",
+            "- VS Code: "
+            f"{_vscode_link(item.source_location.file, item.source_location.line_start)}",
             "",
             "## Quote",
             "",
@@ -253,6 +255,63 @@ def graph_diff(store: LocalStore, name: str) -> dict[str, list[str]]:
     return {"added": sorted(current - baseline), "removed": sorted(baseline - current)}
 
 
+def export_neo4j_cypher(store: LocalStore, output_path: Path) -> Path:
+    artifacts = store.read("artifacts", Artifact)
+    entities = store.read("entities", Entity)
+    relations = store.read("relations", Relation)
+    evidence = store.read("evidence", Evidence)
+    decisions = store.read("impact_decisions", ImpactDecision)
+    lines = [
+        "// SpecImpact Evidence Graph / Domain Graph / Impact Graph export",
+        "CREATE CONSTRAINT specimpact_node_id IF NOT EXISTS "
+        "FOR (n:SpecImpactNode) REQUIRE n.id IS UNIQUE;",
+        "CREATE CONSTRAINT specimpact_evidence_id IF NOT EXISTS "
+        "FOR (e:Evidence) REQUIRE e.id IS UNIQUE;",
+    ]
+    for artifact in artifacts:
+        lines.append(
+            f"MERGE (n:SpecImpactNode:Artifact {{id: {_cypher(artifact.artifact_id)}}}) "
+            f"SET n.name={_cypher(artifact.display_name)}, "
+            f"n.type={_cypher(artifact.artifact_type)};"
+        )
+    for entity in entities:
+        lines.append(
+            f"MERGE (n:SpecImpactNode:Entity {{id: {_cypher(entity.entity_id)}}}) "
+            f"SET n.name={_cypher(entity.display_name)}, "
+            f"n.type={_cypher(entity.entity_type)};"
+        )
+    for item in evidence:
+        lines.append(
+            f"MERGE (e:Evidence {{id: {_cypher(item.evidence_id)}}}) "
+            f"SET e.file={_cypher(item.source_location.file)}, "
+            f"e.line_start={item.source_location.line_start}, "
+            f"e.line_end={item.source_location.line_end};"
+        )
+    for relation in relations:
+        rel_type = re.sub(r"[^A-Z0-9_]", "_", relation.relation_type.upper()) or "RELATED"
+        lines.append(
+            f"MATCH (s:SpecImpactNode {{id: {_cypher(relation.source_id)}}}), "
+            f"(t:SpecImpactNode {{id: {_cypher(relation.target_id)}}}) "
+            f"MERGE (s)-[r:{rel_type} {{id: {_cypher(relation.relation_id)}}}]->(t) "
+            f"SET r.status={_cypher(relation.status)}, r.layer='domain';"
+        )
+        for evidence_id in relation.evidence_ids:
+            lines.append(
+                f"MATCH (s:SpecImpactNode {{id: {_cypher(relation.source_id)}}}), "
+                f"(e:Evidence {{id: {_cypher(evidence_id)}}}) "
+                f"MERGE (s)-[:HAS_EVIDENCE {{relation_id: {_cypher(relation.relation_id)}}}]->(e);"
+            )
+    for decision in decisions:
+        lines.append(
+            f"MATCH (n:SpecImpactNode {{id: {_cypher(decision.candidate_node_id)}}}) "
+            f"MERGE (i:ImpactDecision {{id: {_cypher(decision.impact_id)}}}) "
+            f"SET i.change_id={_cypher(decision.change_id)}, i.status={_cypher(decision.status)}, "
+            f"i.reason={_cypher(decision.reason)} MERGE (i)-[:REVIEWS]->(n);"
+        )
+    store.write_text(output_path, "\n".join(lines) + "\n")
+    return output_path
+
+
 def _safe_filename(value: str) -> str:
     cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", value).strip(" .")
     return cleaned[:80] or "untitled"
@@ -268,6 +327,14 @@ def _relative_to(root: Path, path: Path) -> Path:
 
 def _wiki_link(path: Path, alias: str) -> str:
     return f"[[{path.with_suffix('').as_posix()}|{alias}]]"
+
+
+def _vscode_link(file: str, line: int) -> str:
+    return f"vscode://file/{Path(file).as_posix()}:{line}"
+
+
+def _cypher(value: object) -> str:
+    return json.dumps(value, ensure_ascii=False)
 
 
 def _node_link(paths: dict[str, Path], node_id: str) -> str:
