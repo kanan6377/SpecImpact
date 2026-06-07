@@ -21,6 +21,10 @@
     "needs_review": {"type": "boolean"},
     "llm_judgement": {"enum": ["impact", "possible", "unknown", "no_impact"]},
     "llm_reason": {"type": "string"},
-    "selected_evidence_ids": {"type": "array", "items": {"type": "string"}}
+    "selected_evidence_ids": {"type": "array", "items": {"type": "string"}},
+    "impact_type": {"type": "string"},
+    "required_actions": {"type": "array", "items": {"type": "string"}},
+    "warnings": {"type": "array", "items": {"type": "string"}},
+    "uncertainty": {"type": "string"}
   }
 }

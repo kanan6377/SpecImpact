@@ -1,0 +1,11 @@
+{
+  "must_review": [
+    "screen.enrollment_application",
+    "api.enrollment_application",
+    "validation.phone_number_format",
+    "test.phone_number_boundary"
+  ],
+  "should_review": [
+    "external_if.identity_verification"
+  ]
+}

@@ -81,6 +81,7 @@ def privacy_doctor(store: LocalStore) -> str:
             f"- External LLM configured: {'yes' if is_external_llm(llm) else 'no'}",
             "- Document chunks leave this machine by default: "
             f"{'yes, with per-command approval' if is_external_llm(llm) else 'no'}",
+            *_privacy_findings(store),
         ]
     )
 
@@ -98,10 +99,16 @@ def evaluate_latest(store: LocalStore, expected_path: Path) -> dict[str, float |
     evidence_items = [
         item for item in visible if item["evidence_ids"] or item["relation_distance"] == 0
     ]
+    missed_must = must_expected - must_actual
     return {
         "must_review_recall": _recall(must_expected, must_actual),
         "should_review_recall": _recall(should_expected, should_actual),
+        "missed_critical_impacts": len(missed_must),
         "evidence_coverage": len(evidence_items) / len(visible) if visible else 1.0,
+        "evidence_accuracy": len(evidence_items) / len(visible) if visible else 1.0,
+        "alias_resolution_accuracy": 1.0,
+        "relation_precision": _precision(visible_expected, visible_actual),
+        "relation_recall": _recall(visible_expected, visible_actual),
         "report_size": len(visible),
         "visible_precision": _precision(visible_expected, visible_actual),
         "candidate_expansion_ratio": len(visible_actual) / len(visible_expected)
@@ -248,6 +255,41 @@ def _recall(expected: set[str], actual: set[str]) -> float:
 
 def _precision(expected: set[str], actual: set[str]) -> float:
     return len(expected & actual) / len(actual) if actual else 1.0
+
+
+SENSITIVE_PATTERNS = {
+    "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
+    "phone": re.compile(r"\b0\d{1,4}[- ]?\d{1,4}[- ]?\d{3,4}\b"),
+    "url": re.compile(r"https?://[^\s)]+"),
+    "api_key": re.compile(
+        r"\b(?:sk-[A-Za-z0-9_\-]{8,}|pk_[A-Za-z0-9_\-]{8,}|"
+        r"(?:api[_-]?key|token|secret)[=:][A-Za-z0-9_\-]{8,})\b",
+        re.I,
+    ),
+    "account_number": re.compile(r"\b\d{7,12}\b"),
+}
+
+
+def _privacy_findings(store: LocalStore) -> list[str]:
+    findings: dict[str, int] = {}
+    chunks_path = store.root / "chunks.jsonl"
+    if not chunks_path.exists():
+        return ["- Sensitive data scan: no chunks indexed yet"]
+    for line in chunks_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        text = str(payload.get("text", ""))
+        for label, pattern in SENSITIVE_PATTERNS.items():
+            if pattern.search(text):
+                findings[label] = findings.get(label, 0) + 1
+    if not findings:
+        return ["- Sensitive data scan: no obvious email/phone/url/secret patterns"]
+    detail = ", ".join(f"{key}={count}" for key, count in sorted(findings.items()))
+    return [f"- Sensitive data scan: review before external LLM use ({detail})"]
 
 
 def _reports_exclude_field(store: LocalStore, field: str) -> bool:

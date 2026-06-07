@@ -297,7 +297,14 @@ def analyze(
 ) -> None:
     """Analyze a change request and write a new review run."""
     if llm_first:
-        report = _call(analyze_change_llm_first, LocalStore(), change_request)
+        report = _call(
+            analyze_change_llm_first,
+            LocalStore(),
+            change_request,
+            yes=yes,
+            no_llm=no_llm,
+            confirm=typer.confirm,
+        )
         typer.echo(f"Created run {report.run_id} with {len(report.impacts)} candidates.")
         return
     report = _call(
@@ -384,7 +391,7 @@ def release_check(dataset: Path) -> None:
 
 @aliases_app.command("suggest")
 def aliases_suggest(
-    llm: bool = typer.Option(False, "--llm", help="Use v2 alias inference."),
+    llm: bool = typer.Option(True, "--llm/--no-llm", help="Use v2 alias inference."),
 ) -> None:
     """Generate inspectable local alias suggestions."""
     typer.echo(f"Created {_call(suggest_aliases, LocalStore(), use_llm=llm)} alias suggestions.")
@@ -627,7 +634,14 @@ def change_analyze(change: str) -> None:
         digest = hashlib.sha1(change.encode("utf-8")).hexdigest()[:12]
         change_path = store.root / "changes" / f"change-{digest}.md"
         store.write_text(change_path, f"# Change Request\n\n{change.strip()}\n")
-    report = _call(analyze_change_llm_first, store, change_path)
+    report = _call(
+        analyze_change_llm_first,
+        store,
+        change_path,
+        yes=False,
+        no_llm=False,
+        confirm=typer.confirm,
+    )
     typer.echo(f"Created run {report.run_id} with {len(report.impacts)} candidates.")
 
 

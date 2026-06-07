@@ -73,6 +73,10 @@ class DirtySheet(BaseModel):
     max_row: int = 0
     max_column: int = 0
     hidden: bool = False
+    image_count: int = 0
+    chart_count: int = 0
+    table_count: int = 0
+    unsupported_drawings: list[str] = Field(default_factory=list)
 
 
 class DirtyWorkbook(BaseModel):
@@ -82,6 +86,7 @@ class DirtyWorkbook(BaseModel):
     normalized_path: str
     rendered_paths: list[str] = Field(default_factory=list)
     sheet_ids: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class DirtyRegion(BaseModel):

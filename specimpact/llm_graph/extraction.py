@@ -6,6 +6,7 @@ from typing import Any
 
 from specimpact.dirty_excel.models import DirtyCell, DirtyRegion
 from specimpact.graphrag import LLMClient
+from specimpact.llm_graph.prompts import DIRTY_EXCEL_FEW_SHOTS, prompt_for_region_type
 from specimpact.llm_graph.schemas import ExtractedEdge, ExtractedNode, RegionExtractionResult
 
 
@@ -21,10 +22,16 @@ def extract_region_with_llm(
         "sheet": region.sheet_name,
         "range": region.range,
         "region_type_hint": region.region_type,
+        "instructions": prompt_for_region_type(region.region_type),
+        "few_shots": DIRTY_EXCEL_FEW_SHOTS,
         "cells_markdown": region.rendered_text,
         "allowed_evidence_ids": region.evidence_ids,
     }
-    result = client.structured("dirty_excel_region_extraction", payload, RegionExtractionResult)
+    result = client.structured(
+        f"dirty_excel_region_extraction:{region.region_type}",
+        payload,
+        RegionExtractionResult,
+    )
     return _clean_result(result, region)
 
 
@@ -175,20 +182,38 @@ def extract_region_heuristic(region: DirtyRegion, cells: list[DirtyCell]) -> Reg
 
 def _clean_result(result: RegionExtractionResult, region: DirtyRegion) -> RegionExtractionResult:
     allowed = set(region.evidence_ids)
-    result.nodes = [
-        node
-        for node in result.nodes
-        if node.evidence_ids and all(evidence_id in allowed for evidence_id in node.evidence_ids)
-    ]
+    warnings = list(result.warnings)
+    clean_nodes = []
+    for node in result.nodes:
+        if not node.evidence_ids:
+            warnings.append(f"dropped node {node.temp_id}: missing evidence_ids")
+            continue
+        invalid = [evidence_id for evidence_id in node.evidence_ids if evidence_id not in allowed]
+        if invalid:
+            warnings.append(
+                f"dropped node {node.temp_id}: invalid evidence_ids {', '.join(invalid)}"
+            )
+            continue
+        clean_nodes.append(node)
+    result.nodes = clean_nodes
     node_ids = {node.temp_id for node in result.nodes}
-    result.edges = [
-        edge
-        for edge in result.edges
-        if edge.source_temp_id in node_ids
-        and edge.target_temp_id in node_ids
-        and edge.evidence_ids
-        and all(evidence_id in allowed for evidence_id in edge.evidence_ids)
-    ]
+    clean_edges = []
+    for edge in result.edges:
+        if edge.source_temp_id not in node_ids or edge.target_temp_id not in node_ids:
+            warnings.append(f"dropped edge {edge.temp_id}: unknown node reference")
+            continue
+        if not edge.evidence_ids:
+            warnings.append(f"dropped edge {edge.temp_id}: missing evidence_ids")
+            continue
+        invalid = [evidence_id for evidence_id in edge.evidence_ids if evidence_id not in allowed]
+        if invalid:
+            warnings.append(
+                f"dropped edge {edge.temp_id}: invalid evidence_ids {', '.join(invalid)}"
+            )
+            continue
+        clean_edges.append(edge)
+    result.edges = clean_edges
+    result.warnings = sorted(set(warnings))
     result.region_id = region.region_id
     return result
 

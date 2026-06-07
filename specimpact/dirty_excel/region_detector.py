@@ -9,7 +9,7 @@ from specimpact.dirty_excel.models import DirtyCell, DirtyRegion, DirtySheet, Re
 def detect_regions(sheets: list[DirtySheet], cells: list[DirtyCell]) -> list[DirtyRegion]:
     by_sheet: dict[str, list[DirtyCell]] = {sheet.sheet_id: [] for sheet in sheets}
     for cell in cells:
-        if cell.value not in (None, ""):
+        if _layout_cell(cell):
             by_sheet.setdefault(cell.sheet_id, []).append(cell)
     regions: list[DirtyRegion] = []
     for sheet in sheets:
@@ -93,6 +93,17 @@ def _split_numbers(numbers: list[int]) -> list[list[int]]:
     if current:
         blocks.append(current)
     return blocks
+
+
+def _layout_cell(cell: DirtyCell) -> bool:
+    return bool(
+        cell.value not in (None, "")
+        or cell.merged_range
+        or cell.style.border
+        or cell.style.fill_color
+        or cell.comment
+        or cell.hyperlink
+    )
 
 
 def _region_type(sheet: DirtySheet, cells: list[DirtyCell]) -> RegionType:

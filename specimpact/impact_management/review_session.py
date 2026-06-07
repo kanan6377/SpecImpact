@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Callable
 from uuid import uuid4
 
+from specimpact.graphrag import client_from_config, ensure_llm_consent
 from specimpact.impact_management.change_atoms import parse_change_atoms
 from specimpact.impact_management.decision_store import ensure_decisions_for_report
 from specimpact.impact_management.impact_hypothesis import build_impact_hypotheses
@@ -13,7 +15,14 @@ from specimpact.schema_validation import validate_report
 from specimpact.store import LocalStore
 
 
-def analyze_change_llm_first(store: LocalStore, change_path: Path) -> Report:
+def analyze_change_llm_first(
+    store: LocalStore,
+    change_path: Path,
+    *,
+    yes: bool = False,
+    no_llm: bool = False,
+    confirm: Callable[[str], bool] | None = None,
+) -> Report:
     extraction = parse_change_atoms(store, change_path)
     atoms = extraction.change_atoms
     body = change_path.read_text(encoding="utf-8")
@@ -22,7 +31,22 @@ def analyze_change_llm_first(store: LocalStore, change_path: Path) -> Report:
         change_path.stem,
     )
     retrieved = retrieve_impacts(store, atoms)
-    impacts = build_impact_hypotheses(store, atoms, retrieved)
+    client = None if no_llm else client_from_config(store)
+    if client:
+        ensure_llm_consent(
+            client,
+            purpose="impact_hypothesis",
+            chunk_count=len(retrieved),
+            yes=yes,
+            confirm=confirm,
+        )
+    impacts = build_impact_hypotheses(
+        store,
+        atoms,
+        retrieved,
+        use_llm=bool(client),
+        llm_client=client,
+    )
     change = ChangeRequest(
         change_id=extraction.change_id,
         title=title,

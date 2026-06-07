@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from openpyxl import Workbook
+from openpyxl.chart import BarChart, Reference
 from openpyxl.comments import Comment
 from openpyxl.styles import Font, PatternFill
 
@@ -11,8 +12,10 @@ from specimpact.dirty_excel.region_detector import detect_regions
 from specimpact.dirty_excel.sheet_classifier import classify_sheets
 from specimpact.dirty_excel.workbook_reader import read_dirty_workbook
 from specimpact.graphrag import FakeLLMClient
-from specimpact.impact_management.change_atoms import parse_change_atoms
+from specimpact.impact_management.change_atoms import ChangeAtom, parse_change_atoms
 from specimpact.impact_management.decision_store import set_impact_status
+from specimpact.impact_management.impact_hypothesis import build_impact_hypotheses
+from specimpact.impact_management.impact_retrieval import RetrievedPath
 from specimpact.impact_management.review_session import analyze_change_llm_first
 from specimpact.llm_graph.entity_resolution import (
     decide_alias_candidate,
@@ -20,7 +23,8 @@ from specimpact.llm_graph.entity_resolution import (
 )
 from specimpact.llm_graph.extraction import extract_region_with_llm
 from specimpact.llm_graph.schemas import AliasCandidate
-from specimpact.models import Entity
+from specimpact.llm_graph.verifier import classify_impact
+from specimpact.models import Artifact, Entity, Evidence, EvidenceSupport, Relation, SourceLocation
 from specimpact.store import LocalStore
 from specimpact.webui.registry import ProjectRegistry
 from specimpact.webui.services import dirty_excel_data, execute, impact_decisions_data
@@ -51,6 +55,8 @@ def test_dirty_workbook_normalization_preserves_cells_and_regions(tmp_path: Path
     assert any(cell.hyperlink == "https://example.com/spec" for cell in cells)
     assert any(cell.is_hidden_row for cell in cells)
     assert any(cell.is_hidden_col for cell in cells)
+    assert any(sheet.chart_count for sheet in sheets)
+    assert read_dirty_workbook(workbook_path)[0].warnings
 
     regions = detect_regions(classify_sheets(sheets, cells), cells)
     region_types = {region.region_type for region in regions}
@@ -125,6 +131,7 @@ def test_region_llm_extraction_keeps_only_valid_evidence(tmp_path: Path) -> None
         FakeLLMClient({"dirty_excel_region_extraction": invalid}),
     )
     assert cleaned.nodes == []
+    assert "invalid evidence_ids missing" in " ".join(cleaned.warnings)
 
 
 def test_alias_inference_confirm_and_reject_persist(tmp_path: Path) -> None:
@@ -154,13 +161,188 @@ def test_alias_inference_confirm_and_reject_persist(tmp_path: Path) -> None:
         ],
     )
 
-    assert suggest_alias_candidates(store, use_llm=True) == 1
+    assert suggest_alias_candidates(
+        store,
+        use_llm=True,
+        llm_client=FakeLLMClient(
+            {
+                "alias_resolution": {
+                    "judgement": "same",
+                    "reason": "same credit limit field across screen, API, and DB names",
+                    "evidence_ids": [],
+                }
+            }
+        ),
+    ) == 1
     candidate = store.read("alias_candidates", AliasCandidate)[0]
+    assert candidate.judgement == "same"
+    assert candidate.compared_entity_ids
+    assert "same credit limit" in candidate.llm_reason
     decide_alias_candidate(store, candidate.candidate_id, "confirmed")
     aliases = (store.root / "aliases.yml").read_text(encoding="utf-8")
     assert "requestedCreditLimit" in aliases
     decide_alias_candidate(store, candidate.candidate_id, "rejected")
     assert store.read("alias_candidates", AliasCandidate)[0].status == "rejected"
+
+
+def test_alias_llm_judgement_can_reject_similarity(tmp_path: Path) -> None:
+    store = LocalStore(tmp_path / ".specimpact")
+    store.init()
+    store.write(
+        "entities",
+        [
+            Entity(
+                entity_id="entity.limit",
+                entity_type="BusinessField",
+                display_name="requestedCreditLimit",
+                canonical_name="credit_limit",
+            ),
+            Entity(
+                entity_id="entity.limit.related",
+                entity_type="BusinessField",
+                display_name="limitReason",
+                canonical_name="credit_limit_reason",
+            ),
+        ],
+    )
+    count = suggest_alias_candidates(
+        store,
+        use_llm=True,
+        llm_client=FakeLLMClient(
+            {
+                "alias_resolution": {
+                    "judgement": "different",
+                    "reason": "limit amount and reason are different fields",
+                    "evidence_ids": [],
+                }
+            }
+        ),
+    )
+    assert count == 1
+    candidate = store.read("alias_candidates", AliasCandidate)[0]
+    assert candidate.judgement == "different"
+    assert "different fields" in candidate.llm_reason
+
+
+def test_verifier_downgrades_must_when_before_value_or_property_mismatch(tmp_path: Path) -> None:
+    store = LocalStore(tmp_path / ".specimpact")
+    store.init()
+    evidence = Evidence(
+        evidence_id="ev.limit",
+        document_id="doc",
+        section_id="sec",
+        chunk_id="chunk",
+        quote="requestedCreditLimit upper bound is 999",
+        evidence_type="test",
+        supports=[EvidenceSupport(type="relation", id="rel.limit")],
+        source_location=SourceLocation(file="spec.xlsx", line_start=1, line_end=1),
+    )
+    relation = Relation(
+        relation_id="rel.limit",
+        relation_type="VALIDATES",
+        source_id="validation.credit_limit",
+        target_id="entity.credit_limit",
+        evidence_ids=["ev.limit"],
+        polarity="explicit",
+    )
+    store.write("evidence", [evidence])
+    priority, _reason = classify_impact(
+        store,
+        [relation],
+        ["ev.limit"],
+        ["requestedCreditLimit"],
+        "999",
+        change_property="max_value",
+        artifact_type="ValidationRule",
+    )
+    assert priority == "must_review"
+    priority, _reason = classify_impact(
+        store,
+        [relation],
+        ["ev.limit"],
+        ["requestedCreditLimit"],
+        "1000",
+        change_property="max_value",
+        artifact_type="ValidationRule",
+    )
+    assert priority == "should_review"
+    priority, _reason = classify_impact(
+        store,
+        [relation],
+        ["ev.limit"],
+        ["requestedCreditLimit"],
+        "999",
+        change_property="max_value",
+        artifact_type="DeploymentJob",
+    )
+    assert priority == "should_review"
+
+
+def test_llm_impact_hypothesis_adds_actions_and_reason(tmp_path: Path) -> None:
+    store = LocalStore(tmp_path / ".specimpact")
+    store.init()
+    artifact = Artifact(
+        artifact_id="validation.credit_limit",
+        artifact_type="ValidationRule",
+        display_name="Credit limit upper bound",
+    )
+    evidence = Evidence(
+        evidence_id="ev.limit",
+        document_id="doc",
+        section_id="sec",
+        chunk_id="chunk",
+        quote="requestedCreditLimit upper bound is 999",
+        evidence_type="test",
+        supports=[EvidenceSupport(type="relation", id="rel.limit")],
+        source_location=SourceLocation(file="spec.xlsx", line_start=1, line_end=1),
+    )
+    relation = Relation(
+        relation_id="rel.limit",
+        relation_type="VALIDATES",
+        source_id="validation.credit_limit",
+        target_id="entity.credit_limit",
+        evidence_ids=["ev.limit"],
+        polarity="explicit",
+    )
+    store.write("artifacts", [artifact])
+    store.write("evidence", [evidence])
+    atom = [
+        ChangeAtom(
+            atom_id="atom.limit",
+            change_id="change.limit",
+            target_terms=["requestedCreditLimit"],
+            operation="change_constraint",
+            property="max_value",
+            before="999",
+            after="9999",
+        )
+    ]
+    impacts = build_impact_hypotheses(
+        store,
+        atom,
+        [
+            RetrievedPath(
+                node_id=artifact.artifact_id,
+                relations=[relation],
+                evidence_ids=["ev.limit"],
+            )
+        ],
+        use_llm=True,
+        llm_client=FakeLLMClient(
+            {
+                "impact_hypothesis": {
+                    "impact_type": "boundary_value_change",
+                    "required_actions": ["Update upper-bound validation and boundary tests."],
+                    "warnings": ["Check API contract."],
+                    "uncertainty": "low",
+                    "reason": "The supplied evidence contains the changed upper bound.",
+                    "evidence_ids": ["ev.limit"],
+                }
+            }
+        ),
+    )
+    assert impacts[0].impact_type == "boundary_value_change"
+    assert "boundary tests" in impacts[0].required_actions[0]
 
 
 def test_llm_first_impact_from_dirty_excel_credit_limit(tmp_path: Path) -> None:
@@ -236,4 +418,7 @@ def _write_dirty_workbook(path: Path) -> None:
     sheet.append(
         ["CHK-001", "利用限度額入力チェック", "利用限度額", "requestedCreditLimit", "999万円"]
     )
+    chart = BarChart()
+    chart.add_data(Reference(sheet, min_col=1, min_row=2, max_row=2))
+    sheet.add_chart(chart, "H2")
     workbook.save(path)

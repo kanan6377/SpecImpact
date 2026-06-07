@@ -108,6 +108,10 @@ class Impact(BaseModel):
     llm_judgement: str | None = None
     llm_reason: str | None = None
     selected_evidence_ids: list[str] | None = None
+    impact_type: str | None = None
+    required_actions: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    uncertainty: str | None = None
 
 
 class ChangeRequest(BaseModel):

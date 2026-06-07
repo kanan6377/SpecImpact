@@ -100,3 +100,22 @@ class AliasCandidate(BaseModel):
     evidence_ids: list[str] = Field(default_factory=list)
     reason: str = ""
     status: Literal["pending", "confirmed", "rejected"] = "pending"
+    compared_entity_ids: list[str] = Field(default_factory=list)
+    surrounding_node_ids: list[str] = Field(default_factory=list)
+    evidence_quotes: list[str] = Field(default_factory=list)
+    llm_reason: str = ""
+
+
+class AliasJudgement(BaseModel):
+    judgement: Literal["same", "related", "different", "unsure"] = "unsure"
+    reason: str = ""
+    evidence_ids: list[str] = Field(default_factory=list)
+
+
+class ImpactHypothesisLLMResult(BaseModel):
+    impact_type: str = "review"
+    required_actions: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    uncertainty: str = "medium"
+    reason: str = ""
+    evidence_ids: list[str] = Field(default_factory=list)
