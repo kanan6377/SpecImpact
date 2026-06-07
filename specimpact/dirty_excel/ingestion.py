@@ -54,7 +54,7 @@ def ingest_dirty_excel(
         client = llm_client or client_from_config(store)
         if client is None:
             raise ValueError(
-                "LLM provider not configured; run specimpact llm configure or omit --llm"
+                "LLM provider not configured; run specimpact llm configure or pass --no-llm"
             )
         ensure_llm_consent(
             client,
@@ -73,7 +73,7 @@ def ingest_dirty_excel(
         workbook, sheets, cells = read_dirty_workbook(workbook_path)
         original = preserve_original(workbook_path, store.root, workbook.workbook_id)
         normalized = write_normalized(store.root, workbook, cells)
-        sheets = classify_sheets(sheets, cells)
+        sheets = classify_sheets(sheets, cells, client)
         rendered = write_rendered(store.root, workbook, sheets, cells)
         workbook.original_path = original.as_posix()
         workbook.normalized_path = normalized.as_posix()
@@ -156,6 +156,9 @@ def inspect_dirty_excel(store_or_path: LocalStore | Path) -> dict[str, object]:
             "cells": len(cells),
             "regions": len(regions),
             "proposals": len(proposals),
+            "unsupported_drawings": sum(
+                len(sheet.unsupported_drawings) for sheet in sheets
+            ),
             "sheet_types": _counts(sheet.sheet_type for sheet in sheets),
             "region_types": _counts(region.region_type for region in regions),
             "unresolved_mentions": sum(
@@ -167,17 +170,35 @@ def inspect_dirty_excel(store_or_path: LocalStore | Path) -> dict[str, object]:
                     for proposal in proposals
                     for warning in proposal.result.warnings
                 }
+                | {warning for workbook in workbooks for warning in workbook.warnings}
+                | {
+                    f"Sheet '{sheet.sheet_name}' has unresolved drawing content: "
+                    f"{', '.join(sheet.unsupported_drawings)}"
+                    for sheet in sheets
+                    if sheet.unsupported_drawings
+                }
             ),
         }
     workbooks = _workbook_paths(store_or_path)
-    summary = {"workbooks": len(workbooks), "sheets": 0, "cells": 0, "regions": 0}
+    summary = {
+        "workbooks": len(workbooks),
+        "sheets": 0,
+        "cells": 0,
+        "regions": 0,
+        "unsupported_drawings": 0,
+        "warnings": [],
+    }
     for workbook_path in workbooks:
-        _, sheets, cells = read_dirty_workbook(workbook_path)
+        workbook, sheets, cells = read_dirty_workbook(workbook_path)
         sheets = classify_sheets(sheets, cells)
         regions = detect_regions(sheets, cells)
         summary["sheets"] += len(sheets)
         summary["cells"] += len(cells)
         summary["regions"] += len(regions)
+        summary["unsupported_drawings"] += sum(
+            len(sheet.unsupported_drawings) for sheet in sheets
+        )
+        summary["warnings"].extend(workbook.warnings)
     return summary
 
 

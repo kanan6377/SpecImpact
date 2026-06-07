@@ -41,6 +41,10 @@ def read_dirty_workbook(path: Path) -> tuple[DirtyWorkbook, list[DirtySheet], li
                 max_row=sheet.max_row or 0,
                 max_column=sheet.max_column or 0,
                 hidden=sheet.sheet_state != "visible",
+                image_count=len(getattr(sheet, "_images", []) or []),
+                chart_count=len(getattr(sheet, "_charts", []) or []),
+                table_count=len(getattr(sheet, "tables", {}) or {}),
+                unsupported_drawings=_unsupported_drawings(sheet),
             )
         )
         for row in sheet.iter_rows():
@@ -76,6 +80,11 @@ def read_dirty_workbook(path: Path) -> tuple[DirtyWorkbook, list[DirtySheet], li
         original_path="",
         normalized_path="",
         sheet_ids=[sheet.sheet_id for sheet in sheets],
+        warnings=[
+            warning
+            for sheet in sheets
+            for warning in _drawing_warnings(sheet.sheet_name, sheet.unsupported_drawings)
+        ],
     )
     return dirty_workbook, sheets, cells
 
@@ -153,6 +162,26 @@ def _has_border(cell: Cell) -> bool:
         side and side.style
         for side in (border.left, border.right, border.top, border.bottom)
     )
+
+
+def _unsupported_drawings(sheet) -> list[str]:
+    drawings: list[str] = []
+    image_count = len(getattr(sheet, "_images", []) or [])
+    chart_count = len(getattr(sheet, "_charts", []) or [])
+    table_count = len(getattr(sheet, "tables", {}) or {})
+    if image_count:
+        drawings.append(f"{image_count} images")
+    if chart_count:
+        drawings.append(f"{chart_count} charts")
+    if table_count:
+        drawings.append(f"{table_count} Excel tables")
+    return drawings
+
+
+def _drawing_warnings(sheet_name: str, drawings: list[str]) -> list[str]:
+    return [
+        f"Sheet '{sheet_name}' contains unsupported drawing content: {', '.join(drawings)}"
+    ] if drawings else []
 
 
 def _slug(value: str) -> str:

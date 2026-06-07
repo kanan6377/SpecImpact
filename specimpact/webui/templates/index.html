@@ -53,7 +53,7 @@
             <div class="hero-copy">
               <p class="eyebrow">LOCAL-FIRST GRAPH IMPACT ENGINE</p>
               <h1>設計変更の爆風半径を、証拠つきで追跡する。</h1>
-              <p>SpecImpact は設計書をローカル knowledge graph に変換し、変更要求から review candidate、relation path、引用行をまとめて出します。LLM は任意の副操縦士。判断は人間、根拠は保存。</p>
+              <p>SpecImpact は LLM で設計書を evidence graph / GraphRAG に変換し、変更要求から review candidate、relation path、引用行をまとめて出します。判断は人間、根拠は保存。</p>
               <div class="hero-actions">
                 <button class="button primary" data-action="init">案件を初期化</button>
                 <a class="button ghost" href="/ui/demo">サンプルで試す</a>
@@ -79,8 +79,8 @@ $ specimpact why "カード入会申込API"
           </div>
           <div class="metric-grid" id="metrics"></div>
           <div class="grid three story-grid">
-            <article class="panel feature-card"><span class="feature-kicker">01</span><h2>Graph を先に作る</h2><p>Markdown、OpenAPI、DDL、CSV、Excel から設計要素と関係を抽出。LLM なしでも候補を出せます。</p></article>
-            <article class="panel feature-card"><span class="feature-kicker">02</span><h2>LLM は検査役</h2><p>OpenAI、Ollama、Codex CLI を任意で利用。変更抽出と rerank は job 単位の承認つきです。</p></article>
+            <article class="panel feature-card"><span class="feature-kicker">01</span><h2>LLM-first GraphRAG</h2><p>Markdown、OpenAPI、DDL、CSV、Excel を evidence graph に変換。ローカルルールは fallback と検証に使います。</p></article>
+            <article class="panel feature-card"><span class="feature-kicker">02</span><h2>Codex CLI ready</h2><p>Codex CLI、OpenAI API、Ollama を provider として利用。外部 provider は job 単位の承認つきです。</p></article>
             <article class="panel feature-card"><span class="feature-kicker">03</span><h2>証拠を閉じ込める</h2><p>job 履歴に本文や raw response は保存しません。trace は hash と安全な要約だけを残します。</p></article>
           </div>
           <div class="grid two">
@@ -106,7 +106,7 @@ $ specimpact why "カード入会申込API"
         </section>
         <section class="page" data-view="dirty-excel">
           <div class="page-head"><div><p class="eyebrow">DIRTY EXCEL REVIEW CONSOLE</p><h1>Dirty Excel</h1><p>セル番地、region、LLM/ルール抽出提案を確認します。</p></div></div>
-          <article class="panel"><form data-job="ingest_dirty_excel" class="inline-form"><label>Excel path<input name="path" required placeholder="docs または workbook.xlsx"></label><label>Aliases YAML<input name="aliases" placeholder="aliases.yml"></label><label class="check"><input type="checkbox" name="llm"> configured LLM で region 抽出</label><button class="button primary">Dirty Excel ingest</button></form></article>
+          <article class="panel"><form data-job="ingest_dirty_excel" class="inline-form"><label>Excel path<input name="path" required placeholder="docs または workbook.xlsx"></label><label>Aliases YAML<input name="aliases" placeholder="aliases.yml"></label><label class="check"><input type="checkbox" name="llm" checked> configured LLM で region 抽出</label><button class="button primary">Dirty Excel ingest</button></form></article>
           <div class="grid two"><article class="panel"><h2>Summary</h2><pre id="dirty-summary"></pre></article><article class="panel"><h2>Graph proposals</h2><div id="dirty-proposals"></div></article></div>
           <article class="panel"><h2>Regions</h2><div id="dirty-regions"></div></article>
         </section>
@@ -125,8 +125,8 @@ $ specimpact why "カード入会申込API"
               <span>Evidence report</span>
             </div>
           </article>
-          <article class="panel"><form data-job="analyze" class="inline-form"><label>Change request<input name="path" required placeholder="changes/change_credit_limit.md"></label><label class="check"><input type="checkbox" name="no_llm"> local-only / --no-llm</label><button class="button primary">Analyze impact</button></form><p class="field-help">LLM 有効時も候補は local graph から出発します。外部 provider を使う job は送信前に必ず確認します。</p></article>
-          <article class="panel"><form data-job="analyze_llm_first" class="inline-form"><label>Change request<input name="path" required placeholder="changes/利用限度額上限変更.md"></label><button class="button">LLM-first / Change Atom 解析</button></form><p class="field-help">Dirty Excel 由来 graph と Change Atom から evidence 付き候補を作ります。</p></article>
+          <article class="panel"><form data-job="analyze_llm_first" class="inline-form"><label>Change request<input name="path" required placeholder="changes/利用限度額上限変更.md"></label><button class="button primary">LLM-first impact analysis</button></form><p class="field-help">Change Atom と GraphRAG から evidence 付き候補を作ります。</p></article>
+          <article class="panel"><form data-job="analyze" class="inline-form"><label>Change request<input name="path" required placeholder="changes/change_credit_limit.md"></label><label class="check"><input type="checkbox" name="no_llm"> local-only / --no-llm</label><button class="button">Rule-compatible analyze</button></form><p class="field-help">互換・debug 用の従来解析です。外部 provider を使う job は送信前に必ず確認します。</p></article>
           <article class="panel"><h2>変更依頼テキスト</h2><form data-job="analyze_text"><label>Change request text<textarea name="body" required rows="6" placeholder="入会申込画面の「利用限度額」の上限を999万円から9999万円に変更する。"></textarea></label><button class="button primary">テキストから解析</button></form><p class="field-help">入力内容は案件内のローカルファイルに保存して解析します。外部送信は行いません。</p></article>
           <article class="panel notice"><strong>このレポートは影響確定結果ではなく、レビュー候補です。</strong><span>must_review は「影響あり」ではなく「必ず確認すべき」です。</span></article>
           <div class="grid report-layout"><article class="panel"><h2>Run history</h2><div id="run-history"></div></article><article class="panel"><h2>Latest report</h2><div id="report"></div></article></div>
@@ -134,7 +134,7 @@ $ specimpact why "カード入会申込API"
         <section class="page" data-view="impact-board">
           <div class="page-head"><div><p class="eyebrow">IMPACT REVIEW BOARD</p><h1>Impact Board</h1><p>影響候補の人間判断を保存します。</p></div></div>
           <article class="panel"><form data-job="impact_status" class="inline-form"><label>Impact ID<input name="impact_id" required placeholder="impact.change.xxx.artifact.id"></label><label>Status<select name="status"><option>accepted</option><option>rejected</option><option>needs_investigation</option><option>implemented</option><option>tested</option><option>closed</option><option>unreviewed</option></select></label><label>Reason<input name="reason"></label><button class="button primary">Status 更新</button></form></article>
-          <article class="panel"><h2>Decisions</h2><pre id="impact-decisions"></pre></article>
+          <article class="panel"><h2>Decisions</h2><div id="impact-decisions"></div></article>
         </section>
         <section class="page" data-view="graph">
           <div class="page-head"><div><p class="eyebrow">LOCAL KNOWLEDGE GRAPH</p><h1>Graph Explorer</h1><p>node、relation、evidence を確認し、relation status を更新します。</p></div></div>
@@ -169,7 +169,7 @@ $ specimpact why "カード入会申込API"
           <div class="page-head"><div><p class="eyebrow">NAME RESOLUTION</p><h1>Aliases</h1><p>候補の作成、承認、拒否、追加、削除を行います。</p></div><button class="button primary" data-action="aliases_suggest">候補を作成</button></div>
           <article class="panel"><form data-job="alias_decide" class="inline-form"><label>Target ID<input name="target_id" required></label><label>Alias<input name="alias" required></label><label>Status<select name="status"><option>approved</option><option>rejected</option></select></label><button class="button">反映</button></form></article>
           <article class="panel"><form data-job="alias_remove" class="inline-form"><label>Target ID<input name="target_id" required></label><label>Alias<input name="alias" required></label><button class="button ghost">削除</button></form></article>
-          <article class="panel"><h2>Aliases と Suggestions</h2><pre id="aliases-result"></pre></article>
+          <article class="panel"><h2>Aliases と Suggestions</h2><div id="aliases-result"></div></article>
         </section>
         <section class="page" data-view="settings">
           <div class="page-head"><div><p class="eyebrow">PROVIDER LAB</p><h1>Settings</h1><p>API key は保存せず、環境変数と CLI availability だけを表示します。</p></div></div>

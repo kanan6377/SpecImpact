@@ -1,4 +1,4 @@
-# Optional Integrations
+# Integrations
 
 ## Neo4j
 
@@ -8,7 +8,27 @@ with `specimpact backend set local`.
 
 ## Obsidian
 
-`specimpact export-obsidian <directory>` reuses the latest Markdown report.
+SpecImpact can export an Obsidian review vault from the local JSONL graph. SpecImpact remains the
+source of truth; Obsidian is used for dependency exploration, canvas review, and human notes.
+
+```powershell
+specimpact export-obsidian .\vault
+specimpact export-obsidian .\vault --report-only
+```
+
+The standard export writes:
+
+- `SpecImpact/Dashboard.md`
+- `SpecImpact/Artifacts/*.md`
+- `SpecImpact/Evidence/*.md`
+- `SpecImpact/Changes/*.md` when an analysis run exists
+- `SpecImpact/Canvases/*.canvas` when an analysis run exists
+
+Artifact notes include frontmatter, Obsidian links, relation lists, and evidence links. The
+standard Obsidian Graph View can show dependencies, Canvas can show the latest impact review, and
+Dataview can list open review statuses.
+
+`--report-only` preserves the legacy behavior and copies only the latest Markdown report.
 
 ## Review Import And Diff
 

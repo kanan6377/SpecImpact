@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from pydantic import BaseModel
+
 from specimpact.dirty_excel.models import DirtyCell, DirtySheet, SheetType
+from specimpact.graphrag import LLMClient
 
 KEYWORDS: list[tuple[SheetType, tuple[str, ...]]] = [
     ("revision_history", ("改訂", "履歴", "revision")),
@@ -14,7 +17,17 @@ KEYWORDS: list[tuple[SheetType, tuple[str, ...]]] = [
 ]
 
 
-def classify_sheets(sheets: list[DirtySheet], cells: list[DirtyCell]) -> list[DirtySheet]:
+class SheetClassificationResult(BaseModel):
+    sheet_type: SheetType = "unknown"
+    reason: str = ""
+    evidence_level: str = "llm_sample"
+
+
+def classify_sheets(
+    sheets: list[DirtySheet],
+    cells: list[DirtyCell],
+    llm_client: LLMClient | None = None,
+) -> list[DirtySheet]:
     by_sheet = {sheet.sheet_id: [] for sheet in sheets}
     for cell in cells:
         if cell.value:
@@ -30,6 +43,27 @@ def classify_sheets(sheets: list[DirtySheet], cells: list[DirtyCell]) -> list[Di
         else:
             sheet.evidence_level = "none"
             sheet.reason = "no sheet-name or heading keyword matched"
+        if llm_client is not None:
+            sample = "\n".join(by_sheet.get(sheet.sheet_id, [])[:120])
+            llm_result = llm_client.structured(
+                "dirty_excel_sheet_classification",
+                {
+                    "sheet_name": sheet.sheet_name,
+                    "heuristic_sheet_type": sheet.sheet_type,
+                    "max_row": sheet.max_row,
+                    "max_column": sheet.max_column,
+                    "cell_sample": sample,
+                    "instruction": (
+                        "Classify the SIer design workbook sheet. Prefer explicit table "
+                        "headings over sheet name alone."
+                    ),
+                },
+                SheetClassificationResult,
+            )
+            if llm_result.sheet_type != "unknown":
+                sheet.sheet_type = llm_result.sheet_type
+                sheet.evidence_level = llm_result.evidence_level or "llm_sample"
+                sheet.reason = f"LLM classification: {llm_result.reason}"
         result.append(sheet)
     return result
 

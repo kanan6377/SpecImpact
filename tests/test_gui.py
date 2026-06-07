@@ -6,6 +6,7 @@ import json
 import threading
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 import pytest
 from fastapi.testclient import TestClient
@@ -245,6 +246,29 @@ def test_external_provider_requires_per_job_approval(tmp_path: Path) -> None:
         )
         assert response.status_code == 400
         assert "承認" in response.text
+
+
+def test_external_preview_endpoint_receives_json_params(tmp_path: Path) -> None:
+    target = tmp_path / "demo"
+    copy_demo(demo_source(), target)
+    project = ProjectRegistry(tmp_path / "registry").add(target)
+    execute(project, "init", {})
+    execute(project, "ingest", {"path": "docs", "aliases": "aliases.yml", "no_llm": True})
+    execute(
+        project,
+        "llm_configure",
+        {"provider": "ollama", "model": "remote", "base_url": "https://ollama.example.com"},
+    )
+    app = create_app(registry_root=tmp_path / "registry")
+    params = quote(json.dumps({"path": "changes/change_credit_limit.md", "no_llm": True}))
+
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        preview = client.get(
+            f"/api/projects/{project.project_id}/external-preview?action=analyze&params={params}"
+        )
+
+    assert preview.status_code == 200
+    assert preview.json()["required"] is False
 
 
 def test_analyze_external_preview_lists_extraction_and_rerank_counts(tmp_path: Path) -> None:

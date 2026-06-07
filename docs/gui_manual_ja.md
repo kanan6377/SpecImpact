@@ -1,11 +1,11 @@
 # SpecImpact GUI Manual
 
 SpecImpact GUI は、設計変更の影響範囲を「候補 + relation path + 引用行」で追える
-localhost 専用コンソールです。設計書を local knowledge graph に変換し、変更要求に関係しそうな
+localhost 専用コンソールです。設計書を LLM-first evidence graph / GraphRAG に変換し、変更要求に関係しそうな
 API、画面、DB、外部 IF、テストを根拠つきで並べます。
 
-LLM は任意です。OpenAI、Ollama、Codex CLI を使う場合も、外部送信は job 単位で確認されます。
-LLM を切っても local graph だけで分析できます。
+Codex CLI を第一候補の provider とし、OpenAI API や Ollama も使えます。外部送信は job 単位で
+確認されます。秘匿性の強い案件やdebugでは local fallback だけでも分析できます。
 
 ## 1. 何ができるか
 
@@ -13,7 +13,7 @@ LLM を切っても local graph だけで分析できます。
 - 変更要求から影響候補を `must_review` / `should_review` / `may_review` に分類する
 - 候補ごとに relation path と引用元ファイル、行番号、quote を表示する
 - Graph Explorer で relation を確認し、`confirmed` / `rejected` にレビューできる
-- 任意の LLM で entity 抽出と batch rerank を行う
+- LLM で entity / relation / alias / Change Atom を抽出し、verifier で evidence を確認する
 - job 履歴、trace、privacy doctor で「何を保存したか」を確認できる
 
 SpecImpact は最終判断を自動化しません。レビュー候補を作り、根拠を集め、人間が判断するための
@@ -43,10 +43,10 @@ GUI は常に `127.0.0.1` に bind します。LAN 公開 option はありませ
 2. `サンプル解析を実行`
 3. `Analyze / Report` で候補、理由、evidence を確認
 4. `Graph Explorer` で relation path を眺める
-5. `Settings` で `codex / default` などを設定し、LLM ありの analyze を試す
+5. `Settings` で `codex / default` などを設定し、LLM-first analyze を試す
 
-local-only の標準サンプルは 13 candidates を生成します。Codex CLI を有効にすると、変更要求の解釈と
-候補精査に LLM が使われ、追加候補が出る場合があります。
+Codex CLI を有効にすると、設計書の構造把握、変更要求の解釈、候補精査に LLM が使われます。
+local fallback では同じ evidence graph をルールで構築します。
 
 ![Dashboard](images/gui/dashboard.png)
 
@@ -56,15 +56,16 @@ SpecImpact GUI は black box ではありません。
 
 ```text
 design docs
-  -> local graph
-  -> change entity extraction
+  -> LLM structured extraction
+  -> evidence graph / GraphRAG
+  -> Change Atom extraction
   -> graph walk
-  -> optional LLM batch rerank
+  -> verifier
   -> report with evidence
 ```
 
-重要なのは、LLM に設計書一式を丸投げしないことです。まず local graph が候補と根拠を作り、
-LLM は変更要求の読み取りと候補の精査を手伝います。
+重要なのは、LLM 出力をそのまま確定しないことです。LLM は構造抽出と仮説生成を行い、
+verifier が evidence ID と graph path を確認し、人間が最終判断します。
 
 ## 5. Dashboard
 
@@ -80,8 +81,8 @@ Dashboard は Launchpad です。
 標準状態は以下です。
 
 ```text
-LLM: disabled
-External transmission: none
+LLM: provider configured by project
+External transmission: preview + approval
 Backend: local JSONL
 Embeddings: local
 ```

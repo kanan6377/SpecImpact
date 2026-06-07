@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import threading
 import webbrowser
@@ -46,6 +47,7 @@ from specimpact.inspection import (
 from specimpact.integrations import (
     configure_backend,
     create_baseline,
+    export_neo4j_cypher,
     export_obsidian,
     graph_diff,
     import_review_results,
@@ -63,16 +65,16 @@ from specimpact.store import LocalStore
 from specimpact.structured_loaders import ingest_ddl, ingest_openapi
 from specimpact.tabular_loaders import ingest_csv, ingest_excel, inspect_excel_folder
 
-app = typer.Typer(help="Evidence-first software design change impact review CLI.")
+app = typer.Typer(help="LLM-first, evidence-verified design impact management CLI.")
 aliases_app = typer.Typer(help="Review manual and suggested aliases.")
 inspect_app = typer.Typer(help="Inspect local graph state.")
 relations_app = typer.Typer(help="Review extracted relation status.")
-backend_app = typer.Typer(help="Configure optional graph backend.")
+backend_app = typer.Typer(help="Configure graph backend.")
 baseline_app = typer.Typer(help="Create graph baselines.")
 graph_app = typer.Typer(help="Compare graph state.")
 graph_proposals_app = typer.Typer(help="Review LLM graph proposals.")
 review_app = typer.Typer(help="Import reviewer decisions.")
-llm_app = typer.Typer(help="Configure optional LLM extraction and reranking.")
+llm_app = typer.Typer(help="Configure the standard LLM provider.")
 embeddings_app = typer.Typer(help="Build and inspect local-first semantic embeddings.")
 excel_app = typer.Typer(help="Inspect and lint Excel design workbooks.")
 change_app = typer.Typer(help="Parse and inspect structured change atoms.")
@@ -129,6 +131,65 @@ def init() -> None:
     """Initialize local SpecImpact state."""
     LocalStore().init()
     typer.echo("Initialized .specimpact/")
+
+
+@app.command()
+def onboard(
+    path: Path,
+    mode: str = typer.Option("auto", help="auto, markdown, or dirty-excel."),
+    provider: str = typer.Option("codex", help="codex, openai, ollama, fake, or none."),
+    model: str = typer.Option("default", help="LLM model name."),
+    base_url: str | None = typer.Option(None, help="Required for Ollama."),
+    aliases: Path | None = typer.Option(None, help="Manual aliases.yml file."),
+    obsidian_vault: Path | None = typer.Option(
+        None,
+        "--obsidian-vault",
+        help="Export a review vault after onboarding.",
+    ),
+    yes: bool = typer.Option(False, "--yes", help="Approve external transmission."),
+    no_llm: bool = typer.Option(False, "--no-llm", help="Use local-only fallback."),
+) -> None:
+    """Run the standard LLM-first project onboarding flow."""
+    store = LocalStore()
+    store.init()
+    if no_llm or provider == "none":
+        no_llm = True
+        typer.echo("LLM provider skipped; using local-only fallback.")
+    else:
+        _call(configure_llm, store, provider, model, base_url)
+        typer.echo(f"Configured {provider} LLM provider with model {model}.")
+    detected_mode = _detect_onboard_mode(path) if mode == "auto" else mode
+    if detected_mode == "dirty-excel":
+        summary = _call(
+            ingest_dirty_excel,
+            store,
+            path,
+            aliases,
+            use_llm=not no_llm,
+            yes=yes,
+            confirm=typer.confirm,
+        )
+        typer.echo(
+            "Onboarded dirty Excel: "
+            f"{summary.workbooks} workbooks, {summary.regions} regions, "
+            f"{summary.proposals} graph proposals."
+        )
+    elif detected_mode == "markdown":
+        count = _call(
+            ingest_documents,
+            store,
+            path,
+            aliases,
+            yes=yes,
+            no_llm=no_llm,
+            confirm=typer.confirm,
+        )
+        typer.echo(f"Onboarded {count} documents.")
+    else:
+        raise typer.BadParameter("mode must be auto, markdown, or dirty-excel")
+    if obsidian_vault:
+        target = _call(export_obsidian, store, obsidian_vault)
+        typer.echo(f"Exported Obsidian review vault: {target}")
 
 
 @app.command()
@@ -199,7 +260,11 @@ def ingest_excel_command(
 @app.command("ingest-dirty-excel")
 def ingest_dirty_excel_command(
     path: Path,
-    llm: bool = typer.Option(False, "--llm", help="Use configured LLM for region extraction."),
+    llm: bool = typer.Option(
+        True,
+        "--llm/--no-llm",
+        help="Use configured LLM for region extraction.",
+    ),
     aliases: Path | None = typer.Option(None, help="Manual aliases.yml file."),
     yes: bool = typer.Option(False, "--yes", help="Approve external transmission."),
 ) -> None:
@@ -225,11 +290,22 @@ def analyze(
     change_request: Path,
     yes: bool = typer.Option(False, "--yes", help="Approve external transmission."),
     no_llm: bool = typer.Option(False, "--no-llm", help="Temporarily disable LLM calls."),
-    llm_first: bool = typer.Option(False, "--llm-first", help="Use v2 Change Atom impact flow."),
+    llm_first: bool = typer.Option(
+        False,
+        "--llm-first",
+        help="Use standard Change Atom impact flow.",
+    ),
 ) -> None:
     """Analyze a change request and write a new review run."""
     if llm_first:
-        report = _call(analyze_change_llm_first, LocalStore(), change_request)
+        report = _call(
+            analyze_change_llm_first,
+            LocalStore(),
+            change_request,
+            yes=yes,
+            no_llm=no_llm,
+            confirm=typer.confirm,
+        )
         typer.echo(f"Created run {report.run_id} with {len(report.impacts)} candidates.")
         return
     report = _call(
@@ -316,7 +392,7 @@ def release_check(dataset: Path) -> None:
 
 @aliases_app.command("suggest")
 def aliases_suggest(
-    llm: bool = typer.Option(False, "--llm", help="Use v2 alias inference."),
+    llm: bool = typer.Option(True, "--llm/--no-llm", help="Use v2 alias inference."),
 ) -> None:
     """Generate inspectable local alias suggestions."""
     typer.echo(f"Created {_call(suggest_aliases, LocalStore(), use_llm=llm)} alias suggestions.")
@@ -425,9 +501,24 @@ def backend_set(backend: str, uri: str | None = typer.Option(None)) -> None:
 
 
 @app.command("export-obsidian")
-def export_obsidian_command(output_dir: Path) -> None:
-    """Export the latest Markdown report for Obsidian."""
-    typer.echo(f"Exported {_call(export_obsidian, LocalStore(), output_dir)}")
+def export_obsidian_command(
+    output_dir: Path,
+    report_only: bool = typer.Option(
+        False,
+        "--report-only",
+        help="Only copy the latest Markdown report.",
+    ),
+) -> None:
+    """Export an Obsidian review vault with graph notes and impact canvas."""
+    typer.echo(
+        f"Exported {_call(export_obsidian, LocalStore(), output_dir, report_only=report_only)}"
+    )
+
+
+@app.command("export-neo4j")
+def export_neo4j_command(output_path: Path) -> None:
+    """Export graph layers as Neo4j Cypher."""
+    typer.echo(f"Exported {_call(export_neo4j_cypher, LocalStore(), output_path)}")
 
 
 @review_app.command("import")
@@ -474,7 +565,7 @@ def llm_configure(
     model: str = typer.Option(..., help="Provider model name."),
     base_url: str | None = typer.Option(None, help="Required for Ollama."),
 ) -> None:
-    """Enable an optional LLM provider."""
+    """Enable the standard LLM provider."""
     _call(configure_llm, LocalStore(), provider, model, base_url)
     typer.echo(f"Configured {provider} LLM provider with model {model}.")
 
@@ -538,6 +629,29 @@ def change_parse(path: Path) -> None:
     typer.echo(json.dumps(extraction.model_dump(), ensure_ascii=False, indent=2))
 
 
+@change_app.command("analyze")
+def change_analyze(change: str) -> None:
+    """Analyze a change request path or natural-language text with the standard flow."""
+    store = LocalStore()
+    store.init()
+    path = Path(change)
+    if path.exists():
+        change_path = path
+    else:
+        digest = hashlib.sha1(change.encode("utf-8")).hexdigest()[:12]
+        change_path = store.root / "changes" / f"change-{digest}.md"
+        store.write_text(change_path, f"# Change Request\n\n{change.strip()}\n")
+    report = _call(
+        analyze_change_llm_first,
+        store,
+        change_path,
+        yes=False,
+        no_llm=False,
+        confirm=typer.confirm,
+    )
+    typer.echo(f"Created run {report.run_id} with {len(report.impacts)} candidates.")
+
+
 @changes_app.command("list")
 def changes_list() -> None:
     """List parsed changes."""
@@ -599,3 +713,11 @@ def _render_health_check(health: dict[str, Any]) -> str:
             *extra,
         ]
     )
+
+
+def _detect_onboard_mode(path: Path) -> str:
+    if path.is_file() and path.suffix.lower() == ".xlsx":
+        return "dirty-excel"
+    if path.is_dir() and any(item.suffix.lower() == ".xlsx" for item in path.iterdir()):
+        return "dirty-excel"
+    return "markdown"

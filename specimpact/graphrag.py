@@ -4,6 +4,7 @@ import hashlib
 import ipaddress
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -151,6 +152,7 @@ class OpenAILLMClient(HTTPJSONClient):
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY is required for the OpenAI provider")
+        safe_payload = redact_payload(payload)
         response = self._post(
             "https://api.openai.com/v1/responses",
             {
@@ -163,7 +165,7 @@ class OpenAILLMClient(HTTPJSONClient):
                             f"SpecImpact purpose: {purpose}."
                         ),
                     },
-                    {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+                    {"role": "user", "content": json.dumps(safe_payload, ensure_ascii=False)},
                 ],
                 "text": {
                     "format": {
@@ -188,6 +190,7 @@ class OllamaLLMClient(HTTPJSONClient):
         self.base_url = validate_ollama_base_url(base_url)
 
     def structured(self, purpose: str, payload: dict[str, Any], schema: type[BaseModel]) -> Any:
+        safe_payload = redact_payload(payload)
         response = self._post(
             f"{self.base_url}/api/chat",
             {
@@ -202,7 +205,7 @@ class OllamaLLMClient(HTTPJSONClient):
                             f"SpecImpact purpose: {purpose}."
                         ),
                     },
-                    {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+                    {"role": "user", "content": json.dumps(safe_payload, ensure_ascii=False)},
                 ],
             },
         )
@@ -229,13 +232,14 @@ class CodexCLIClient:
             raise ValueError("Codex CLI executable was not found")
 
     def structured(self, purpose: str, payload: dict[str, Any], schema: type[BaseModel]) -> Any:
+        safe_payload = redact_payload(payload)
         prompt = (
             "Act only as a structured JSON extraction backend. "
             "Do not use tools, inspect files, or execute commands. "
             "Return only JSON matching the provided schema. "
             "Use only the supplied payload as evidence. "
             f"SpecImpact purpose: {purpose}.\n"
-            f"Payload:\n{json.dumps(payload, ensure_ascii=False)}"
+            f"Payload:\n{json.dumps(safe_payload, ensure_ascii=False)}"
         )
         with tempfile.TemporaryDirectory(prefix="specimpact-codex-") as directory:
             root = Path(directory)
@@ -300,6 +304,8 @@ class FakeLLMClient:
 
     def structured(self, purpose: str, payload: dict[str, Any], schema: type[BaseModel]) -> Any:
         value = self.responses.get(purpose)
+        if value is None and ":" in purpose:
+            value = self.responses.get(purpose.split(":", 1)[0])
         if isinstance(value, list):
             value = value.pop(0) if value else None
         if value is None:
@@ -451,6 +457,39 @@ def redact_url(url: object) -> str | None:
     except ValueError:
         port = ""
     return parsed._replace(netloc=f"[REDACTED]@{host}{port}").geturl()
+
+
+REDACTION_PATTERNS = (
+    re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
+    re.compile(r"\b0\d{1,4}[- ]?\d{1,4}[- ]?\d{3,4}\b"),
+    re.compile(r"https?://[^\s)]+"),
+    re.compile(
+        r"\b(?:sk-[A-Za-z0-9_\-]{8,}|pk_[A-Za-z0-9_\-]{8,}|"
+        r"(?:api[_-]?key|token|secret)[=:][A-Za-z0-9_\-]{8,})\b",
+        re.I,
+    ),
+    re.compile(r"\b\d{7,12}\b"),
+)
+
+
+def redact_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: (
+                "[REDACTED]"
+                if re.search(r"key|token|secret|password", str(key), re.I)
+                else redact_payload(item)
+            )
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [redact_payload(item) for item in value]
+    if isinstance(value, str):
+        redacted = value
+        for pattern in REDACTION_PATTERNS:
+            redacted = pattern.sub("[REDACTED]", redacted)
+        return redacted
+    return value
 
 
 def transmission_message(provider: str, model: str, purpose: str, chunk_count: int) -> str:
@@ -656,6 +695,9 @@ def _trace_row(
         "provider": client.provider,
         "model": client.model,
         "purpose": purpose,
+        "item_count": _payload_item_count(payload),
+        "redacted": True,
+        "source_hash": _payload_source_hash(payload),
         "chunk_id": chunk_id,
         "prompt_hash": _hash(payload),
         "response_hash": _hash(result.model_dump()),
@@ -715,6 +757,29 @@ def _result_summary(result: BaseModel) -> dict[str, Any]:
             ),
         }
     return {}
+
+
+def _payload_item_count(payload: dict[str, Any]) -> int | None:
+    for key in (
+        "known_entities",
+        "candidates",
+        "evidence",
+        "allowed_evidence_ids",
+        "cells",
+        "chunks",
+    ):
+        value = payload.get(key)
+        if isinstance(value, list):
+            return len(value)
+    return 1 if payload else 0
+
+
+def _payload_source_hash(payload: dict[str, Any]) -> str | None:
+    for key in ("chunk_id", "region_id", "sheet", "change_request"):
+        value = payload.get(key)
+        if isinstance(value, str) and value:
+            return hashlib.sha256(value.encode("utf-8")).hexdigest()
+    return None
 
 
 def _hash(value: Any) -> str:

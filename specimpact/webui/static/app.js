@@ -171,14 +171,23 @@ function formValues(form) {
 async function enqueue(action, params) {
   try {
     if (!state.projectId) throw new Error("案件を選択してください。");
-    const preview = await api(
-      withProject(
-        `/external-preview?action=${encodeURIComponent(action)}&params=${encodeURIComponent(
-          JSON.stringify(params),
-        )}`,
-      ),
-    );
+    const query = new URLSearchParams({
+      action,
+      params: JSON.stringify(params),
+    });
+    let preview;
+    try {
+      preview = await api(withProject(`/external-preview?${query.toString()}`));
+    } catch (error) {
+      throw new Error(
+        `External preview failed: action=${action}, params=${safeParams(params)}, error=${error.message}`,
+      );
+    }
     const approved = preview.required ? await confirmExternal(preview.transmissions) : false;
+    if (preview.required && !approved) {
+      toast("外部送信をキャンセルしました。Job は実行していません。");
+      return;
+    }
     const result = await api(withProject("/jobs"), {
       method: "POST",
       body: JSON.stringify({ action, params, external_approved: approved, input_kind: "path" }),
@@ -188,6 +197,14 @@ async function enqueue(action, params) {
   } catch (error) {
     toast(error.message);
   }
+}
+
+function safeParams(params) {
+  const redacted = {};
+  Object.entries(params || {}).forEach(([key, value]) => {
+    redacted[key] = /key|token|secret|password/i.test(key) ? "[redacted]" : value;
+  });
+  return JSON.stringify(redacted);
 }
 
 function confirmExternal(rows) {
@@ -385,7 +402,7 @@ async function loadJobs() {
               job.state,
             )}">${escapeHtml(job.state)}</span><small>${escapeHtml(job.created_at)}<br>${escapeHtml(
               JSON.stringify(job.result_summary || job.error_summary || ""),
-            )}</small></div>${
+            )}${recoveryHint(job)}</small></div>${
               job.state === "queued"
                 ? `<button class="button ghost" onclick="cancelJob('${escapeHtml(job.job_id)}')">取消</button>`
                 : ""
@@ -459,20 +476,7 @@ async function loadDirtyExcel() {
   $("#dirty-proposals").innerHTML = data.proposals.length
     ? data.proposals
         .map(
-          (proposal) =>
-            `<details><summary>${escapeHtml(proposal.proposal_id)} <span class="status ${escapeHtml(
-              proposal.status,
-            )}">${escapeHtml(proposal.status)}</span></summary><p>${escapeHtml(
-              proposal.region_id,
-            )}</p><p>${proposal.result.nodes.length} nodes / ${
-              proposal.result.edges.length
-            } edges</p><button class="button ghost" data-proposal-id="${escapeHtml(
-              proposal.proposal_id,
-            )}" data-proposal-status="accepted">承認</button><button class="button ghost" data-proposal-id="${escapeHtml(
-              proposal.proposal_id,
-            )}" data-proposal-status="rejected">却下</button><pre>${escapeHtml(
-              JSON.stringify(proposal.result, null, 2),
-            )}</pre></details>`,
+          (proposal) => renderGraphProposal(proposal),
         )
         .join("")
     : '<p class="empty-state">proposal はまだありません。</p>';
@@ -499,7 +503,122 @@ async function loadDirtyExcel() {
 
 async function loadImpactDecisions() {
   const data = await api(withProject("/impact-decisions"));
-  $("#impact-decisions").textContent = JSON.stringify(data.decisions, null, 2);
+  $("#impact-decisions").innerHTML = renderImpactDecisionTable(data.decisions);
+  $$("[data-impact-status]").forEach((control) => {
+    control.onchange = () =>
+      enqueue("impact_status", {
+        impact_id: control.dataset.impactId,
+        status: control.value,
+        reason: control.closest("tr")?.querySelector("[data-impact-reason]")?.value || "",
+      }).then(() => setTimeout(loadImpactDecisions, 700));
+  });
+  $$("[data-impact-save]").forEach((button) => {
+    button.onclick = () =>
+      enqueue("impact_status", {
+        impact_id: button.dataset.impactId,
+        status:
+          button.closest("tr")?.querySelector("[data-impact-status]")?.value || "unreviewed",
+        reason: button.closest("tr")?.querySelector("[data-impact-reason]")?.value || "",
+      }).then(() => setTimeout(loadImpactDecisions, 700));
+  });
+}
+
+function renderGraphProposal(proposal) {
+  const nodes = proposal.result.nodes || [];
+  const edges = proposal.result.edges || [];
+  const warnings = proposal.result.warnings || [];
+  const unresolved = proposal.result.unresolved_mentions || [];
+  return `<details><summary>${escapeHtml(proposal.proposal_id)} <span class="status ${escapeHtml(
+    proposal.status,
+  )}">${escapeHtml(proposal.status)}</span></summary>
+    <div class="detail-grid">
+      <div><span>Region</span><strong>${escapeHtml(proposal.region_id)}</strong></div>
+      <div><span>Method</span><strong>${escapeHtml(proposal.extraction_method)}</strong></div>
+      <div><span>Diff</span><strong>+${nodes.length} nodes / +${edges.length} edges</strong></div>
+    </div>
+    <h3>Nodes to add</h3>
+    ${renderMiniList(nodes.map((node) => `${node.node_type}: ${node.display_name}`))}
+    <h3>Edges to add</h3>
+    ${renderMiniList(edges.map((edge) => `${edge.source_temp_id} -${edge.relation_type}-> ${edge.target_temp_id}`))}
+    <h3>Evidence</h3>
+    ${renderMiniList([...new Set([...nodes, ...edges].flatMap((item) => item.evidence_ids || []))])}
+    ${warnings.length ? `<h3>Warnings</h3>${renderMiniList(warnings)}` : ""}
+    ${unresolved.length ? `<h3>Unresolved mentions</h3>${renderMiniList(unresolved)}` : ""}
+    <button class="button ghost" data-proposal-id="${escapeHtml(
+      proposal.proposal_id,
+    )}" data-proposal-status="accepted">Accept</button>
+    <button class="button ghost" data-proposal-id="${escapeHtml(
+      proposal.proposal_id,
+    )}" data-proposal-status="rejected">Reject</button>
+  </details>`;
+}
+
+function renderImpactDecisionTable(decisions) {
+  if (!decisions.length) return '<p class="empty-state">Impact decision はまだありません。</p>';
+  const statuses = [
+    "unreviewed",
+    "accepted",
+    "rejected",
+    "needs_investigation",
+    "implemented",
+    "tested",
+    "closed",
+  ];
+  const rows = decisions
+    .map(
+      (item) => `<tr>
+        <td><strong>${escapeHtml(item.display_name || item.candidate_node_id)}</strong><br><small>${escapeHtml(
+          item.impact_id,
+        )}</small></td>
+        <td><span class="status ${escapeHtml(item.review_priority || "unconfirmed")}">${escapeHtml(
+          item.review_priority || "-",
+        )}</span><br><small>${escapeHtml(item.impact_type || item.artifact_type || "")}</small></td>
+        <td>${escapeHtml(item.impact_reason || "")}${renderMiniList(item.required_actions || [])}${
+          item.warnings?.length ? `<small>${escapeHtml(item.warnings.join(" / "))}</small>` : ""
+        }</td>
+        <td>${renderEvidenceButtons(item.evidence_ids || [])}</td>
+        <td><select data-impact-status data-impact-id="${escapeHtml(item.impact_id)}">${statuses
+          .map(
+            (status) =>
+              `<option ${status === item.status ? "selected" : ""}>${escapeHtml(status)}</option>`,
+          )
+          .join("")}</select></td>
+        <td><input data-impact-reason value="${escapeHtml(item.reason || "")}" placeholder="review reason"></td>
+        <td><button class="button ghost" data-impact-save data-impact-id="${escapeHtml(
+          item.impact_id,
+        )}">Save</button></td>
+      </tr>`,
+    )
+    .join("");
+  return `<div class="table-wrap"><table><thead><tr><th>Candidate</th><th>Priority</th><th>Reason / Actions</th><th>Evidence</th><th>Status</th><th>Decision reason</th><th></th></tr></thead><tbody>${rows}</tbody></table></div><div id="impact-evidence-viewer" class="graph-detail"></div>`;
+}
+
+function renderMiniList(items) {
+  if (!items.length) return '<p class="empty-state">none</p>';
+  return `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+}
+
+function renderEvidenceButtons(ids) {
+  if (!ids.length) return "-";
+  return ids
+    .map(
+      (id) =>
+        `<button class="table-link" onclick="showEvidence('${escapeHtml(id)}', '#impact-evidence-viewer')">${escapeHtml(
+          id,
+        )}</button>`,
+    )
+    .join("<br>");
+}
+
+async function showEvidence(id, target = "#graph-detail") {
+  const query = new URLSearchParams();
+  query.append("evidence_id", id);
+  const response = await api(withProject(`/evidence?${query}`));
+  const evidence = response.evidence || [];
+  const element = $(target);
+  if (element) {
+    element.innerHTML = `<h3>Evidence</h3>${renderEvidenceList(evidence)}`;
+  }
 }
 
 async function loadGraph() {
@@ -838,7 +957,13 @@ async function relationStatus(relationId, status) {
 
 async function loadAliases() {
   const data = await api(withProject("/aliases"));
-  $("#aliases-result").textContent = JSON.stringify(data, null, 2);
+  $("#aliases-result").innerHTML = renderAliasReview(data);
+  $$("[data-alias-candidate]").forEach((button) => {
+    button.onclick = () =>
+      enqueue(button.dataset.aliasAction, {
+        candidate_id: button.dataset.aliasCandidate,
+      }).then(() => setTimeout(loadAliases, 700));
+  });
 }
 
 function escapeHtml(value) {
@@ -860,6 +985,68 @@ function renderEvidence(items = []) {
         )}</li>`,
     )
     .join("");
+}
+
+function recoveryHint(job) {
+  const text = JSON.stringify(job.error_summary || "").toLowerCase();
+  if (!text || job.state !== "failed") return "";
+  if (text.includes("llm provider not configured")) {
+    return "<br><strong>Next:</strong> Settings で provider を設定するか --no-llm/local-only を選びます。";
+  }
+  if (text.includes("external transmission") || text.includes("approval")) {
+    return "<br><strong>Next:</strong> 外部送信previewを確認して承認してから再実行します。";
+  }
+  if (text.includes("excel") || text.includes("workbook")) {
+    return "<br><strong>Next:</strong> Excel inspect/classify で対象ファイルと未対応要素を確認します。";
+  }
+  if (text.includes("proposal")) {
+    return "<br><strong>Next:</strong> Dirty Excel の proposal / warnings を確認します。";
+  }
+  return "<br><strong>Next:</strong> 入力path、provider設定、最新jobの詳細を確認します。";
+}
+
+function renderEvidenceList(items = []) {
+  if (!items.length) return '<p class="empty-state">関連する evidence はありません。</p>';
+  return `<ul class="evidence-list">${items
+    .map(
+      (item) =>
+        `<li><code>${escapeHtml(item.evidence_id)}</code><small>${escapeHtml(
+          item.source_location.file,
+        )}:${item.source_location.line_start}-${item.source_location.line_end}</small><p>${escapeHtml(
+          item.quote,
+        )}</p></li>`,
+    )
+    .join("")}</ul>`;
+}
+
+function renderAliasReview(data) {
+  const candidates = data.candidates || [];
+  const candidateTable = candidates.length
+    ? `<div class="table-wrap"><table><thead><tr><th>Target</th><th>Aliases</th><th>Judgement</th><th>Evidence</th><th>Action</th></tr></thead><tbody>${candidates
+        .map(
+          (item) => `<tr>
+            <td><strong>${escapeHtml(item.target_id)}</strong><br><small>${escapeHtml(
+              (item.compared_entity_ids || []).join(", "),
+            )}</small></td>
+            <td>${renderMiniList(item.aliases || [])}</td>
+            <td><span class="status ${escapeHtml(item.status)}">${escapeHtml(
+              item.status,
+            )}</span><br><small>${escapeHtml(item.judgement)}: ${escapeHtml(
+              item.llm_reason || item.reason || "",
+            )}</small></td>
+            <td>${renderMiniList(item.evidence_quotes || item.evidence_ids || [])}</td>
+            <td><button class="button ghost" data-alias-action="alias_confirm" data-alias-candidate="${escapeHtml(
+              item.candidate_id,
+            )}">Confirm</button><button class="button ghost" data-alias-action="alias_reject_candidate" data-alias-candidate="${escapeHtml(
+              item.candidate_id,
+            )}">Reject</button></td>
+          </tr>`,
+        )
+        .join("")}</tbody></table></div>`
+    : '<p class="empty-state">alias candidate はまだありません。</p>';
+  return `${candidateTable}<h3>Raw aliases</h3><pre>${escapeHtml(
+    JSON.stringify({ aliases: data.aliases, suggestions: data.suggestions }, null, 2),
+  )}</pre>`;
 }
 
 boot().catch((error) => toast(error.message));

@@ -308,7 +308,34 @@ def dirty_excel_data(project: Project) -> dict[str, Any]:
 
 
 def impact_decisions_data(project: Project, change_id: str | None = None) -> list[dict[str, Any]]:
-    return json.loads(list_impacts(store_for(project), change_id))
+    store = store_for(project)
+    decisions = json.loads(list_impacts(store, change_id))
+    impacts_by_id: dict[str, dict[str, Any]] = {}
+    try:
+        report = json.loads((latest_run_dir(store) / "report.json").read_text(encoding="utf-8"))
+    except ValueError:
+        report = {}
+    change = report.get("change", {})
+    change_id = change.get("change_id") if isinstance(change, dict) else None
+    for group in ("must_review", "should_review", "may_review", "hidden"):
+        for impact in report.get(group, []):
+            impact_id = f"impact.{change_id}.{impact['artifact_id']}"
+            impacts_by_id[impact_id] = impact
+    for decision in decisions:
+        impact = impacts_by_id.get(decision["impact_id"], {})
+        decision.update(
+            {
+                "display_name": impact.get("display_name", decision["candidate_node_id"]),
+                "artifact_type": impact.get("artifact_type", ""),
+                "review_priority": impact.get("review_priority", ""),
+                "impact_reason": impact.get("reason", ""),
+                "impact_type": impact.get("impact_type", ""),
+                "required_actions": impact.get("required_actions", []),
+                "warnings": impact.get("warnings", []),
+                "evidence_ids": impact.get("evidence_ids", []),
+            }
+        )
+    return decisions
 
 
 def external_preview(project: Project, action: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -320,7 +347,8 @@ def external_preview(project: Project, action: str, params: dict[str, Any]) -> d
     llm = config["llm"]
     dirty_llm = action == "ingest_dirty_excel" and bool(params.get("llm"))
     graph_llm = action in {"ingest", "analyze", "analyze_llm_first"} and not no_llm
-    if (dirty_llm or graph_llm) and is_external_llm(llm):
+    alias_llm = action == "aliases_suggest" and bool(params.get("llm", True)) and not no_llm
+    if (dirty_llm or graph_llm or alias_llm) and is_external_llm(llm):
         if action == "ingest":
             purposes.append(
                 {
@@ -337,6 +365,15 @@ def external_preview(project: Project, action: str, params: dict[str, Any]) -> d
                     "model": llm.get("model"),
                     "purpose": "Dirty Excel region extraction",
                     "item_count": 1,
+                }
+            )
+        elif action == "aliases_suggest":
+            purposes.append(
+                {
+                    "provider": llm.get("provider"),
+                    "model": llm.get("model"),
+                    "purpose": "alias resolution judgement",
+                    "item_count": len(store.read("entities", Entity)),
                 }
             )
         else:
@@ -434,7 +471,13 @@ def execute(project: Project, action: str, params: dict[str, Any]) -> dict[str, 
         )
         result = {"run_id": report.run_id, "candidates": len(report.impacts)}
     elif action == "analyze_llm_first":
-        report = analyze_change_llm_first(store, _path(project, params, "path"))
+        report = analyze_change_llm_first(
+            store,
+            _path(project, params, "path"),
+            yes=approved,
+            no_llm=bool(params.get("no_llm")),
+            confirm=confirm,
+        )
         result = {"run_id": report.run_id, "candidates": len(report.impacts)}
     elif action == "analyze_text":
         body = str(params.get("body", "")).strip()
@@ -456,7 +499,7 @@ def execute(project: Project, action: str, params: dict[str, Any]) -> dict[str, 
         extraction = parse_change_atoms(store, _path(project, params, "path"))
         result = extraction.model_dump()
     elif action == "aliases_suggest":
-        result = {"suggestions": suggest_aliases(store, use_llm=bool(params.get("llm")))}
+        result = {"suggestions": suggest_aliases(store, use_llm=bool(params.get("llm", True)))}
     elif action == "alias_confirm":
         result = confirm_alias_candidate(store, params["candidate_id"]).model_dump()
     elif action == "alias_reject_candidate":

@@ -1,0 +1,10 @@
+{
+  "must_review": [
+    "api.enrollment_application",
+    "external_if.credit_screening",
+    "test.external_if_mapping"
+  ],
+  "should_review": [
+    "column.requested_credit_limit"
+  ]
+}

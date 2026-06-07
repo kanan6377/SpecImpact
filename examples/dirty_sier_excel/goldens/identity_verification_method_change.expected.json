@@ -1,0 +1,11 @@
+{
+  "must_review": [
+    "screen.enrollment_application",
+    "api.enrollment_application",
+    "external_if.identity_verification",
+    "test.identity_verification"
+  ],
+  "should_review": [
+    "validation.identity_verification_required"
+  ]
+}
