@@ -33,6 +33,16 @@ ROOT = Path(__file__).parents[1]
 SIER = ROOT / "examples" / "japanese_sier_excel"
 
 
+class RecordingFakeLLMClient(FakeLLMClient):
+    def __init__(self, responses=None, model: str = "fake-model") -> None:
+        super().__init__(responses, model)
+        self.calls = []
+
+    def structured(self, purpose, payload, schema):
+        self.calls.append({"purpose": purpose, "payload": payload, "schema": schema.__name__})
+        return super().structured(purpose, payload, schema)
+
+
 def test_dirty_workbook_normalization_preserves_cells_and_regions(tmp_path: Path) -> None:
     workbook_path = tmp_path / "dirty.xlsx"
     _write_dirty_workbook(workbook_path)
@@ -173,9 +183,11 @@ def test_alias_inference_confirm_and_reject_persist(tmp_path: Path) -> None:
                 }
             }
         ),
-    ) == 1
+    ) == 2
     candidate = store.read("alias_candidates", AliasCandidate)[0]
     assert candidate.judgement == "same"
+    assert candidate.entity_a_id == "entity.credit_limit.jp"
+    assert candidate.entity_b_id
     assert candidate.compared_entity_ids
     assert "same credit limit" in candidate.llm_reason
     decide_alias_candidate(store, candidate.candidate_id, "confirmed")
@@ -317,6 +329,19 @@ def test_llm_impact_hypothesis_adds_actions_and_reason(tmp_path: Path) -> None:
             after="9999",
         )
     ]
+    client = RecordingFakeLLMClient(
+        {
+            "impact_hypothesis": {
+                "impact_type": "boundary_value_change",
+                "required_actions": ["Update upper-bound validation and boundary tests."],
+                "warnings": ["Check API contract."],
+                "uncertainty": "low",
+                "reason": "The supplied evidence contains the changed upper bound.",
+                "evidence_ids": ["ev.limit"],
+                "review_priority_suggestion": "may_review",
+            }
+        }
+    )
     impacts = build_impact_hypotheses(
         store,
         atom,
@@ -328,21 +353,14 @@ def test_llm_impact_hypothesis_adds_actions_and_reason(tmp_path: Path) -> None:
             )
         ],
         use_llm=True,
-        llm_client=FakeLLMClient(
-            {
-                "impact_hypothesis": {
-                    "impact_type": "boundary_value_change",
-                    "required_actions": ["Update upper-bound validation and boundary tests."],
-                    "warnings": ["Check API contract."],
-                    "uncertainty": "low",
-                    "reason": "The supplied evidence contains the changed upper bound.",
-                    "evidence_ids": ["ev.limit"],
-                }
-            }
-        ),
+        llm_client=client,
     )
     assert impacts[0].impact_type == "boundary_value_change"
     assert "boundary tests" in impacts[0].required_actions[0]
+    assert impacts[0].review_priority == "may_review"
+    payload = client.calls[0]["payload"]
+    assert "candidate_subgraph" in payload
+    assert payload["candidate_subgraph"]["relations"]
 
 
 def test_llm_first_impact_from_dirty_excel_credit_limit(tmp_path: Path) -> None:

@@ -34,73 +34,95 @@ def suggest_alias_candidates(
             unique.values(),
             key=lambda item: (_is_ascii(item.display_name), item.entity_id),
         )[0]
-        aliases = sorted(
-            {
-                value
-                for item in unique.values()
-                for value in [item.display_name, item.canonical_name, *item.aliases]
-                if value and value not in {target.display_name, target.entity_id}
-            }
-        )
-        evidence_ids = sorted(
-            {
-                evidence_id
-                for relation in relations
-                if relation.target_id in unique
-                for evidence_id in relation.evidence_ids
-                if evidence_id in evidence
-            }
-        )
-        surrounding_node_ids = _surrounding_nodes(relations, set(unique))
-        evidence_quotes = [evidence[evidence_id].quote for evidence_id in evidence_ids[:8]]
-        judgement = AliasJudgement(judgement="unsure", reason=f"similar concept key: {group}")
-        if client:
-            judgement = client.structured(
-                "alias_resolution",
+        for candidate in sorted(unique.values(), key=lambda item: item.entity_id):
+            if candidate.entity_id == target.entity_id:
+                continue
+            pair_ids = {target.entity_id, candidate.entity_id}
+            aliases = sorted(
                 {
-                    "target": _entity_payload(target),
-                    "candidates": [
-                        _entity_payload(item)
-                        for item in sorted(unique.values(), key=lambda item: item.entity_id)
-                        if item.entity_id != target.entity_id
-                    ],
-                    "relations": [
-                        relation.model_dump()
-                        for relation in relations
-                        if relation.source_id in unique or relation.target_id in unique
-                    ][:20],
-                    "evidence": [
-                        {
-                            "evidence_id": evidence_id,
-                            "quote": evidence[evidence_id].quote,
-                            "file": evidence[evidence_id].source_location.file,
-                        }
-                        for evidence_id in evidence_ids[:8]
-                    ],
-                    "instruction": (
-                        "Return same only when the names refer to the same business field or "
-                        "system object. Return related for connected but distinct concepts."
+                    value
+                    for value in [
+                        candidate.display_name,
+                        candidate.canonical_name,
+                        *candidate.aliases,
+                    ]
+                    if value
+                    and value
+                    not in {target.display_name, target.canonical_name, target.entity_id}
+                }
+            )
+            pair_relations = [
+                relation
+                for relation in relations
+                if relation.source_id in pair_ids
+                or relation.target_id in pair_ids
+                or relation.source_id in _surrounding_nodes(relations, pair_ids)
+                or relation.target_id in _surrounding_nodes(relations, pair_ids)
+            ][:24]
+            evidence_ids = sorted(
+                {
+                    evidence_id
+                    for relation in pair_relations
+                    for evidence_id in relation.evidence_ids
+                    if evidence_id in evidence
+                }
+            )
+            surrounding_node_ids = _surrounding_nodes(relations, pair_ids)
+            evidence_quotes = [evidence[evidence_id].quote for evidence_id in evidence_ids[:8]]
+            relation_context = [_relation_context(relation) for relation in pair_relations]
+            judgement = AliasJudgement(
+                judgement="unsure",
+                reason=f"similar concept key: {group}",
+            )
+            if client:
+                judgement = client.structured(
+                    "alias_resolution",
+                    {
+                        "entity_a": _entity_payload(target),
+                        "entity_b": _entity_payload(candidate),
+                        "relations": [relation.model_dump() for relation in pair_relations],
+                        "relation_context": relation_context,
+                        "evidence": [
+                            {
+                                "evidence_id": evidence_id,
+                                "quote": evidence[evidence_id].quote,
+                                "file": evidence[evidence_id].source_location.file,
+                            }
+                            for evidence_id in evidence_ids[:8]
+                        ],
+                        "instruction": (
+                            "Judge whether entity_a and entity_b are the same business or "
+                            "system concept. Return same only when they should become aliases. "
+                            "Return related for connected but distinct fields, and different "
+                            "for separate concepts. Use only supplied evidence and relation "
+                            "context."
+                        ),
+                    },
+                    AliasJudgement,
+                )
+            clean_evidence_ids = [
+                evidence_id for evidence_id in judgement.evidence_ids if evidence_id in evidence
+            ] or evidence_ids
+            rows.append(
+                AliasCandidate(
+                    candidate_id=(
+                        f"alias_{_short_hash(group + target.entity_id + candidate.entity_id)}"
                     ),
-                },
-                AliasJudgement,
+                    target_id=target.entity_id,
+                    aliases=aliases,
+                    judgement=judgement.judgement,
+                    evidence_ids=clean_evidence_ids,
+                    reason=judgement.reason or f"similar concept key: {group}",
+                    entity_a_id=target.entity_id,
+                    entity_b_id=candidate.entity_id,
+                    compared_entity_ids=sorted(pair_ids),
+                    surrounding_node_ids=surrounding_node_ids,
+                    relation_context=relation_context,
+                    evidence_quotes=evidence_quotes,
+                    llm_reason=judgement.reason if client else "",
+                    confidence_label=judgement.confidence_label,
+                )
             )
-        clean_evidence_ids = [
-            evidence_id for evidence_id in judgement.evidence_ids if evidence_id in evidence
-        ] or evidence_ids
-        rows.append(
-            AliasCandidate(
-                candidate_id=f"alias_{_short_hash(group + target.entity_id)}",
-                target_id=target.entity_id,
-                aliases=aliases,
-                judgement=judgement.judgement,
-                evidence_ids=clean_evidence_ids,
-                reason=judgement.reason or f"similar concept key: {group}",
-                compared_entity_ids=sorted(unique),
-                surrounding_node_ids=surrounding_node_ids,
-                evidence_quotes=evidence_quotes,
-                llm_reason=judgement.reason if client else "",
-            )
-        )
     store.write(
         "alias_candidates",
         _merge_candidates(store.read("alias_candidates", AliasCandidate), rows),
@@ -128,7 +150,8 @@ def decide_alias_candidate(store: LocalStore, candidate_id: str, status: str) ->
     if status == "confirmed":
         from specimpact.inspection import decide_alias
 
-        for alias in candidate.aliases:
+        aliases = candidate.aliases if candidate.judgement == "same" else []
+        for alias in aliases:
             decide_alias(store, candidate.target_id, alias, "approved")
     return candidate
 
@@ -182,6 +205,13 @@ def _surrounding_nodes(relations: list[Relation], entity_ids: set[str]) -> list[
         if relation.target_id in entity_ids:
             result.add(relation.source_id)
     return sorted(result)
+
+
+def _relation_context(relation: Relation) -> str:
+    return (
+        f"{relation.source_id} -{relation.relation_type}-> {relation.target_id} "
+        f"[{relation.status}/{relation.polarity}]"
+    )
 
 
 def _is_ascii(value: str) -> bool:

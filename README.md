@@ -150,6 +150,11 @@ specimpact impacts set-status <impact_id> accepted --reason "画面/API/DBの上
 `must_review` は「影響あり確定」ではなく「直接証拠と関係経路があるので必ず確認する」
 という意味です。LLMだけの主張や evidence のない主張は `may_review` 以下に落とされます。
 
+LLM-first の中核では、alias は entity ペアごとに `same / related / different / unsure`
+で判定されます。Dirty Excel の region 抽出は画面項目表、入力チェック、API対応表、DB定義、
+外部IF、テストケースで指示を分けます。Impact 候補には `impact_type`、`required_actions`、
+`warnings` が付きますが、最終 priority は verifier と人間レビューで決まります。
+
 ## LLM provider
 
 LLMは標準導線です。Codex CLIを第一候補にし、OpenAI APIとOllamaも選べます。
@@ -183,6 +188,8 @@ specimpact export-obsidian .\vault
 
 Artifact note には frontmatter、Obsidianリンク、evidenceリンクが入り、標準Graph ViewやCanvasで
 依存関係を確認できます。Dataview plugin を入れると未レビュー項目の一覧も表示できます。
+Impact decision note には status、review_priority、impact_type、required_actions、evidence link が
+入り、Dashboard から未完了レビューを追えます。
 
 ## GUI
 

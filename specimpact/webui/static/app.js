@@ -957,7 +957,7 @@ async function relationStatus(relationId, status) {
 
 async function loadAliases() {
   const data = await api(withProject("/aliases"));
-  $("#aliases-result").innerHTML = renderAliasReview(data);
+  $("#aliases-result").innerHTML = renderAliasReviewV2(data);
   $$("[data-alias-candidate]").forEach((button) => {
     button.onclick = () =>
       enqueue(button.dataset.aliasAction, {
@@ -1047,6 +1047,56 @@ function renderAliasReview(data) {
   return `${candidateTable}<h3>Raw aliases</h3><pre>${escapeHtml(
     JSON.stringify({ aliases: data.aliases, suggestions: data.suggestions }, null, 2),
   )}</pre>`;
+}
+
+function renderAliasReviewV2(data) {
+  const candidates = data.candidates || [];
+  const groups = ["same", "related", "unsure", "different"]
+    .map((judgement) => [
+      judgement,
+      candidates.filter((item) => (item.judgement || "unsure") === judgement),
+    ])
+    .filter(([, rows]) => rows.length);
+  const candidateTables = groups.length
+    ? groups
+        .map(
+          ([judgement, rows]) =>
+            `<h3>${escapeHtml(judgement)}</h3><div class="table-wrap"><table><thead><tr><th>Pair</th><th>Alias values</th><th>Reason</th><th>Evidence / Relations</th><th>Action</th></tr></thead><tbody>${rows
+              .map((item) => renderAliasCandidateRow(item))
+              .join("")}</tbody></table></div>`,
+        )
+        .join("")
+    : '<p class="empty-state">alias candidate はまだありません。</p>';
+  return `${candidateTables}<h3>Raw aliases</h3><pre>${escapeHtml(
+    JSON.stringify({ aliases: data.aliases, suggestions: data.suggestions }, null, 2),
+  )}</pre>`;
+}
+
+function renderAliasCandidateRow(item) {
+  const pair = [item.entity_a_id || item.target_id, item.entity_b_id]
+    .filter(Boolean)
+    .join(" ↔ ");
+  const context = [
+    ...(item.relation_context || []),
+    ...(item.evidence_quotes || item.evidence_ids || []),
+  ];
+  return `<tr>
+    <td><strong>${escapeHtml(pair || item.target_id)}</strong><br><small>${escapeHtml(
+      (item.compared_entity_ids || []).join(", "),
+    )}</small></td>
+    <td>${renderMiniList(item.aliases || [])}</td>
+    <td><span class="status ${escapeHtml(item.status)}">${escapeHtml(
+      item.status,
+    )}</span><br><small>${escapeHtml(item.judgement || "unsure")} / ${escapeHtml(
+      item.confidence_label || "unknown",
+    )}</small><p>${escapeHtml(item.llm_reason || item.reason || "")}</p></td>
+    <td>${renderMiniList(context)}</td>
+    <td><button class="button ghost" data-alias-action="alias_confirm" data-alias-candidate="${escapeHtml(
+      item.candidate_id,
+    )}" ${item.judgement !== "same" ? "disabled" : ""}>Confirm</button><button class="button ghost" data-alias-action="alias_reject_candidate" data-alias-candidate="${escapeHtml(
+      item.candidate_id,
+    )}">Reject</button></td>
+  </tr>`;
 }
 
 boot().catch((error) => toast(error.message));

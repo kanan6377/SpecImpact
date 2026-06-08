@@ -8,6 +8,7 @@ from pathlib import Path
 from specimpact.config import load_config, save_config
 from specimpact.core import latest_run_dir
 from specimpact.impact_management.decision_store import ImpactDecision
+from specimpact.llm_graph.schemas import AliasCandidate, GraphProposal
 from specimpact.models import Artifact, Entity, Evidence, Relation
 from specimpact.store import LocalStore
 
@@ -42,8 +43,9 @@ def export_obsidian(store: LocalStore, output_dir: Path, *, report_only: bool = 
     artifacts_dir = vault_root / "Artifacts"
     evidence_dir = vault_root / "Evidence"
     changes_dir = vault_root / "Changes"
+    impacts_dir = vault_root / "Impacts"
     canvases_dir = vault_root / "Canvases"
-    for directory in (artifacts_dir, evidence_dir, changes_dir, canvases_dir):
+    for directory in (artifacts_dir, evidence_dir, changes_dir, impacts_dir, canvases_dir):
         directory.mkdir(parents=True, exist_ok=True)
 
     artifacts = store.read("artifacts", Artifact)
@@ -51,6 +53,8 @@ def export_obsidian(store: LocalStore, output_dir: Path, *, report_only: bool = 
     relations = store.read("relations", Relation)
     evidence = store.read("evidence", Evidence)
     decisions = store.read("impact_decisions", ImpactDecision)
+    alias_candidates = store.read("alias_candidates", AliasCandidate)
+    graph_proposals = store.read("graph_proposals", GraphProposal)
     report = (
         json.loads((run_dir / "report.json").read_text(encoding="utf-8"))
         if run_dir is not None
@@ -88,16 +92,22 @@ def export_obsidian(store: LocalStore, output_dir: Path, *, report_only: bool = 
         for item in evidence
     }
     decisions_by_candidate = {item.candidate_node_id: item for item in decisions}
+    impact_by_artifact = _impact_by_artifact(report)
 
     for node in nodes:
         outgoing = [item for item in relations if item.source_id == node["id"]]
         incoming = [item for item in relations if item.target_id == node["id"]]
         decision = decisions_by_candidate.get(node["id"])
+        impact = impact_by_artifact.get(str(node["id"]), {})
         body = [
             "---",
             f"specimpact_id: {json.dumps(node['id'], ensure_ascii=False)}",
             f"type: {json.dumps(node['type'], ensure_ascii=False)}",
+            f"artifact_type: {json.dumps(node['type'], ensure_ascii=False)}",
             f"review_status: {json.dumps(decision.status if decision else 'unreviewed')}",
+            f"review_priority: {json.dumps(impact.get('review_priority', 'none'))}",
+            f"source_document_ids: {json.dumps(node['source_document_ids'], ensure_ascii=False)}",
+            f"extraction_methods: {json.dumps(node['extraction_methods'], ensure_ascii=False)}",
             "---",
             "",
             f"# {node['display_name']}",
@@ -137,6 +147,8 @@ def export_obsidian(store: LocalStore, output_dir: Path, *, report_only: bool = 
             f"file: {json.dumps(item.source_location.file, ensure_ascii=False)}",
             f"line_start: {item.source_location.line_start}",
             f"line_end: {item.source_location.line_end}",
+            f"source_file: {json.dumps(item.source_location.file, ensure_ascii=False)}",
+            f"cell_range: {json.dumps(_cell_range_from_quote(item.quote), ensure_ascii=False)}",
             "---",
             "",
             f"# {item.evidence_id}",
@@ -155,6 +167,38 @@ def export_obsidian(store: LocalStore, output_dir: Path, *, report_only: bool = 
             "```",
         ]
         store.write_text(evidence_paths[item.evidence_id], "\n".join(body) + "\n")
+
+    for decision in decisions:
+        impact = impact_by_artifact.get(decision.candidate_node_id, {})
+        impact_path = impacts_dir / f"{_safe_filename(decision.impact_id)}.md"
+        body = [
+            "---",
+            f"specimpact_id: {json.dumps(decision.impact_id, ensure_ascii=False)}",
+            "type: impact_decision",
+            f"change_id: {json.dumps(decision.change_id, ensure_ascii=False)}",
+            f"candidate_node_id: {json.dumps(decision.candidate_node_id, ensure_ascii=False)}",
+            f"status: {json.dumps(decision.status, ensure_ascii=False)}",
+            f"review_priority: {json.dumps(impact.get('review_priority', 'unreviewed'))}",
+            f"impact_type: {json.dumps(impact.get('impact_type', ''), ensure_ascii=False)}",
+            "---",
+            "",
+            f"# {decision.impact_id}",
+            "",
+            f"- Candidate: {_node_link(node_paths, decision.candidate_node_id)}",
+            f"- Status: `{decision.status}`",
+            f"- Reason: {decision.reason or impact.get('reason', '')}",
+            "",
+            "## Required Actions",
+            *[f"- {item}" for item in impact.get("required_actions", [])],
+            "",
+            "## Evidence",
+            *[
+                f"- {_evidence_link(evidence_paths, evidence_id)}"
+                for evidence_id in impact.get("evidence_ids", [])
+                if evidence_id in evidence_paths
+            ],
+        ]
+        store.write_text(impact_path, "\n".join(body) + "\n")
 
     change_path = None
     canvas_path = None
@@ -218,6 +262,31 @@ def export_obsidian(store: LocalStore, output_dir: Path, *, report_only: bool = 
                 "WHERE review_status != \"closed\"",
                 "SORT review_status ASC",
                 "```",
+                "",
+                "## Impact Decisions",
+                "",
+                "```dataview",
+                'TABLE status, review_priority, impact_type FROM "SpecImpact/Impacts"',
+                "WHERE status != \"closed\"",
+                "SORT review_priority ASC",
+                "```",
+                "",
+                "## Pending Alias Candidates",
+                "",
+                *[
+                    f"- `{item.judgement}` {item.entity_a_id or item.target_id} <-> "
+                    f"{item.entity_b_id or ', '.join(item.compared_entity_ids)}"
+                    for item in alias_candidates
+                    if item.status == "pending"
+                ],
+                "",
+                "## Pending Graph Proposals",
+                "",
+                *[
+                    f"- `{item.extraction_method}` {item.proposal_id}: {item.region_id}"
+                    for item in graph_proposals
+                    if item.status == "pending"
+                ],
             ]
         )
         + "\n",
@@ -319,6 +388,23 @@ def _safe_filename(value: str) -> str:
 
 def _short_id(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", value).strip("_")[:32] or "id"
+
+
+def _impact_by_artifact(report: dict[str, object] | None) -> dict[str, dict[str, object]]:
+    if report is None:
+        return {}
+    result: dict[str, dict[str, object]] = {}
+    for group in ("must_review", "should_review", "may_review", "hidden"):
+        for item in report.get(group, []) or []:
+            if isinstance(item, dict) and isinstance(item.get("artifact_id"), str):
+                item["review_priority"] = group
+                result[str(item["artifact_id"])] = item
+    return result
+
+
+def _cell_range_from_quote(quote: str) -> str:
+    match = re.match(r"\[.+?!([A-Z]+[0-9]+(?::[A-Z]+[0-9]+)?)\]", quote)
+    return match.group(1) if match else ""
 
 
 def _relative_to(root: Path, path: Path) -> Path:

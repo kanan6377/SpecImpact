@@ -267,6 +267,10 @@ specimpact aliases confirm <candidate_id>
 specimpact aliases reject-candidate <candidate_id>
 ```
 
+LLMを使う場合、alias候補は entity ペアごとに `same / related / different / unsure` で
+判定されます。`same` は同一概念としてalias化できる候補、`related` は関連はあるが別概念の候補です。
+GUIでは候補ペア、周辺relation、evidence quote、LLM理由を同じ画面で確認できます。
+
 Relation:
 
 ```powershell
@@ -283,6 +287,10 @@ specimpact impacts set-status <impact_id> accepted --reason "修正対象"
 specimpact impacts set-status <impact_id> needs_investigation --reason "別紙参照先の確認が必要"
 specimpact impacts set-status <impact_id> closed --reason "実装とテスト完了"
 ```
+
+LLM-first impact analysis では、Change Atom、候補artifact、周辺subgraph、evidence quote、
+過去のaccepted/rejected判断をLLMに渡し、`impact_type`、`required_actions`、`warnings` を
+作業仮説として保存します。ただし、LLMだけでは `must_review` に昇格できません。
 
 ## 12. aliasファイルを書く
 
@@ -440,7 +448,9 @@ specimpact export-obsidian .\vault --report-only
 ```
 
 通常の `export-obsidian` は `SpecImpact/Dashboard.md`、`Artifacts`、`Evidence`、`Changes`、
-`Canvases` を生成します。`--report-only` は旧形式のMarkdownレポートコピーです。
+`Impacts`、`Canvases` を生成します。Artifact / Evidence / Impact note にはfrontmatterと
+Wiki linkが入り、Dataviewで未レビュー項目を一覧できます。`--report-only` は旧形式のMarkdown
+レポートコピーです。
 
 graph baseline:
 
