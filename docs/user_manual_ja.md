@@ -1,33 +1,21 @@
-# SpecImpact 日本語利用マニュアル
+# SpecImpact 日本語ユーザーマニュアル
 
-このマニュアルは、SpecImpact を初めて使う人が、サンプル実行から自分の設計書の解析まで
-進められるようにした手順書です。GUIを使う場合は [gui_manual_ja.md](gui_manual_ja.md) も
-参照してください。
+このマニュアルは、SpecImpact を初めて使う人が、設計書の取り込みから変更影響レビュー、Obsidian 出力まで進められるようにまとめたものです。
 
-## 1. SpecImpactとは
+## 1. SpecImpact とは
 
-SpecImpact は、LLMで設計書を evidence graph / GraphRAG に変換し、変更依頼から
-「確認したほうがよい影響候補」を evidence 付きで出すローカルファーストのCLI/GUIツールです。
+SpecImpact は、設計書を LLM と GraphRAG で構造化し、変更依頼に対する影響候補を evidence 付きで出す CLI / GUI ツールです。
 
-SpecImpact が出す結果は影響確定ではありません。`must_review` も「影響あり確定」ではなく、
-「直接証拠や関係経路があるので必ず確認する」という意味です。最終判断は設計者、開発者、
-テスト担当者が行います。
+主な対象は、SIer 現場でよくある Excel 設計書です。結合セル、複数表混在、同上、別紙参照、論理名と物理名の表記揺れを扱います。
 
-標準導線はLLM-firstです。Codex CLIを第一候補にし、OpenAI APIやOllamaも利用できます。
-外部サービスへ設計書を送る場合は、provider設定と送信承認が必要です。解析データは作業
-ディレクトリの `.specimpact/` に保存されます。
+重要な前提:
 
-## 2. 動作環境
+- SpecImpact の結果は影響確定ではなくレビュー候補です。
+- `must_review` は「影響あり確定」ではなく「直接 evidence と graph path があるので必ず確認する」という意味です。
+- LLM だけの主張や evidence のない主張は `may_review` 以下に落とされます。
+- 最終判断は人間が `accepted`、`rejected`、`closed` などの status で管理します。
 
-- Python 3.11 以上
-- PowerShell またはコマンドプロンプト
-- Git
-
-以下の例は PowerShell 用です。
-
-## 3. インストール
-
-GitHubから取得して、editable install します。
+## 2. インストール
 
 ```powershell
 git clone https://github.com/kanan6377/SpecImpact.git
@@ -36,60 +24,29 @@ python -m pip install -e .
 specimpact --help
 ```
 
-古い版をインストール済みの場合も、必ず `python -m pip install -e .` を実行し直してください。
-`python -m specimpact` は古いインストールやカレントディレクトリの影響を受けやすいため、
-通常利用では `specimpact` コマンドを使ってください。
-
-GUIも使う場合:
+GUI も使う場合:
 
 ```powershell
 python -m pip install -e ".[gui]"
 ```
 
-## 4. どの入口を選ぶか
+## 3. 最短で試す
 
-| 入力の状態 | 使うコマンド |
-| --- | --- |
-| 初期導入をまとめて実行 | `specimpact onboard` |
-| Markdown / text の設計書 | `specimpact ingest` |
-| OpenAPI | `specimpact ingest-openapi` |
-| SQL DDL | `specimpact ingest-ddl` |
-| CSV | `specimpact ingest-csv` |
-| 1行ヘッダーの表形式Excel | `specimpact ingest-excel` |
-| 結合セル、複数表、改版履歴、同上、別紙参照があるExcel | `specimpact ingest-dirty-excel` |
-
-迷った場合は、先にExcel診断を実行します。
+Dirty Excel サンプルを使います。
 
 ```powershell
-specimpact excel inspect .\docs
-specimpact excel classify .\docs
-```
-
-## 5. サンプル1: Dirty Excelを試す
-
-日本のSIer現場に近いExcelサンプルです。
-
-```powershell
-cd <repo-dir>
 specimpact onboard .\examples\dirty_sier_excel\docs `
   --provider codex `
   --model default `
   --aliases .\examples\dirty_sier_excel\aliases.yml
-specimpact change analyze .\examples\dirty_sier_excel\changes\利用限度額上限変更.md
-specimpact impacts list
+
+specimpact analyze .\examples\dirty_sier_excel\changes\利用限度額上限変更.md --llm-first
 specimpact report --format markdown
+specimpact impacts list
 specimpact export-obsidian .\vault
 ```
 
-期待する流れ:
-
-- `5 workbooks` のようにExcelが取り込まれる
-- Change Atom に `利用限度額`、`requestedCreditLimit`、`REQUESTED_CREDIT_LIMIT` などが出る
-- 画面項目、API項目、チェック仕様、DB項目、外部IF、境界値テストなどがレビュー候補になる
-- 各候補に workbook、sheet、cell/range の evidence が付く
-- `.\vault` をObsidianで開くと依存関係noteとCanvasを確認できる
-
-LLMなしで挙動だけ確認する場合:
+LLM を使わない確認:
 
 ```powershell
 specimpact onboard .\examples\dirty_sier_excel\docs `
@@ -97,160 +54,84 @@ specimpact onboard .\examples\dirty_sier_excel\docs `
   --aliases .\examples\dirty_sier_excel\aliases.yml
 ```
 
-詳細は [../examples/dirty_sier_excel/README.md](../examples/dirty_sier_excel/README.md) を参照してください。
+## 4. LLM provider
 
-## 6. サンプル2: 構造が明確な設計書を試す
-
-Markdown設計書のサンプルです。
+標準導線は LLM-first です。Codex CLI を第一候補としています。
 
 ```powershell
-cd <repo-dir>
-specimpact init
-specimpact ingest .\examples\credit_card_enrollment\docs `
-  --aliases .\examples\credit_card_enrollment\aliases.yml
-specimpact analyze .\examples\credit_card_enrollment\changes\change_credit_limit.md
-specimpact report --format markdown
-specimpact why "カード入会申込API"
+specimpact llm configure --provider codex --model default
+specimpact llm status
 ```
 
-表形式Excelのサンプルです。
+OpenAI API:
 
 ```powershell
-cd <repo-dir>
-specimpact init
-specimpact ingest-excel .\examples\japanese_sier_excel\docs `
-  --profile sier `
-  --aliases .\examples\japanese_sier_excel\aliases.yml
-specimpact analyze .\examples\japanese_sier_excel\changes\利用限度額_上限変更.md
-specimpact report --format markdown
+specimpact llm configure --provider openai --model <model>
 ```
 
-## 7. 自分のプロジェクトで使う
-
-プロジェクトごとに作業ディレクトリを分けます。`.specimpact/` は現在のディレクトリに作られます。
+Ollama:
 
 ```powershell
-mkdir C:\work\my-system-impact
-cd C:\work\my-system-impact
-mkdir docs
-mkdir changes
-specimpact onboard .\docs --provider codex --model default --aliases .\aliases.yml
+specimpact llm configure --provider ollama --model <model> --base-url http://localhost:11434
 ```
 
-`onboard` は `.xlsx` を含む入力を dirty Excel、それ以外を Markdown/text として自動判定します。
-外部送信したくない場合は `--no-llm` を付けます。
+無効化:
 
-個別コマンドで進める場合、`docs\` に設計書を置きます。dirty Excel の場合:
+```powershell
+specimpact llm disable
+```
+
+OpenAI、Codex CLI、remote Ollama、OpenAI embeddings は外部送信確認が必要です。localhost Ollama と local embeddings はローカルで動作します。
+
+## 5. 設計書を取り込む
+
+### Dirty Excel
+
+```powershell
+specimpact ingest-dirty-excel .\docs --aliases .\aliases.yml
+```
+
+または:
+
+```powershell
+specimpact ingest .\docs --mode dirty-excel --aliases .\aliases.yml
+```
+
+取り込み前に Excel の状態を確認できます。
 
 ```powershell
 specimpact excel inspect .\docs
 specimpact excel classify .\docs
-specimpact ingest-dirty-excel .\docs --aliases .\aliases.yml
 ```
 
-Markdownやtextの場合:
+Dirty Excel では、workbook、sheet、cell、region、evidence を保存します。LLM 抽出結果は Graph Proposal として保存され、承認前は確定 graph にはなりません。
+
+### Markdown / text
 
 ```powershell
 specimpact ingest .\docs --aliases .\aliases.yml
 ```
 
-表形式Excelの場合:
+### 表形式 Excel
+
+1 行 1 レコードのような構造が明確な Excel は、従来の loader を使います。
 
 ```powershell
 specimpact ingest-excel .\docs --profile sier --aliases .\aliases.yml
 ```
 
-## 8. 変更依頼を書く
+## 6. LLM 抽出と Graph Proposal
 
-`changes\change_example.md` を作成します。先頭にMarkdown見出しを置いてください。
+Dirty Excel region は、種類ごとに専用の LLM 指示を使います。
 
-```markdown
-# 変更依頼: 利用上限の変更
+- `screen_item_table`
+- `validation_block`
+- `api_mapping_table`
+- `db_mapping_table`
+- `external_if_table`
+- `test_case_table`
 
-## 変更内容
-
-入会申込画面の「利用限度額」の上限を999万円から9999万円に変更する。
-
-## 確認したい観点
-
-- 画面項目
-- APIリクエスト
-- 入力チェック
-- DBカラム
-- 外部連携
-- 境界値テスト
-```
-
-解析します。
-
-```powershell
-specimpact change parse .\changes\change_example.md
-specimpact analyze .\changes\change_example.md --llm-first
-specimpact report --format markdown
-```
-
-自然言語を直接渡す場合:
-
-```powershell
-specimpact change analyze "入会申込画面の利用限度額上限を999万円から9999万円に変更"
-```
-
-LLMを使わない通常解析にしたい場合:
-
-```powershell
-specimpact analyze .\changes\change_example.md --no-llm
-```
-
-## 9. レポートの読み方
-
-主な項目は以下です。
-
-| 項目 | 意味 |
-| --- | --- |
-| `artifact_id` | ツール内部で使う安定ID |
-| `display_name` | 人が読む表示名 |
-| `review_priority` | レビュー優先度 |
-| `evidence_strength` | 証拠の明示度 |
-| `match_type` | 完全一致、alias、一部推論などの一致方法 |
-| `relation_distance` | 変更対象から候補までの関係距離 |
-| `reason` | 候補に挙がった理由 |
-| `relation_paths` | 変更対象から候補までの経路 |
-| `evidence_ids` | 根拠レコードのID |
-| `needs_review` | 人による確認が必要か |
-
-`review_priority` の意味:
-
-| 値 | 意味 |
-| --- | --- |
-| `must_review` | 直接証拠と関係経路があり、必ず確認する |
-| `should_review` | 関係が近く、確認したほうがよい |
-| `may_review` | 弱い一致やLLM仮説。必要に応じて確認する |
-| `hidden` | 証拠が弱い。Markdownレポートには通常表示されない |
-
-`evidence_strength` は確率ではありません。SpecImpact は未較正の confidence score を出しません。
-
-## 10. なぜ候補に入ったか確認する
-
-表示名、alias、内部IDを指定できます。
-
-```powershell
-specimpact why "カード入会申込API"
-specimpact why api.card_application.submit
-specimpact why-not "本人確認サービス"
-```
-
-証拠を直接見る場合:
-
-```powershell
-specimpact inspect evidence
-specimpact inspect evidence <evidence_id>
-```
-
-## 11. レビュー結果を保存する
-
-Dirty ExcelやLLM抽出では、提案をそのまま確定せず、review status を保存します。
-
-Graph proposal:
+Graph Proposal を確認します。
 
 ```powershell
 specimpact graph proposals list
@@ -258,216 +139,225 @@ specimpact graph proposals accept <proposal_id>
 specimpact graph proposals reject <proposal_id>
 ```
 
-Alias:
+承認した proposal だけが graph に反映されます。
+
+## 7. Alias review
+
+Alias 候補を生成します。
 
 ```powershell
-specimpact aliases suggest
+specimpact aliases suggest --llm
 specimpact aliases review
+```
+
+LLM は entity ペアごとに次の判定を返します。
+
+| 判定 | 意味 |
+| --- | --- |
+| `same` | 同一概念として alias 化できる |
+| `related` | 関連はあるが別概念 |
+| `different` | 別概念 |
+| `unsure` | 人間確認が必要 |
+
+候補生成では、次の signal を使います。
+
+- concept key 一致
+- camelCase / snake_case 分解
+- 名前トークン重複
+- 疑似 embedding 類似
+- 周辺 relation 類似
+- 同じ evidence または近傍 evidence
+
+確認:
+
+```powershell
 specimpact aliases confirm <candidate_id>
 specimpact aliases reject-candidate <candidate_id>
 ```
 
-LLMを使う場合、alias候補は entity ペアごとに `same / related / different / unsure` で
-判定されます。`same` は同一概念としてalias化できる候補、`related` は関連はあるが別概念の候補です。
-GUIでは候補ペア、周辺relation、evidence quote、LLM理由を同じ画面で確認できます。
+`same` 以外を confirm しても alias としては確定しません。
 
-Relation:
+## 8. 変更依頼を書く
 
-```powershell
-specimpact relations list
-specimpact relations set-status <relation_id> confirmed
-specimpact relations set-status <relation_id> rejected
+Markdown の例:
+
+```markdown
+# 利用限度額上限変更
+
+入会申込画面の利用限度額上限を999万円から9999万円に変更する。
+
+API項目 requestedCreditLimit、DB項目 REQUESTED_CREDIT_LIMIT、外部IF、境界値テストも確認する。
 ```
 
-Impact:
+Change Atom に分解:
 
 ```powershell
+specimpact change parse .\changes\change_request.md
+```
+
+## 9. 変更影響分析
+
+```powershell
+specimpact analyze .\changes\change_request.md --llm-first
+specimpact report --format markdown
+```
+
+自然文を直接渡す場合:
+
+```powershell
+specimpact change analyze "電話番号の桁数を10桁から11桁に変更する"
+```
+
+LLM-first impact analysis では、LLM に以下を渡します。
+
+- Change Atom
+- 候補 artifact
+- candidate subgraph
+- evidence quote
+- 過去の accepted / rejected 判断
+
+LLM は `impact_type`、`required_actions`、`warnings`、`uncertainty` を作業仮説として返します。ただし、LLM だけでは `must_review` に昇格できません。
+
+## 10. Impact decision
+
+```powershell
+specimpact changes list
 specimpact impacts list
-specimpact impacts set-status <impact_id> accepted --reason "修正対象"
+specimpact impacts set-status <impact_id> accepted --reason "修正対象にする"
 specimpact impacts set-status <impact_id> needs_investigation --reason "別紙参照先の確認が必要"
-specimpact impacts set-status <impact_id> closed --reason "実装とテスト完了"
+specimpact impacts set-status <impact_id> implemented --reason "実装完了"
+specimpact impacts set-status <impact_id> tested --reason "境界値テスト完了"
+specimpact impacts set-status <impact_id> closed --reason "レビュー完了"
 ```
 
-LLM-first impact analysis では、Change Atom、候補artifact、周辺subgraph、evidence quote、
-過去のaccepted/rejected判断をLLMに渡し、`impact_type`、`required_actions`、`warnings` を
-作業仮説として保存します。ただし、LLMだけでは `must_review` に昇格できません。
+Status:
 
-## 12. aliasファイルを書く
+- `unreviewed`
+- `accepted`
+- `rejected`
+- `needs_investigation`
+- `implemented`
+- `tested`
+- `closed`
 
-表記揺れがある場合は `aliases.yml` を用意します。
+## 11. Obsidian export
+
+```powershell
+specimpact export-obsidian .\vault
+```
+
+通常出力:
+
+- `SpecImpact/Dashboard.md`
+- `SpecImpact/Artifacts/*.md`
+- `SpecImpact/Evidence/*.md`
+- `SpecImpact/Changes/*.md`
+- `SpecImpact/Impacts/*.md`
+- `SpecImpact/Canvases/*.canvas`
+
+Artifact note には relation と evidence link が入ります。Impact note には status、review priority、impact type、required actions が入ります。Canvas では変更依頼と影響候補の関係を確認できます。
+
+旧形式の report コピー:
+
+```powershell
+specimpact export-obsidian .\vault --report-only
+```
+
+## 12. GUI
+
+```powershell
+specimpact gui
+```
+
+GUI は `127.0.0.1` のみに bind します。
+
+主な画面:
+
+- Dashboard
+- Ingest / Analyze / Report
+- Graph Explorer
+- Dirty Excel Review Console
+- Region Viewer
+- Alias Review
+- Impact Review Board
+- Settings / Privacy
+
+詳細は [gui_manual_ja.md](gui_manual_ja.md) を参照してください。
+
+## 13. evidence を確認する
+
+```powershell
+specimpact inspect evidence
+specimpact inspect evidence <evidence_id>
+```
+
+Excel evidence は、workbook、sheet、cell/range、quote に戻れるように保存されます。
+
+## 14. aliases.yml
+
+手動 alias を書く場合:
 
 ```yaml
 aliases:
-  api.card_application.submit:
-    canonical_type: API
-    aliases:
-      - 入会申込API
-      - cardApplicationSubmit
-
-  field.requested_credit_limit:
+  entity.application.requested_credit_limit:
     canonical_type: BusinessField
     aliases:
       - 利用限度額
+      - 希望利用限度額
       - requestedCreditLimit
       - REQUESTED_CREDIT_LIMIT
-      - LIMIT_AMT
 ```
 
 注意:
 
-- alias は別の内部IDと重複させないでください。
-- 型が異なる artifact 間でも同じ alias は避けてください。
-- `canonical_type` は `API`、`Table`、`BusinessField` などの許可された型を指定します。
+- 同じ alias を複数 ID に割り当てないでください。
+- artifact と entity の境界を無理に混ぜないでください。
+- LLM alias は候補であり、確定には review が必要です。
 
-## 13. 推奨Markdown形式
+## 15. Obsidian を使ったレビュー運用例
 
-Markdown設計書は、1つのartifactを1つのトップレベル見出しで書くと解析しやすくなります。
+1. `specimpact export-obsidian .\vault`
+2. Obsidian で `SpecImpact/Dashboard.md` を開く
+3. Dataview で未レビュー Impact を確認する
+4. Canvas で変更依頼と影響候補の関係を見る
+5. CLI または GUI で impact status を更新する
+6. 再度 export して note を更新する
 
-```markdown
-# API: Payment Submit API
-
-## Request fields
-- paymentAmount
-- merchantId
-
-## Calls
-- Fraud Gateway
-```
-
-```markdown
-# Screen: Payment Entry Screen
-
-## Fields
-- paymentAmount
-- merchantId
-
-## Calls
-- Payment Submit API
-```
-
-代表的なartifact:
-
-- `API`
-- `Screen`
-- `Table`
-- `Column`
-- `ValidationRule`
-- `ExternalIF`
-- `TestCase`
-- `Batch`
-- `Document`
-
-代表的な関係見出し:
-
-- `Request fields`
-- `Response fields`
-- `Reads`
-- `Writes`
-- `Displays`
-- `Validates`
-- `Sends`
-- `Receives`
-- `Calls`
-- `Covers`
-- `Asserts`
-
-`入力項目`、`リクエスト項目`、`API Parameters`、`request parameters` など一部の同義見出しも扱えます。
-artifact名や項目名の表記揺れは `aliases.yml`、section heading の同義語はparser側のsection aliasです。
-両者を混同しないでください。
-
-## 14. LLM provider
-
-LLM-firstが標準導線です。Codex CLIを第一候補にし、OpenAI APIやOllamaも利用できます。
-
-```powershell
-specimpact llm status
-specimpact llm configure --provider codex --model default
-specimpact llm configure --provider openai --model <model>
-specimpact llm configure --provider ollama --model <model> --base-url http://localhost:11434
-specimpact llm disable
-```
-
-OpenAI、Codex CLI、remote Ollama、OpenAI embeddings は外部送信確認が必要です。
-localhost Ollama と local embeddings はローカルで動作します。CI、debug、秘匿性の強い案件では
-`--no-llm` を使います。
-
-## 15. よくあるエラー
+## 16. よくあるエラー
 
 ### `specimpact` コマンドが見つからない
 
 リポジトリルートで再インストールしてください。
 
 ```powershell
-cd <repo-dir>
 python -m pip install -e .
 ```
 
-### v2コマンドが見えない
-
-古いインストールを拾っています。`specimpact --help` に `ingest-dirty-excel`、`change`、
-`impacts` が表示されるか確認してください。表示されない場合は再インストールしてください。
-
 ### `No analysis run exists`
 
-先に設計書を読み込み、変更依頼を解析してください。
+先に設計書を取り込み、変更依頼を分析してください。
 
 ```powershell
 specimpact ingest .\docs --aliases .\aliases.yml
-specimpact analyze .\changes\change_example.md
+specimpact analyze .\changes\change_request.md --llm-first
 ```
 
-### `Ambiguous alias`
+### `External transmission was not approved`
 
-同じaliasが複数の内部IDに割り当てられています。`aliases.yml` の重複を解消してください。
+外部 LLM を使う処理で承認が不足しています。内容を確認して `--yes` を付けるか、`--no-llm` を使ってください。
 
-### `Invalid Excel source`
+### Excel がうまく読めない
 
-拡張子だけでなく、ファイルが有効な `.xlsx` workbook であることを確認してください。
-表形式ではないExcelは `ingest-dirty-excel` を使ってください。
-
-## 16. 状態確認とリセット
-
-現在の状態:
+まず診断してください。
 
 ```powershell
-specimpact status
-specimpact doctor --privacy
+specimpact excel inspect .\docs
+specimpact excel classify .\docs
 ```
 
-最初からやり直す場合は、作業ディレクトリ内の `.specimpact/` を削除してから
-`specimpact init` から再実行します。削除対象が正しい作業ディレクトリ内であることを必ず
-確認してください。
+表形式ではなく汚い Excel の場合は `ingest-dirty-excel` を使ってください。
 
-## 17. 補助機能
-
-Obsidian review vault:
-
-```powershell
-specimpact export-obsidian .\vault
-specimpact export-obsidian .\vault --report-only
-```
-
-通常の `export-obsidian` は `SpecImpact/Dashboard.md`、`Artifacts`、`Evidence`、`Changes`、
-`Impacts`、`Canvases` を生成します。Artifact / Evidence / Impact note にはfrontmatterと
-Wiki linkが入り、Dataviewで未レビュー項目を一覧できます。`--report-only` は旧形式のMarkdown
-レポートコピーです。
-
-graph baseline:
-
-```powershell
-specimpact baseline create before
-specimpact graph diff before
-```
-
-review import:
-
-```powershell
-specimpact review import .\review-results.json
-```
-
-Neo4j backend は任意機能です。通常利用ではlocal backendのまま使用してください。
-
-## 18. 開発者向け
+## 17. 開発者向け確認
 
 ```powershell
 python -m pip install -e ".[dev,gui]"
@@ -477,4 +367,4 @@ python -m compileall -q specimpact
 specimpact release-check .\examples\evaluation\release_cases.yml
 ```
 
-`release-check` はOSS公開用の品質gateです。通常の変更影響レビューでは不要です。
+`release-check` は OSS 公開向けの品質 gate です。評価ケース数、must review recall、visible precision、evidence coverage などを確認します。
