@@ -7,4 +7,20 @@
     "test.credit_limit_boundary"
   ],
   "should_review": []
+  ,
+  "expected_required_actions": {
+    "validation.credit_limit_upper_bound": [
+      "Update the upper-bound validation value and error message.",
+      "Update boundary-value tests for the new credit-limit maximum."
+    ],
+    "api.enrollment_application": [
+      "Confirm requestedCreditLimit contract examples and request validation."
+    ],
+    "column.requested_credit_limit": [
+      "Confirm DB column precision and storage range for the new maximum."
+    ],
+    "external_if.credit_screening": [
+      "Confirm the credit-screening external IF can send or receive the new limit value."
+    ]
+  }
 }

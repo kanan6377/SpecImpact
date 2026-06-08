@@ -7,5 +7,20 @@
   ],
   "should_review": [
     "external_if.identity_verification"
-  ]
+  ],
+  "expected_required_actions": {
+    "validation.phone_number_format": [
+      "Update phone-number digit-length validation from 10 to 11 digits.",
+      "Update error messages and accepted input examples."
+    ],
+    "api.enrollment_application": [
+      "Confirm API request schema and examples allow 11-digit phone numbers."
+    ],
+    "test.phone_number_boundary": [
+      "Update normal, lower-bound, and upper-bound phone-number tests."
+    ],
+    "external_if.identity_verification": [
+      "Check whether the identity-verification external IF has a phone-number length constraint."
+    ]
+  }
 }

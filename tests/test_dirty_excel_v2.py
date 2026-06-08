@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
+import pytest
 from openpyxl import Workbook
 from openpyxl.chart import BarChart, Reference
 from openpyxl.comments import Comment
@@ -128,13 +130,15 @@ def test_region_llm_extraction_keeps_only_valid_evidence(tmp_path: Path) -> None
         "edges": [],
     }
 
-    result = extract_region_with_llm(
-        region,
-        cells,
-        FakeLLMClient({"dirty_excel_region_extraction": [valid, invalid]}),
-    )
+    client = RecordingFakeLLMClient({"dirty_excel_region_extraction": [valid, invalid]})
+    result = extract_region_with_llm(region, cells, client)
     assert len(result.nodes) == 2
     assert len(result.edges) == 1
+    payload = client.calls[0]["payload"]
+    assert payload["system_prompt"] == payload["instruction"] == payload["instructions"]
+    assert payload["prompt"] == payload["system_prompt"]
+    assert "screen item definition table" in payload["system_prompt"]
+    assert payload["region_type_hint"] == "screen_item_table"
     cleaned = extract_region_with_llm(
         region,
         cells,
@@ -171,30 +175,43 @@ def test_alias_inference_confirm_and_reject_persist(tmp_path: Path) -> None:
         ],
     )
 
+    client = RecordingFakeLLMClient(
+        {
+            "alias_resolution": {
+                "judgement": "same",
+                "reason": "same credit limit field across screen, API, and DB names",
+                "evidence_ids": [],
+            }
+        }
+    )
     assert suggest_alias_candidates(
         store,
         use_llm=True,
-        llm_client=FakeLLMClient(
-            {
-                "alias_resolution": {
-                    "judgement": "same",
-                    "reason": "same credit limit field across screen, API, and DB names",
-                    "evidence_ids": [],
-                }
-            }
-        ),
-    ) == 2
-    candidate = store.read("alias_candidates", AliasCandidate)[0]
+        llm_client=client,
+    ) == 3
+    assert client.calls[0]["payload"]["candidate_signals"]
+    candidate = next(
+        item
+        for item in store.read("alias_candidates", AliasCandidate)
+        if item.entity_a_id == "entity.credit_limit.jp"
+        and item.entity_b_id == "entity.credit_limit.api"
+    )
     assert candidate.judgement == "same"
     assert candidate.entity_a_id == "entity.credit_limit.jp"
-    assert candidate.entity_b_id
     assert candidate.compared_entity_ids
     assert "same credit limit" in candidate.llm_reason
     decide_alias_candidate(store, candidate.candidate_id, "confirmed")
     aliases = (store.root / "aliases.yml").read_text(encoding="utf-8")
     assert "requestedCreditLimit" in aliases
     decide_alias_candidate(store, candidate.candidate_id, "rejected")
-    assert store.read("alias_candidates", AliasCandidate)[0].status == "rejected"
+    assert (
+        next(
+            item
+            for item in store.read("alias_candidates", AliasCandidate)
+            if item.candidate_id == candidate.candidate_id
+        ).status
+        == "rejected"
+    )
 
 
 def test_alias_llm_judgement_can_reject_similarity(tmp_path: Path) -> None:
@@ -234,6 +251,108 @@ def test_alias_llm_judgement_can_reject_similarity(tmp_path: Path) -> None:
     candidate = store.read("alias_candidates", AliasCandidate)[0]
     assert candidate.judgement == "different"
     assert "different fields" in candidate.llm_reason
+
+
+def test_alias_candidate_recall_uses_name_shape_relations_and_evidence(tmp_path: Path) -> None:
+    store = LocalStore(tmp_path / ".specimpact")
+    store.init()
+    entities = [
+        Entity(
+            entity_id="entity.postal.camel",
+            entity_type="BusinessField",
+            display_name="postalCode",
+            canonical_name="postal_code",
+        ),
+        Entity(
+            entity_id="entity.postal.snake",
+            entity_type="BusinessField",
+            display_name="POSTAL_CODE",
+            canonical_name="address_postal_code",
+        ),
+        Entity(
+            entity_id="entity.zip.form",
+            entity_type="BusinessField",
+            display_name="zipFormValue",
+            canonical_name="zip_form_value",
+        ),
+        Entity(
+            entity_id="entity.zip.api",
+            entity_type="BusinessField",
+            display_name="zipCd",
+            canonical_name="zip_code",
+        ),
+    ]
+    evidence = [
+        Evidence(
+            evidence_id="ev.zip.form",
+            document_id="doc",
+            section_id="sec",
+            chunk_id="chunk",
+            quote="zipFormValue appears near zipCd mapping",
+            evidence_type="test",
+            supports=[],
+            source_location=SourceLocation(file="spec.xlsx", line_start=10, line_end=10),
+        ),
+        Evidence(
+            evidence_id="ev.zip.api",
+            document_id="doc",
+            section_id="sec",
+            chunk_id="chunk",
+            quote="zipCd appears near zipFormValue mapping",
+            evidence_type="test",
+            supports=[],
+            source_location=SourceLocation(file="spec.xlsx", line_start=12, line_end=12),
+        ),
+    ]
+    relations = [
+        Relation(
+            relation_id="rel.postal.camel",
+            relation_type="VALIDATES",
+            source_id="validation.address",
+            target_id="entity.postal.camel",
+            evidence_ids=[],
+        ),
+        Relation(
+            relation_id="rel.postal.snake",
+            relation_type="VALIDATES",
+            source_id="validation.address",
+            target_id="entity.postal.snake",
+            evidence_ids=[],
+        ),
+        Relation(
+            relation_id="rel.zip.form",
+            relation_type="REQUEST_FIELD",
+            source_id="api.address",
+            target_id="entity.zip.form",
+            evidence_ids=["ev.zip.form"],
+        ),
+        Relation(
+            relation_id="rel.zip.api",
+            relation_type="REQUEST_FIELD",
+            source_id="api.address",
+            target_id="entity.zip.api",
+            evidence_ids=["ev.zip.api"],
+        ),
+    ]
+    store.write("entities", entities)
+    store.write("evidence", evidence)
+    store.write("relations", relations)
+
+    assert suggest_alias_candidates(store) >= 2
+    rows = store.read("alias_candidates", AliasCandidate)
+    postal = next(
+        item
+        for item in rows
+        if set(item.compared_entity_ids) == {"entity.postal.camel", "entity.postal.snake"}
+    )
+    assert "name_token_overlap" in postal.reason or "embedding_similarity" in postal.reason
+    zip_pair = next(
+        item
+        for item in rows
+        if set(item.compared_entity_ids) == {"entity.zip.form", "entity.zip.api"}
+    )
+    assert "relation_similarity" in zip_pair.reason
+    assert "same_evidence_neighborhood" in zip_pair.reason
 
 
 def test_verifier_downgrades_must_when_before_value_or_property_mismatch(tmp_path: Path) -> None:
@@ -363,6 +482,98 @@ def test_llm_impact_hypothesis_adds_actions_and_reason(tmp_path: Path) -> None:
     assert payload["candidate_subgraph"]["relations"]
 
 
+@pytest.mark.parametrize(
+    ("golden_name", "artifact_id", "change_property"),
+    [
+        ("利用限度額上限変更.expected.json", "validation.credit_limit_upper_bound", "max_value"),
+        ("phone_number_length_change.expected.json", "validation.phone_number_format", "length"),
+        (
+            "identity_verification_method_change.expected.json",
+            "external_if.identity_verification",
+            "method",
+        ),
+        ("external_if_item_added.expected.json", "external_if.credit_screening", "field_added"),
+    ],
+)
+def test_llm_impact_hypothesis_matches_dirty_excel_required_action_goldens(
+    tmp_path: Path,
+    golden_name: str,
+    artifact_id: str,
+    change_property: str,
+) -> None:
+    expected = json.loads(
+        (ROOT / "examples" / "dirty_sier_excel" / "goldens" / golden_name).read_text(
+            encoding="utf-8"
+        )
+    )
+    expected_actions = expected["expected_required_actions"][artifact_id]
+    store = LocalStore(tmp_path / ".specimpact")
+    store.init()
+    artifact = Artifact(
+        artifact_id=artifact_id,
+        artifact_type=_artifact_type_for_id(artifact_id),
+        display_name=artifact_id,
+    )
+    evidence = Evidence(
+        evidence_id=f"ev.{artifact_id}",
+        document_id="doc",
+        section_id="sec",
+        chunk_id="chunk",
+        quote=f"{artifact_id} evidence for {change_property}",
+        evidence_type="test",
+        supports=[EvidenceSupport(type="relation", id=f"rel.{artifact_id}")],
+        source_location=SourceLocation(file="dirty.xlsx", line_start=1, line_end=1),
+    )
+    relation = Relation(
+        relation_id=f"rel.{artifact_id}",
+        relation_type="VALIDATES" if artifact.artifact_type == "ValidationRule" else "CALLS",
+        source_id=artifact_id,
+        target_id="entity.changed",
+        evidence_ids=[evidence.evidence_id],
+        polarity="explicit",
+    )
+    store.write("artifacts", [artifact])
+    store.write("evidence", [evidence])
+    client = RecordingFakeLLMClient(
+        {
+            "impact_hypothesis": {
+                "impact_type": change_property,
+                "required_actions": expected_actions,
+                "warnings": [],
+                "uncertainty": "low",
+                "reason": "matches dirty Excel golden",
+                "evidence_ids": [evidence.evidence_id],
+                "review_priority_suggestion": "should_review",
+            }
+        }
+    )
+
+    impacts = build_impact_hypotheses(
+        store,
+        [
+            ChangeAtom(
+                atom_id=f"atom.{artifact_id}",
+                change_id=f"change.{artifact_id}",
+                target_terms=["entity.changed"],
+                operation="change",
+                property=change_property,
+            )
+        ],
+        [
+            RetrievedPath(
+                node_id=artifact_id,
+                relations=[relation],
+                evidence_ids=[evidence.evidence_id],
+            )
+        ],
+        use_llm=True,
+        llm_client=client,
+    )
+
+    assert impacts[0].required_actions == expected_actions
+    assert client.calls[0]["payload"]["candidate_subgraph"]["relations"]
+
+
 def test_llm_first_impact_from_dirty_excel_credit_limit(tmp_path: Path) -> None:
     store = LocalStore(tmp_path / ".specimpact")
     ingest_dirty_excel(store, SIER / "docs", SIER / "aliases.yml")
@@ -440,3 +651,17 @@ def _write_dirty_workbook(path: Path) -> None:
     chart.add_data(Reference(sheet, min_col=1, min_row=2, max_row=2))
     sheet.add_chart(chart, "H2")
     workbook.save(path)
+
+
+def _artifact_type_for_id(artifact_id: str) -> str:
+    if artifact_id.startswith("validation."):
+        return "ValidationRule"
+    if artifact_id.startswith("external_if."):
+        return "ExternalIF"
+    if artifact_id.startswith("api."):
+        return "API"
+    if artifact_id.startswith("test."):
+        return "TestCase"
+    if artifact_id.startswith("column."):
+        return "DBColumn"
+    return "Artifact"

@@ -6,5 +6,20 @@
   ],
   "should_review": [
     "column.requested_credit_limit"
-  ]
+  ],
+  "expected_required_actions": {
+    "external_if.credit_screening": [
+      "Add the new external IF item to the credit-screening send/receive mapping.",
+      "Confirm partner-system contract, optionality, and fallback behavior."
+    ],
+    "api.enrollment_application": [
+      "Map the new external IF item from or to the application API payload."
+    ],
+    "test.external_if_mapping": [
+      "Add mapping tests for the new external IF item including missing-value cases."
+    ],
+    "column.requested_credit_limit": [
+      "Confirm whether the new IF item requires DB persistence or derived mapping."
+    ]
+  }
 }

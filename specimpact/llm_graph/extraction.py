@@ -17,12 +17,16 @@ def extract_region_with_llm(
 ) -> RegionExtractionResult:
     if client is None:
         return extract_region_heuristic(region, cells)
+    instruction = prompt_for_region_type(region.region_type)
     payload = {
         "region_id": region.region_id,
         "sheet": region.sheet_name,
         "range": region.range,
         "region_type_hint": region.region_type,
-        "instructions": prompt_for_region_type(region.region_type),
+        "system_prompt": instruction,
+        "instruction": instruction,
+        "instructions": instruction,
+        "prompt": instruction,
         "few_shots": DIRTY_EXCEL_FEW_SHOTS,
         "cells_markdown": region.rendered_text,
         "allowed_evidence_ids": region.evidence_ids,

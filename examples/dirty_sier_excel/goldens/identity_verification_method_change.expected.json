@@ -7,5 +7,20 @@
   ],
   "should_review": [
     "validation.identity_verification_required"
-  ]
+  ],
+  "expected_required_actions": {
+    "external_if.identity_verification": [
+      "Update the identity-verification external IF flow from document check to eKYC.",
+      "Confirm request and response fields required by the eKYC provider."
+    ],
+    "api.enrollment_application": [
+      "Update API orchestration and status handling for eKYC."
+    ],
+    "screen.enrollment_application": [
+      "Update screen guidance, input items, and review status display for eKYC."
+    ],
+    "test.identity_verification": [
+      "Add eKYC success, failure, timeout, and manual-review transition tests."
+    ]
+  }
 }
