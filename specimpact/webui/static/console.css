@@ -472,6 +472,295 @@ html, body {
 }
 .impact-actions .hint { font-size: 11.5px; color: var(--c-text-3); margin-left: auto; }
 
+/* ---------- Change workflow / design reference ---------- */
+.change-workflow {
+  margin-bottom: 16px;
+}
+
+.workflow-head,
+.design-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.workflow-head h2,
+.design-header h2 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+
+.workflow-head p,
+.design-header p {
+  margin: 0;
+  color: var(--c-text-2);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.workflow-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) 1fr auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.workflow-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-text-2);
+}
+
+.workflow-form select,
+.workflow-form textarea {
+  width: 100%;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-surface);
+  padding: 9px 11px;
+  font: inherit;
+  color: var(--c-text);
+}
+
+.workflow-form textarea {
+  resize: vertical;
+  min-height: 78px;
+}
+
+.workflow-status {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--c-text-2);
+}
+
+.view-switch {
+  display: inline-flex;
+  gap: 4px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.view-switch button {
+  border: 0;
+  background: transparent;
+  color: var(--c-text-2);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.view-switch button.active {
+  background: var(--c-surface);
+  color: var(--c-accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.design-reference {
+  margin-bottom: 16px;
+}
+
+.highlight-summary {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-radius: 99px;
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.design-doc-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.design-doc-tabs button {
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  background: var(--c-surface);
+  color: var(--c-text-2);
+  padding: 5px 9px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.design-doc-tabs button.active {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+  background: var(--c-accent-soft);
+}
+
+.design-doc-tabs span {
+  margin-left: 6px;
+  color: var(--c-should);
+  font-family: var(--font-mono);
+}
+
+.source-lines {
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0f172a;
+}
+
+.source-line {
+  display: grid;
+  grid-template-columns: 58px 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 7px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.source-line:last-child {
+  border-bottom: 0;
+}
+
+.source-line .line-no {
+  color: #94a3b8;
+  font-family: var(--font-mono);
+  text-align: right;
+  font-size: 11px;
+}
+
+.source-line code {
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.source-line.is-highlighted,
+.excel-grid tr.is-highlighted,
+.evidence-quote.is-highlighted {
+  background: #fff7c2;
+}
+
+.source-line.is-highlighted code,
+.source-line.is-highlighted .line-no {
+  color: #1f2937;
+  font-weight: 700;
+}
+
+.evidence-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 220px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  padding: 2px 7px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.excel-grid {
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  overflow: auto;
+  max-height: 560px;
+}
+
+.excel-grid table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.excel-grid th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  z-index: 1;
+  text-align: left;
+  font-size: 11px;
+  color: var(--c-text-3);
+  text-transform: uppercase;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.excel-grid td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--c-border);
+  vertical-align: top;
+}
+
+.cell-note {
+  display: block;
+  margin-top: 2px;
+  color: var(--c-text-3);
+  font-size: 10px;
+}
+
+.region-strip {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.region-strip span {
+  border: 1px solid var(--c-border);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--c-text-2);
+  background: #f8fafc;
+}
+
+.region-strip span.active {
+  border-color: #f59e0b;
+  background: #fffbeb;
+  color: #92400e;
+  font-weight: 700;
+}
+
+.empty-state {
+  color: var(--c-text-2);
+  text-align: center;
+  padding: 22px;
+}
+
+.evidence-button {
+  display: block;
+  width: 100%;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.evidence-button:hover {
+  filter: brightness(0.98);
+}
+
 /* ---------- Graph Explorer ---------- */
 .graph-layout {
   display: grid;
@@ -628,4 +917,11 @@ html, body {
   #sidebar { display: none; }
   .graph-layout { grid-template-columns: 1fr; grid-template-rows: 1fr 300px; }
   .graph-side { border-left: none; border-top: 1px solid var(--c-border); }
+  .workflow-head,
+  .design-header,
+  .workflow-form {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
 }

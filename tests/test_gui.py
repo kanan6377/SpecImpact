@@ -20,6 +20,7 @@ from specimpact.webui.registry import ProjectRegistry
 from specimpact.webui.services import (
     copy_demo,
     demo_source,
+    design_documents_data,
     execute,
     external_preview,
     graph_data,
@@ -395,6 +396,43 @@ def test_report_data_includes_all_evidence_quotes_and_locations(tmp_path: Path) 
     assert len(candidate["evidence"]) == len(candidate["evidence_ids"])
     assert all(item["quote"] for item in candidate["evidence"])
     assert all(item["source_location"]["file"] for item in candidate["evidence"])
+
+
+def test_design_documents_data_highlights_latest_report_evidence(tmp_path: Path) -> None:
+    target = tmp_path / "demo"
+    copy_demo(demo_source(), target)
+    project = ProjectRegistry(tmp_path / "registry").add(target)
+    execute(project, "demo_run", {})
+
+    data = design_documents_data(project)
+
+    assert data["selected_evidence_ids"]
+    assert any(item["highlight_count"] > 0 for item in data["documents"])
+    assert any(
+        row["highlight"]
+        for document in data["documents"]
+        for row in document["rows"]
+    )
+
+
+def test_design_documents_endpoint_filters_to_selected_evidence(tmp_path: Path) -> None:
+    target = tmp_path / "demo"
+    copy_demo(demo_source(), target)
+    project = ProjectRegistry(tmp_path / "registry").add(target)
+    execute(project, "demo_run", {})
+    evidence_id = design_documents_data(project)["selected_evidence_ids"][0]
+    app = create_app(registry_root=tmp_path / "registry")
+
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        response = client.get(
+            f"/api/projects/{project.project_id}/design-documents",
+            params={"evidence_id": evidence_id},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["selected_evidence_ids"] == [evidence_id]
+    assert any(document["highlight_count"] for document in body["documents"])
 
 
 def test_session_tokens_are_bounded_and_expire(tmp_path: Path) -> None:

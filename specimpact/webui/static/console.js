@@ -1,5 +1,5 @@
 /* ============================================================
- * SpecImpact Console — Redesign Prototype Logic
+ * SpecImpact Console - live GUI shell
  * ============================================================ */
 
 (function () {
@@ -7,519 +7,744 @@
 
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+  const TERMINAL = new Set(["succeeded", "failed", "cancelled", "interrupted"]);
+  const fallback = typeof SI_DATA !== "undefined" ? SI_DATA : {};
 
-  /* ---------- Toast ---------- */
-  let toastTimer;
-  function toast(msg) {
-    $("#toast-msg").textContent = msg;
-    $("#toast").classList.add("show");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => $("#toast").classList.remove("show"), 2400);
-  }
-
-  /* ---------- Navigation ---------- */
-  function showView(name) {
-    $$(".view").forEach((v) => v.classList.remove("active"));
-    const view = $("#view-" + name);
-    if (view) view.classList.add("active");
-    $$(".nav-item").forEach((n) => n.classList.toggle("active", n.dataset.view === name));
-    if (name === "graph") initGraph();
-  }
-  $$(".nav-item").forEach((btn) =>
-    btn.addEventListener("click", () => showView(btn.dataset.view))
-  );
-  $$("[data-goto]").forEach((btn) =>
-    btn.addEventListener("click", () => showView(btn.dataset.goto))
-  );
-  $("#btn-new-analyze").addEventListener("click", () => {
-    showView("impacts");
-    toast("プロトタイプのため、分析済みの結果を表示します");
-  });
-  /* デモ用のモック操作ボタン(設定変更・取り込みなど) */
-  $$("[data-demo-toast]").forEach((btn) =>
-    btn.addEventListener("click", () => toast(btn.dataset.demoToast))
-  );
-
-  /* ============================================================
-   * Dashboard
-   * ============================================================ */
-  const STAT_DEFS = [
-    { key: "documents", label: "Documents", icon: "fa-file-lines" },
-    { key: "artifacts", label: "Artifacts", icon: "fa-cube" },
-    { key: "entities", label: "Entities", icon: "fa-tag" },
-    { key: "relations", label: "Relations", icon: "fa-link" },
-    { key: "evidence", label: "Evidence", icon: "fa-quote-left" },
-  ];
-  $("#stat-grid").innerHTML = STAT_DEFS.map(
-    (d) => `
-    <div class="stat-card">
-      <div class="sc-label"><i class="fa-solid ${d.icon}"></i>${d.label}</div>
-      <div class="sc-value">${SI_DATA.stats[d.key]}</div>
-    </div>`
-  ).join("");
-
-  /* Chart */
-  const prioCounts = { must_review: 0, should_review: 0, may_review: 0 };
-  SI_DATA.impacts.forEach((i) => prioCounts[i.priority]++);
-  new Chart($("#impact-chart"), {
-    type: "doughnut",
-    data: {
-      labels: ["must_review", "should_review", "may_review"],
-      datasets: [{
-        data: [prioCounts.must_review, prioCounts.should_review, prioCounts.may_review],
-        backgroundColor: ["#dc2626", "#d97706", "#2563eb"],
-        borderWidth: 2,
-        borderColor: "#ffffff",
-      }],
-    },
-    options: {
-      maintainAspectRatio: false,
-      cutout: "64%",
-      plugins: {
-        legend: { position: "right", labels: { boxWidth: 10, boxHeight: 10, font: { size: 11, family: "'JetBrains Mono', monospace" } } },
-      },
-    },
-  });
-
-  /* ============================================================
-   * Impact Review Board
-   * ============================================================ */
-  const PRIO_META = {
-    must_review: { cls: "p-must", badge: "prio-must", icon: "fa-circle-exclamation" },
-    should_review: { cls: "p-should", badge: "prio-should", icon: "fa-triangle-exclamation" },
-    may_review: { cls: "p-may", badge: "prio-may", icon: "fa-circle-info" },
+  const state = {
+    csrf: "",
+    project: null,
+    overview: null,
+    report: null,
+    graph: null,
+    aliases: null,
+    jobs: [],
+    design: null,
+    selectedEvidenceIds: [],
+    selectedDocumentFile: "",
+    projectReady: false,
+    impactFilter: "all",
+    impactQuery: "",
+    designMode: "impacts",
+    graphInit: false,
+    chart: null,
   };
-  const KIND_ICONS = {
-    SCREEN: "fa-display", API: "fa-plug", DB: "fa-database", CHECK: "fa-list-check",
-    EXTERNAL_IF: "fa-arrow-right-arrow-left", TEST: "fa-vial", BATCH: "fa-clock", LOG: "fa-file-lines",
-  };
-  let impactFilter = "all";
-  let impactQuery = "";
 
-  function esc(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  function esc(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    }[char]));
   }
 
-  function relPathHtml(path) {
-    return path
-      .map((seg, i) =>
-        i % 2 === 0
-          ? `<span class="rel-node">${esc(seg)}</span>`
-          : `<span class="rel-edge">—${esc(seg)}→</span>`
-      )
-      .join("");
+  function toast(message) {
+    const toastEl = $("#toast");
+    const msgEl = $("#toast-msg");
+    if (!toastEl || !msgEl) return;
+    msgEl.textContent = message;
+    toastEl.classList.add("show");
+    clearTimeout(toastEl._timer);
+    toastEl._timer = setTimeout(() => toastEl.classList.remove("show"), 2600);
   }
 
-  function evidenceHtml(evList) {
-    if (!evList.length) {
-      return `<div class="no-evidence"><i class="fa-solid fa-triangle-exclamation"></i>直接の evidence なし — graph 上の関連のみ。優先度は自動的に下げられています。</div>`;
+  async function api(path, options = {}) {
+    const headers = { Accept: "application/json", ...(options.headers || {}) };
+    if (options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+    if (options.method && options.method !== "GET") {
+      if (!state.csrf) await loadSession();
+      headers["X-CSRF-Token"] = state.csrf;
     }
-    return evList
-      .map(
-        (ev) => `
-      <div class="evidence-quote">
-        <div class="eq-src"><i class="fa-solid fa-file-excel"></i>${esc(ev.file)} · ${esc(ev.locator)}</div>
-        <div class="eq-text">"${esc(ev.quote)}"</div>
-      </div>`
-      )
-      .join("");
+    const response = await fetch(path, { credentials: "same-origin", ...options, headers });
+    if (!response.ok) {
+      let detail = `${response.status} ${response.statusText}`;
+      try {
+        const json = await response.json();
+        detail = typeof json.detail === "string" ? json.detail : JSON.stringify(json.detail || json);
+      } catch (_error) {
+        detail = await response.text();
+      }
+      throw new Error(detail);
+    }
+    return response.json();
   }
 
-  function renderImpactFilters() {
-    const counts = { all: SI_DATA.impacts.length, must_review: 0, should_review: 0, may_review: 0 };
-    SI_DATA.impacts.forEach((i) => counts[i.priority]++);
-    const pills = [
-      ["all", "すべて"],
-      ["must_review", "must"],
-      ["should_review", "should"],
-      ["may_review", "may"],
-    ];
-    $("#impact-filters").innerHTML = pills
-      .map(
-        ([key, label]) =>
-          `<button class="filter-pill ${impactFilter === key ? "active" : ""}" data-filter="${key}">${label}<span class="cnt">${counts[key]}</span></button>`
-      )
-      .join("");
-    $$("#impact-filters .filter-pill").forEach((p) =>
-      p.addEventListener("click", () => {
-        impactFilter = p.dataset.filter;
-        renderImpactFilters();
-        renderImpacts();
+  async function loadSession() {
+    const session = await api("/api/session");
+    state.csrf = session.csrf_token;
+  }
+
+  function projectIdFromUrl() {
+    return new URLSearchParams(window.location.search).get("project_id");
+  }
+
+  async function resolveProject() {
+    const projectId = projectIdFromUrl();
+    const data = await api("/api/projects");
+    state.project = projectId
+      ? data.projects.find((item) => item.project_id === projectId)
+      : data.projects[0];
+    if (!state.project) throw new Error("プロジェクトが登録されていません。");
+  }
+
+  async function refreshAll() {
+    if (!state.project) return;
+    const id = state.project.project_id;
+    const results = await Promise.allSettled([
+      api(`/api/projects/${id}/overview`),
+      api(`/api/projects/${id}/report`),
+      api(`/api/projects/${id}/graph`),
+      api(`/api/projects/${id}/aliases`),
+      api(`/api/projects/${id}/jobs`),
+      api(`/api/projects/${id}/design-documents`),
+    ]);
+    [state.overview, state.report, state.graph, state.aliases] = results
+      .slice(0, 4)
+      .map((item) => (item.status === "fulfilled" ? item.value : null));
+    state.jobs = results[4].status === "fulfilled" ? results[4].value.jobs || [] : [];
+    state.design = results[5].status === "fulfilled" ? results[5].value : null;
+    state.projectReady = true;
+    renderAll();
+  }
+
+  async function loadDesignForEvidence(evidenceIds) {
+    state.selectedEvidenceIds = evidenceIds || [];
+    if (!state.project) return;
+    const query = state.selectedEvidenceIds
+      .map((id) => `evidence_id=${encodeURIComponent(id)}`)
+      .join("&");
+    state.design = await api(
+      `/api/projects/${state.project.project_id}/design-documents${query ? `?${query}` : ""}`
+    );
+    const highlighted = state.design.documents?.find((doc) => (doc.highlight_count || 0) > 0);
+    if (highlighted) state.selectedDocumentFile = highlighted.file;
+    renderDesignViewer();
+  }
+
+  function showView(name) {
+    $$(".view").forEach((view) => view.classList.remove("active"));
+    const view = $(`#view-${name}`);
+    if (view) view.classList.add("active");
+    $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === name));
+    if (name === "graph") renderGraph();
+  }
+
+  function setupNavigation() {
+    $$(".nav-item").forEach((btn) => btn.addEventListener("click", () => showView(btn.dataset.view)));
+    $$("[data-goto]").forEach((btn) => btn.addEventListener("click", () => showView(btn.dataset.goto)));
+    $("#btn-new-analyze")?.addEventListener("click", () => {
+      showView("impacts");
+      $("#change-natural-text")?.focus();
+    });
+    $$("[data-demo-toast]").forEach((btn) =>
+      btn.addEventListener("click", () => toast(btn.dataset.demoToast || "この操作は現在の画面では未接続です。"))
+    );
+  }
+
+  function ensureWorkflowPanel() {
+    if ($("#change-workflow-panel")) return;
+    const impactView = $("#view-impacts");
+    const toolbar = $(".board-toolbar", impactView);
+    if (!impactView || !toolbar) return;
+    const panel = document.createElement("div");
+    panel.id = "change-workflow-panel";
+    panel.className = "change-workflow card card-pad";
+    panel.innerHTML = `
+      <div class="workflow-head">
+        <div>
+          <div class="detail-label"><i class="fa-solid fa-wand-magic-sparkles"></i>LLM-first change flow</div>
+          <h2>設計書を選んで、自然言語で変更内容を入力</h2>
+          <p>選択した設計書を起点に、GraphRAG上の関連ノードと証跡から影響候補を作ります。LLM出力はレビュー候補として扱われます。</p>
+        </div>
+        <div class="view-switch" role="tablist" aria-label="影響候補と設計書参照の切り替え">
+          <button class="active" data-design-mode="impacts" type="button"><i class="fa-solid fa-list-check"></i>一覧</button>
+          <button data-design-mode="design" type="button"><i class="fa-solid fa-file-excel"></i>設計書参照</button>
+        </div>
+      </div>
+      <div class="workflow-form">
+        <label>
+          <span>変更したい設計書</span>
+          <select id="design-doc-select"></select>
+        </label>
+        <label class="change-text-label">
+          <span>変更箇所・変更内容</span>
+          <textarea id="change-natural-text" rows="4" placeholder="例: 入会申込画面の利用限度額上限を999万円から9999万円に変更したい"></textarea>
+        </label>
+        <button class="btn btn-primary" id="run-natural-analysis" type="button">
+          <i class="fa-solid fa-bolt"></i>GraphRAGで影響分析
+        </button>
+      </div>
+      <div class="workflow-status" id="workflow-status"></div>
+    `;
+    impactView.insertBefore(panel, toolbar);
+    $("#run-natural-analysis")?.addEventListener("click", runNaturalAnalysis);
+    $$(".view-switch [data-design-mode]").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        state.designMode = btn.dataset.designMode;
+        updateModeSwitch();
       })
     );
   }
 
+  function renderAll() {
+    renderTopbar();
+    renderDashboard();
+    renderImpacts();
+    renderAliases();
+    renderJobs();
+    renderDesignPicker();
+    renderDesignViewer();
+    updateBadges();
+    if ($("#view-graph")?.classList.contains("active")) renderGraph();
+  }
+
+  function renderTopbar() {
+    const picker = $(".project-picker");
+    if (picker) {
+      const label = state.project?.display_name || state.project?.path || fallback.project?.label || "SpecImpact project";
+      picker.innerHTML = `<span class="dot"></span>${esc(label)}<i class="fa-solid fa-chevron-down"></i>`;
+    }
+    const llm = state.overview?.llm;
+    const llmChip = $(".chip-llm");
+    if (llmChip && llm) {
+      const provider = llm.enabled ? `${llm.provider || "llm"} / ${llm.model || "default"}` : "LLM未設定 / local fallback";
+      llmChip.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i>${esc(provider)}`;
+    }
+  }
+
+  function counts() {
+    return state.overview?.counts || fallback.stats || {};
+  }
+
+  function renderDashboard() {
+    const defs = [
+      ["documents", "Documents", "fa-file-lines"],
+      ["artifacts", "Artifacts", "fa-cube"],
+      ["entities", "Entities", "fa-tag"],
+      ["relations", "Relations", "fa-link"],
+      ["evidence", "Evidence", "fa-quote-left"],
+    ];
+    const grid = $("#stat-grid");
+    if (grid) {
+      const values = counts();
+      grid.innerHTML = defs.map(([key, label, icon]) => `
+        <div class="stat-card">
+          <div class="sc-label"><i class="fa-solid ${icon}"></i>${label}</div>
+          <div class="sc-value">${esc(values[key] ?? 0)}</div>
+        </div>
+      `).join("");
+    }
+    renderChart();
+  }
+
+  function reportImpacts() {
+    if (!state.report) return fallback.impacts || [];
+    return ["must_review", "should_review", "may_review", "hidden"].flatMap((priority) =>
+      (state.report[priority] || []).map((impact, index) => ({
+        id: `impact.${priority}.${impact.artifact_id || index}`,
+        priority,
+        status: "open",
+        name: impact.display_name || impact.artifact_id,
+        artifactId: impact.artifact_id,
+        kind: impact.artifact_type || "artifact",
+        reason: impact.reason || impact.rule_assessment || "",
+        impactType: impact.impact_type || "review",
+        requiredActions: impact.required_actions || [],
+        path: impact.relation_paths || [],
+        evidence: (impact.evidence || []).map((item) => ({
+          evidence_id: item.evidence_id,
+          file: item.source_location?.file || "",
+          locator: locationLabel(item.source_location),
+          quote: item.quote || "",
+        })),
+        evidenceIds: impact.evidence_ids || [],
+        llm: {
+          judgement: impact.llm_judgement || impact.rule_assessment || "candidate",
+          reason: impact.llm_reason || impact.reason || "",
+          confidence: impact.uncertainty === "low" ? 0.82 : 0.62,
+        },
+      }))
+    );
+  }
+
+  function locationLabel(location) {
+    if (!location) return "";
+    if (location.line_start === location.line_end) return `L${location.line_start}`;
+    return `L${location.line_start}-L${location.line_end}`;
+  }
+
+  function renderChart() {
+    const canvas = $("#impact-chart");
+    if (!canvas || !window.Chart) return;
+    const countsByPriority = { must_review: 0, should_review: 0, may_review: 0 };
+    reportImpacts().forEach((impact) => {
+      if (countsByPriority[impact.priority] !== undefined) countsByPriority[impact.priority] += 1;
+    });
+    if (state.chart) state.chart.destroy();
+    state.chart = new Chart(canvas, {
+      type: "doughnut",
+      data: {
+        labels: ["must_review", "should_review", "may_review"],
+        datasets: [{
+          data: [countsByPriority.must_review, countsByPriority.should_review, countsByPriority.may_review],
+          backgroundColor: ["#dc2626", "#d97706", "#2563eb"],
+          borderWidth: 2,
+          borderColor: "#ffffff",
+        }],
+      },
+      options: {
+        maintainAspectRatio: false,
+        cutout: "64%",
+        plugins: { legend: { position: "right", labels: { boxWidth: 10, boxHeight: 10 } } },
+      },
+    });
+  }
+
   function renderImpacts() {
     const list = $("#impact-list");
-    const q = impactQuery.toLowerCase();
-    const items = SI_DATA.impacts.filter((imp) => {
-      if (impactFilter !== "all" && imp.priority !== impactFilter) return false;
-      if (!q) return true;
-      const hay = [imp.name, imp.reason, imp.artifactId, ...imp.evidence.map((e) => e.file)].join(" ").toLowerCase();
-      return hay.includes(q);
+    const filters = $("#impact-filters");
+    if (!list || !filters) return;
+    const impacts = reportImpacts();
+    const filterKeys = ["all", "must_review", "should_review", "may_review"];
+    const countBy = Object.fromEntries(filterKeys.map((key) => [key, key === "all" ? impacts.length : 0]));
+    impacts.forEach((impact) => {
+      if (countBy[impact.priority] !== undefined) countBy[impact.priority] += 1;
     });
-
+    filters.innerHTML = filterKeys.map((key) => `
+      <button class="filter-pill ${state.impactFilter === key ? "active" : ""}" data-filter="${key}">
+        ${key === "all" ? "すべて" : key}<span class="cnt">${countBy[key] || 0}</span>
+      </button>
+    `).join("");
+    $$("#impact-filters .filter-pill").forEach((pill) =>
+      pill.addEventListener("click", () => {
+        state.impactFilter = pill.dataset.filter;
+        renderImpacts();
+      })
+    );
+    const query = state.impactQuery.toLowerCase();
+    const items = impacts.filter((impact) => {
+      if (state.impactFilter !== "all" && impact.priority !== state.impactFilter) return false;
+      if (!query) return true;
+      return [impact.name, impact.reason, impact.artifactId, impact.kind].join(" ").toLowerCase().includes(query);
+    });
     if (!items.length) {
-      list.innerHTML = `<div class="card card-pad" style="text-align:center;color:var(--c-text-3);">該当する候補がありません</div>`;
+      list.innerHTML = `<div class="card card-pad empty-state">影響候補はまだありません。変更内容を入力して分析してください。</div>`;
       return;
     }
+    list.innerHTML = items.map((impact) => impactCardHtml(impact)).join("");
+    $$(".impact-head", list).forEach((head) => {
+      head.addEventListener("click", async () => {
+        const card = head.closest(".impact-card");
+        card.classList.toggle("open");
+        head.setAttribute("aria-expanded", String(card.classList.contains("open")));
+        const ids = JSON.parse(card.dataset.evidenceIds || "[]");
+        await loadDesignForEvidence(ids);
+      });
+    });
+    $$("[data-open-design]", list).forEach((btn) =>
+      btn.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        await loadDesignForEvidence(JSON.parse(btn.closest(".impact-card").dataset.evidenceIds || "[]"));
+        state.designMode = "design";
+        updateModeSwitch();
+        $("#design-reference-panel")?.scrollIntoView({ block: "start", behavior: "smooth" });
+      })
+    );
+  }
 
-    list.innerHTML = items
-      .map((imp) => {
-        const meta = PRIO_META[imp.priority];
-        const confPct = Math.round(imp.llm.confidence * 100);
-        return `
-      <article class="impact-card ${meta.cls}" data-id="${imp.id}">
+  function impactCardHtml(impact) {
+    const priorityClass = {
+      must_review: "p-must prio-must",
+      should_review: "p-should prio-should",
+      may_review: "p-may prio-may",
+      hidden: "p-may prio-may",
+    }[impact.priority] || "p-may prio-may";
+    const evidenceHtml = impact.evidence.length
+      ? impact.evidence.map((ev) => `
+        <button class="evidence-quote evidence-button" type="button" data-open-design>
+          <div class="eq-src"><i class="fa-solid fa-file-lines"></i>${esc(ev.file)} ${esc(ev.locator)}</div>
+          <div class="eq-text">"${esc(ev.quote)}"</div>
+        </button>
+      `).join("")
+      : `<div class="no-evidence"><i class="fa-solid fa-triangle-exclamation"></i>直接evidenceなし。must_reviewには昇格しません。</div>`;
+    return `
+      <article class="impact-card ${priorityClass.split(" ")[0]}" data-id="${esc(impact.id)}" data-evidence-ids='${esc(JSON.stringify(impact.evidenceIds || []))}'>
         <div class="impact-head" role="button" tabindex="0" aria-expanded="false">
-          <span class="prio-badge ${meta.badge}"><i class="fa-solid ${meta.icon}"></i>${imp.priority}</span>
+          <span class="prio-badge ${priorityClass.split(" ")[1]}"><i class="fa-solid fa-circle-exclamation"></i>${esc(impact.priority)}</span>
           <div class="ih-main">
             <div class="ih-name">
-              ${esc(imp.name)}
-              <span class="kind-tag"><i class="fa-solid ${KIND_ICONS[imp.kind] || "fa-cube"}"></i>${imp.kind}</span>
-              <span class="status-tag st-${imp.status}">${imp.status}</span>
+              ${esc(impact.name)}
+              <span class="kind-tag">${esc(impact.kind)}</span>
+              <span class="status-tag st-open">open</span>
             </div>
-            <div class="ih-reason">${esc(imp.reason)}</div>
+            <div class="ih-reason">${esc(impact.reason)}</div>
           </div>
+          <button class="btn btn-ghost btn-sm" type="button" data-open-design><i class="fa-solid fa-highlighter"></i>設計書で見る</button>
           <i class="fa-solid fa-chevron-down ih-chevron"></i>
         </div>
         <div class="impact-body">
           <div class="impact-grid">
             <div class="detail-block">
               <div class="detail-label"><i class="fa-solid fa-route"></i>Graph Path</div>
-              <div class="rel-path">${relPathHtml(imp.path)}</div>
+              <div class="rel-path">${pathHtml(impact.path)}</div>
               <div class="detail-label" style="margin-top:14px;"><i class="fa-solid fa-quote-left"></i>Evidence</div>
-              ${evidenceHtml(imp.evidence)}
+              ${evidenceHtml}
             </div>
             <div class="detail-block">
-              <div class="detail-label"><i class="fa-solid fa-list-check"></i>Required Actions(${esc(imp.impactType)})</div>
-              <ul class="action-list">${imp.requiredActions.map((a) => `<li>${esc(a)}</li>`).join("")}</ul>
-              <div class="detail-label" style="margin-top:14px;"><i class="fa-solid fa-wand-magic-sparkles"></i>LLM Hypothesis(作業仮説・未確定)</div>
+              <div class="detail-label"><i class="fa-solid fa-list-check"></i>Required Actions (${esc(impact.impactType)})</div>
+              <ul class="action-list">${(impact.requiredActions || []).map((action) => `<li>${esc(action)}</li>`).join("") || "<li>レビューして対応要否を判断</li>"}</ul>
+              <div class="detail-label" style="margin-top:14px;"><i class="fa-solid fa-robot"></i>LLM Hypothesis</div>
               <div class="llm-judgement">
                 <div class="lj-icon"><i class="fa-solid fa-robot"></i></div>
-                <div style="flex:1;">
-                  <b>${imp.llm.judgement}</b> — ${esc(imp.llm.reason)}
-                  <div class="conf-bar"><div style="width:${confPct}%;"></div></div>
-                  <span style="font-size:11px;color:var(--c-text-3);font-family:var(--font-mono);">confidence ${confPct}%</span>
-                </div>
+                <div><b>${esc(impact.llm.judgement)}</b> - ${esc(impact.llm.reason)}</div>
               </div>
             </div>
           </div>
-          <div class="impact-actions">
-            <button class="btn btn-ok btn-sm" data-act="accepted"><i class="fa-solid fa-check"></i>修正対象にする</button>
-            <button class="btn btn-ghost btn-sm" data-act="closed"><i class="fa-solid fa-flag-checkered"></i>対応完了</button>
-            <button class="btn btn-danger btn-sm" data-act="dismissed"><i class="fa-solid fa-xmark"></i>対象外</button>
-            <span class="hint">判断理由は impact decision として JSONL に記録されます</span>
-          </div>
         </div>
       </article>`;
-      })
-      .join("");
-
-    /* expand / collapse */
-    $$(".impact-head", list).forEach((head) => {
-      const open = () => {
-        const card = head.closest(".impact-card");
-        card.classList.toggle("open");
-        head.setAttribute("aria-expanded", card.classList.contains("open"));
-      };
-      head.addEventListener("click", open);
-      head.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
-      });
-    });
-
-    /* status actions */
-    $$("[data-act]", list).forEach((btn) =>
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const card = btn.closest(".impact-card");
-        const imp = SI_DATA.impacts.find((i) => i.id === card.dataset.id);
-        imp.status = btn.dataset.act;
-        renderImpacts();
-        updateBadges();
-        toast(`${imp.id} を ${btn.dataset.act} に更新しました(decision を記録)`);
-      })
-    );
   }
 
-  $("#impact-search").addEventListener("input", (e) => {
-    impactQuery = e.target.value;
-    renderImpacts();
-  });
+  function pathHtml(path) {
+    const parts = Array.isArray(path) ? path : [path || ""];
+    return parts.length
+      ? parts.map((part, index) => index % 2 === 0
+        ? `<span class="rel-node">${esc(part)}</span>`
+        : `<span class="rel-edge">→ ${esc(part)} →</span>`).join("")
+      : `<span class="rel-edge">graph path pending</span>`;
+  }
 
-  renderImpactFilters();
-  renderImpacts();
+  function renderDesignPicker() {
+    const select = $("#design-doc-select");
+    if (!select) return;
+    const docs = state.design?.documents || [];
+    select.innerHTML = docs.length
+      ? docs.map((doc) => `<option value="${esc(doc.file)}">${esc(doc.title || doc.file)} (${doc.highlight_count || 0})</option>`).join("")
+      : `<option value="">設計書データなし</option>`;
+    if (state.selectedDocumentFile && docs.some((doc) => doc.file === state.selectedDocumentFile)) {
+      select.value = state.selectedDocumentFile;
+    } else if (docs[0]) {
+      state.selectedDocumentFile = docs[0].file;
+      select.value = docs[0].file;
+    }
+    select.onchange = () => {
+      state.selectedDocumentFile = select.value;
+      renderDesignViewer();
+    };
+  }
 
-  /* ============================================================
-   * Graph Explorer (D3 force layout)
-   * ============================================================ */
-  const KIND_COLOR = { artifact: "#4f46e5", entity: "#0891b2", document: "#94a3b8" };
-  const STATUS_COLOR = { confirmed: "#10b981", unconfirmed: "#f59e0b", rejected: "#cbd5e1" };
-  const NODE_ICON = {
-    SCREEN: "\uf108", API: "\uf1e6", DB: "\uf1c0", CHECK: "\uf0ae",
-    EXTERNAL_IF: "\uf362", TEST: "\uf492", BATCH: "\uf017",
-    "論理項目": "\uf02b", "API項目": "\uf02b", "DBカラム": "\uf02b", DOC: "\uf15c",
-  };
-
-  let graphInit = false;
-  let simulation, svgRoot, gZoom, nodeSel, linkSel, linkLabelSel;
-  let graphLinks = []; /* simulation にバインドされた link オブジェクト(状態更新はこちらを正とする) */
-  const impactNodeIds = new Set([
-    "ent.credit_limit", "ent.requestedCreditLimit", "ent.REQUESTED_CREDIT_LIMIT",
-    "scr.card_entry.apply", "scr.card_entry.confirm", "chk.apply.credit_limit_max",
-    "api.card_application.submit", "db.t_card_application", "if.credit_check.if301",
-    "test.tc114.boundary", "batch.b220.monthly_agg",
-  ]);
-
-  function initGraph() {
-    if (graphInit) return;
-    graphInit = true;
-
-    const wrap = $(".graph-canvas-wrap");
-    const W = wrap.clientWidth || 800;
-    const H = wrap.clientHeight || 600;
-
-    const nodes = SI_DATA.graph.nodes.map((d) => ({ ...d }));
-    const links = SI_DATA.graph.links.map((d) => ({ ...d }));
-    graphLinks = links;
-
-    svgRoot = d3.select("#graph-svg").attr("viewBox", [0, 0, W, H]);
-
-    /* arrow markers per status */
-    const defs = svgRoot.append("defs");
-    Object.entries(STATUS_COLOR).forEach(([status, color]) => {
-      defs.append("marker")
-        .attr("id", "arrow-" + status)
-        .attr("viewBox", "0 -5 10 10")
-        .attr("refX", 26).attr("refY", 0)
-        .attr("markerWidth", 7).attr("markerHeight", 7)
-        .attr("orient", "auto")
-        .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", color);
-    });
-
-    gZoom = svgRoot.append("g");
-
-    svgRoot.call(
-      d3.zoom().scaleExtent([0.35, 3]).on("zoom", (e) => gZoom.attr("transform", e.transform))
+  function renderDesignViewer() {
+    let panel = $("#design-reference-panel");
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = "design-reference-panel";
+      panel.className = "design-reference card card-pad";
+      $("#impact-list")?.insertAdjacentElement("beforebegin", panel);
+    }
+    renderDesignPicker();
+    const docs = state.design?.documents || [];
+    const selected = docs.find((doc) => doc.file === state.selectedDocumentFile) || docs[0];
+    state.selectedDocumentFile = selected?.file || "";
+    if (!selected) {
+      panel.innerHTML = `<div class="empty-state">設計書ビューに表示できる証跡がまだありません。まず設計書を取り込んでください。</div>`;
+      updateModeSwitch();
+      return;
+    }
+    panel.innerHTML = `
+      <div class="design-header">
+        <div>
+          <div class="detail-label"><i class="fa-solid fa-highlighter"></i>Design reference</div>
+          <h2>${esc(selected.title || selected.file)}</h2>
+          <p>${esc(selected.file)} / evidence ${selected.evidence_count || 0} / highlight ${selected.highlight_count || 0}</p>
+        </div>
+        <div class="highlight-summary">${(state.selectedEvidenceIds || []).length} evidence selected</div>
+      </div>
+      <div class="design-doc-tabs">
+        ${docs.map((doc) => `<button class="${doc.file === selected.file ? "active" : ""}" data-doc-file="${esc(doc.file)}">${esc(doc.title || doc.file)}<span>${doc.highlight_count || 0}</span></button>`).join("")}
+      </div>
+      <div class="design-content">
+        ${designRowsHtml(selected)}
+      </div>
+    `;
+    $$("[data-doc-file]", panel).forEach((btn) =>
+      btn.addEventListener("click", () => {
+        state.selectedDocumentFile = btn.dataset.docFile;
+        const picker = $("#design-doc-select");
+        if (picker) picker.value = state.selectedDocumentFile;
+        renderDesignViewer();
+      })
     );
+    updateModeSwitch();
+  }
 
-    linkSel = gZoom.append("g")
-      .selectAll("line").data(links).join("line")
-      .attr("stroke", (d) => STATUS_COLOR[d.status])
-      .attr("stroke-width", (d) => (d.status === "confirmed" ? 2 : 1.5))
-      .attr("stroke-dasharray", (d) => (d.status === "rejected" ? "4 4" : d.status === "unconfirmed" ? "6 3" : null))
-      .attr("marker-end", (d) => `url(#arrow-${d.status})`)
-      .attr("opacity", 0.85);
+  function designRowsHtml(doc) {
+    if (doc.cells?.length) return dirtyCellHtml(doc.cells, doc.regions || []);
+    if (doc.rows?.length) {
+      return `<div class="source-lines">${doc.rows.map((row) => `
+        <div class="source-line ${row.highlight ? "is-highlighted" : ""}">
+          <span class="line-no">${esc(row.line)}</span>
+          <code>${esc(row.text)}</code>
+          ${evidenceChips(row.evidence_ids)}
+        </div>
+      `).join("")}</div>`;
+    }
+    if (doc.evidence?.length) {
+      return doc.evidence.map((ev) => `
+        <div class="evidence-quote ${state.selectedEvidenceIds.includes(ev.evidence_id) ? "is-highlighted" : ""}">
+          <div class="eq-src">${esc(ev.evidence_id)} / ${esc(locationLabel(ev.source_location))}</div>
+          <div class="eq-text">${esc(ev.quote)}</div>
+        </div>
+      `).join("");
+    }
+    return `<div class="empty-state">この設計書には表示可能な行またはセルがありません。</div>`;
+  }
 
-    linkLabelSel = gZoom.append("g")
-      .selectAll("text").data(links).join("text")
-      .text((d) => d.rel)
-      .attr("font-family", "'JetBrains Mono', monospace")
-      .attr("font-size", 8.5)
-      .attr("fill", "#94a3b8")
+  function dirtyCellHtml(cells, regions) {
+    const regionHtml = regions.length
+      ? `<div class="region-strip">${regions.slice(0, 12).map((region) => `
+          <span class="${region.highlight ? "active" : ""}">${esc(region.sheet_name)}!${esc(region.range)} ${esc(region.region_type)}</span>
+        `).join("")}</div>`
+      : "";
+    return `${regionHtml}<div class="excel-grid">
+      <table>
+        <thead><tr><th>Sheet</th><th>Cell</th><th>Value</th><th>Evidence</th></tr></thead>
+        <tbody>${cells.map((cell) => `
+          <tr class="${cell.highlight ? "is-highlighted" : ""}">
+            <td>${esc(cell.sheet_name)}</td>
+            <td class="mono">${esc(cell.cell)}${cell.merged_range ? `<span class="cell-note">${esc(cell.merged_range)}</span>` : ""}</td>
+            <td>${esc(cell.value)}</td>
+            <td>${evidenceChips(cell.evidence_ids)}</td>
+          </tr>
+        `).join("")}</tbody>
+      </table>
+    </div>`;
+  }
+
+  function evidenceChips(ids) {
+    return (ids || []).map((id) => `<span class="evidence-chip">${esc(id)}</span>`).join("");
+  }
+
+  function updateModeSwitch() {
+    $$(".view-switch [data-design-mode]").forEach((btn) =>
+      btn.classList.toggle("active", btn.dataset.designMode === state.designMode)
+    );
+    const list = $("#impact-list");
+    const panel = $("#design-reference-panel");
+    if (list) list.style.display = state.designMode === "impacts" ? "" : "none";
+    if (panel) panel.style.display = state.designMode === "design" ? "" : "none";
+  }
+
+  async function runNaturalAnalysis() {
+    const body = $("#change-natural-text")?.value.trim() || "";
+    const designDocument = $("#design-doc-select")?.value || "";
+    if (!body) {
+      toast("変更内容を入力してください。");
+      return;
+    }
+    const status = $("#workflow-status");
+    try {
+      const params = { body, design_document: designDocument };
+      const preview = await api(
+        `/api/projects/${state.project.project_id}/external-preview?action=analyze_text_llm_first&params=${encodeURIComponent(JSON.stringify(params))}`
+      );
+      let approved = false;
+      if (preview.required) {
+        const lines = (preview.transmissions || []).map((item) =>
+          `${item.provider || "provider"} / ${item.model || "model"} / ${item.purpose || "analysis"} / ${item.item_count_label || item.item_count || "n"}件`
+        );
+        approved = window.confirm(`外部LLM送信が必要です。\n\n${lines.join("\n")}\n\nこのジョブを実行しますか？`);
+        if (!approved) return;
+      }
+      if (status) status.textContent = "分析ジョブを投入しています...";
+      const created = await api(`/api/projects/${state.project.project_id}/jobs`, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "analyze_text_llm_first",
+          input_kind: "settings",
+          external_approved: approved,
+          params,
+        }),
+      });
+      toast("LLM-first分析ジョブを開始しました。");
+      await pollJob(created.job.job_id);
+      await refreshAll();
+      state.designMode = "impacts";
+      updateModeSwitch();
+      if (status) status.textContent = "分析が完了しました。一覧から候補を開くと設計書側がハイライトされます。";
+    } catch (error) {
+      if (status) status.textContent = `分析に失敗しました: ${error.message}`;
+      toast("分析ジョブを開始できませんでした。");
+    }
+  }
+
+  async function pollJob(jobId) {
+    for (let i = 0; i < 120; i += 1) {
+      const job = await api(`/api/projects/${state.project.project_id}/jobs/${jobId}`);
+      if (TERMINAL.has(job.state)) {
+        if (job.state !== "succeeded") throw new Error(job.error_summary || `job ${job.state}`);
+        return job;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+    throw new Error("job timeout");
+  }
+
+  function renderAliases() {
+    const list = $("#alias-list");
+    if (!list) return;
+    const candidates = state.aliases?.candidates || fallback.aliases || [];
+    list.innerHTML = candidates.length ? candidates.map((candidate) => {
+      const aliases = candidate.aliases || [candidate.a, candidate.b].filter(Boolean);
+      const left = candidate.entity_a_id || candidate.target_id || aliases[0] || "";
+      const right = candidate.entity_b_id || aliases[1] || "";
+      return `
+        <article class="alias-card">
+          <div class="alias-pair">
+            <span class="alias-term">${esc(left)}</span>
+            <span class="alias-eq"><i class="fa-solid fa-arrows-left-right"></i></span>
+            <span class="alias-term">${esc(right)}</span>
+            <span class="judge-tag j-${esc(candidate.judgement || candidate.llm || "unsure")}">LLM: ${esc(candidate.judgement || candidate.llm || "unsure")}</span>
+            <span class="status-tag st-${esc(candidate.status || "open")}">${esc(candidate.status || "pending")}</span>
+          </div>
+          <div class="evidence-quote">
+            <div class="eq-src">${evidenceChips(candidate.evidence_ids || [])}</div>
+            <div class="eq-text">${esc(candidate.llm_reason || candidate.reason || (candidate.evidence?.quote || ""))}</div>
+          </div>
+        </article>`;
+    }).join("") : `<div class="card card-pad empty-state">Alias候補はまだありません。</div>`;
+  }
+
+  function renderJobs() {
+    const tbody = $("#jobs-table tbody");
+    if (!tbody) return;
+    const jobs = state.jobs.length ? state.jobs : fallback.jobs || [];
+    tbody.innerHTML = jobs.map((job) => `
+      <tr>
+        <td class="mono">${esc(job.job_id || job.id)}</td>
+        <td><b>${esc(job.action || job.type)}</b></td>
+        <td>${esc(job.input_kind || job.target || "")}</td>
+        <td><span class="job-status js-${esc(job.state || job.status)}">${esc(job.state || job.status)}</span></td>
+        <td>${job.external ? `<span class="ext-badge">外部LLM</span>` : `<span class="local-badge">local</span>`}</td>
+        <td class="mono">${esc(job.created_at || job.time || "")}</td>
+        <td class="mono">${esc(job.finished_at || job.duration || "")}</td>
+      </tr>
+    `).join("");
+  }
+
+  function renderGraph() {
+    const svg = $("#graph-svg");
+    if (!svg || !window.d3) return;
+    const rawNodes = state.graph?.nodes?.map((item) => item.data) || fallback.graph?.nodes || [];
+    const rawEdges = state.graph?.edges?.map((item) => item.data) || fallback.graph?.links || [];
+    svg.innerHTML = "";
+    const wrap = $(".graph-canvas-wrap");
+    const width = wrap?.clientWidth || 900;
+    const height = wrap?.clientHeight || 640;
+    const nodes = rawNodes.map((node) => ({
+      id: node.id,
+      label: node.label || node.id,
+      kind: node.kind || "reference",
+      type: node.type || "",
+    }));
+    const links = rawEdges
+      .filter((edge) => edge.source && edge.target)
+      .map((edge) => ({
+        source: edge.source,
+        target: edge.target,
+        label: edge.label || edge.rel || "",
+        status: edge.status || "unconfirmed",
+      }));
+    const colors = { artifact: "#4f46e5", entity: "#0891b2", document: "#94a3b8", reference: "#64748b" };
+    const status = { confirmed: "#10b981", unconfirmed: "#f59e0b", rejected: "#cbd5e1" };
+    const root = d3.select(svg).attr("viewBox", [0, 0, width, height]);
+    const group = root.append("g");
+    root.call(d3.zoom().scaleExtent([0.3, 3]).on("zoom", (event) => group.attr("transform", event.transform)));
+    const link = group.append("g").selectAll("line").data(links).join("line")
+      .attr("stroke", (item) => status[item.status] || "#cbd5e1")
+      .attr("stroke-width", 1.6)
+      .attr("stroke-dasharray", (item) => item.status === "confirmed" ? null : "6 3");
+    const node = group.append("g").selectAll("g").data(nodes).join("g").attr("cursor", "pointer");
+    node.append("circle")
+      .attr("r", (item) => item.kind === "artifact" ? 17 : 13)
+      .attr("fill", (item) => colors[item.kind] || colors.reference)
+      .attr("stroke", "#fff")
+      .attr("stroke-width", 2);
+    node.append("text")
+      .text((item) => item.label)
+      .attr("y", 30)
       .attr("text-anchor", "middle")
-      .attr("paint-order", "stroke")
-      .attr("stroke", "#fbfcfd")
-      .attr("stroke-width", 3);
-
-    nodeSel = gZoom.append("g")
-      .selectAll("g").data(nodes).join("g")
-      .attr("cursor", "pointer")
-      .call(
-        d3.drag()
-          .on("start", (e, d) => { if (!e.active) simulation.alphaTarget(0.25).restart(); d.fx = d.x; d.fy = d.y; })
-          .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
-          .on("end", (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; })
-      )
-      .on("click", (e, d) => selectNode(d));
-
-    nodeSel.append("circle")
-      .attr("r", (d) => (d.kind === "artifact" ? 17 : 13))
-      .attr("fill", (d) => KIND_COLOR[d.kind])
-      .attr("stroke", "#ffffff")
-      .attr("stroke-width", 2.5)
-      .attr("class", "node-circle");
-
-    nodeSel.append("text")
-      .text((d) => NODE_ICON[d.type] || "\uf111")
-      .attr("font-family", "'Font Awesome 6 Free'")
-      .attr("font-weight", 900)
-      .attr("font-size", (d) => (d.kind === "artifact" ? 12 : 10))
-      .attr("fill", "#fff")
-      .attr("text-anchor", "middle")
-      .attr("dy", "0.36em");
-
-    nodeSel.append("text")
-      .text((d) => d.label)
-      .attr("font-family", "'Noto Sans JP', sans-serif")
       .attr("font-size", 11)
       .attr("font-weight", 600)
-      .attr("fill", "#334155")
-      .attr("text-anchor", "middle")
-      .attr("dy", (d) => (d.kind === "artifact" ? 32 : 28))
       .attr("paint-order", "stroke")
       .attr("stroke", "#fbfcfd")
       .attr("stroke-width", 4);
-
-    simulation = d3.forceSimulation(nodes)
-      .force("link", d3.forceLink(links).id((d) => d.id).distance(120).strength(0.6))
-      .force("charge", d3.forceManyBody().strength(-520))
-      .force("center", d3.forceCenter(W / 2, H / 2))
-      .force("collide", d3.forceCollide(46))
+    const sim = d3.forceSimulation(nodes)
+      .force("link", d3.forceLink(links).id((item) => item.id).distance(130))
+      .force("charge", d3.forceManyBody().strength(-460))
+      .force("center", d3.forceCenter(width / 2, height / 2))
+      .force("collide", d3.forceCollide(48))
       .on("tick", () => {
-        linkSel
-          .attr("x1", (d) => d.source.x).attr("y1", (d) => d.source.y)
-          .attr("x2", (d) => d.target.x).attr("y2", (d) => d.target.y);
-        linkLabelSel
-          .attr("x", (d) => (d.source.x + d.target.x) / 2)
-          .attr("y", (d) => (d.source.y + d.target.y) / 2 - 5);
-        nodeSel.attr("transform", (d) => `translate(${d.x},${d.y})`);
+        link.attr("x1", (item) => item.source.x).attr("y1", (item) => item.source.y)
+          .attr("x2", (item) => item.target.x).attr("y2", (item) => item.target.y);
+        node.attr("transform", (item) => `translate(${item.x},${item.y})`);
       });
-
-    /* toolbar */
-    $("#graph-search").addEventListener("input", (e) => {
-      const q = e.target.value.toLowerCase();
-      nodeSel.attr("opacity", (d) => (!q || d.label.toLowerCase().includes(q) || d.id.toLowerCase().includes(q) ? 1 : 0.15));
+    node.on("click", (_event, item) => {
+      const related = links.filter((edge) => (edge.source.id || edge.source) === item.id || (edge.target.id || edge.target) === item.id);
+      $("#graph-side").innerHTML = `
+        <div class="gs-node-head">
+          <div class="gs-node-icon" style="background:${colors[item.kind] || colors.reference};"><i class="fa-solid fa-cube"></i></div>
+          <div><div class="gs-node-name">${esc(item.label)}</div><div class="gs-node-id">${esc(item.id)}</div><span class="kind-tag">${esc(item.kind)} / ${esc(item.type)}</span></div>
+        </div>
+        <div class="detail-label">Relations (${related.length})</div>
+        ${related.map((edge) => `<div class="gs-rel-item"><div class="gs-rel-head"><span class="rel-name">${esc(edge.label)}</span><span class="gs-rel-status rs-${esc(edge.status)}">${esc(edge.status)}</span></div></div>`).join("")}
+      `;
     });
-    $("#btn-graph-impact").addEventListener("click", () => {
-      nodeSel.attr("opacity", (d) => (impactNodeIds.has(d.id) ? 1 : 0.12));
-      linkSel.attr("opacity", (d) => (impactNodeIds.has(d.source.id) && impactNodeIds.has(d.target.id) ? 1 : 0.08));
-      linkLabelSel.attr("opacity", (d) => (impactNodeIds.has(d.source.id) && impactNodeIds.has(d.target.id) ? 1 : 0.06));
-      toast("CHG-2026-0042 の影響パスを強調表示しています");
-    });
-    $("#btn-graph-reset").addEventListener("click", () => {
-      nodeSel.attr("opacity", 1);
-      linkSel.attr("opacity", 0.85);
-      linkLabelSel.attr("opacity", 1);
-      $("#graph-search").value = "";
-    });
+    $("#graph-search")?.addEventListener("input", (event) => {
+      const q = event.target.value.toLowerCase();
+      node.attr("opacity", (item) => !q || item.label.toLowerCase().includes(q) || item.id.toLowerCase().includes(q) ? 1 : 0.15);
+    }, { once: true });
+    $("#btn-graph-reset")?.addEventListener("click", () => renderGraph(), { once: true });
+    state.graphInit = true;
   }
 
-  function selectNode(d) {
-    nodeSel.select(".node-circle")
-      .attr("stroke", (n) => (n.id === d.id ? "#f59e0b" : "#ffffff"))
-      .attr("stroke-width", (n) => (n.id === d.id ? 4 : 2.5));
-
-    const rels = graphLinks.filter((l) => (l.source.id || l.source) === d.id || (l.target.id || l.target) === d.id);
-    const side = $("#graph-side");
-    side.innerHTML = `
-      <div class="gs-node-head">
-        <div class="gs-node-icon" style="background:${KIND_COLOR[d.kind]};"><i class="fa-solid fa-cube"></i></div>
-        <div>
-          <div class="gs-node-name">${esc(d.label)}</div>
-          <div class="gs-node-id">${esc(d.id)}</div>
-          <span class="kind-tag" style="margin-top:5px;">${esc(d.kind)} · ${esc(d.type)}</span>
-        </div>
-      </div>
-      <div class="detail-label"><i class="fa-solid fa-link"></i>Relations(${rels.length})</div>
-      ${rels.map((l, idx) => {
-        const srcId = l.source.id || l.source, tgtId = l.target.id || l.target;
-        const peerId = srcId === d.id ? tgtId : srcId;
-        const peer = SI_DATA.graph.nodes.find((n) => n.id === peerId);
-        const dir = srcId === d.id ? "→" : "←";
-        return `
-        <div class="gs-rel-item" data-rel-idx="${graphLinks.indexOf(l)}">
-          <div class="gs-rel-head">
-            <span class="rel-name">${esc(l.rel)} ${dir}</span>
-            <span class="peer">${esc(peer ? peer.label : peerId)}</span>
-            <span class="gs-rel-status rs-${l.status}"><span class="rs-dot"></span>${l.status}</span>
-          </div>
-          <div class="evidence-quote" style="margin-top:8px;">
-            <div class="eq-src"><i class="fa-solid fa-file-excel"></i>${esc(l.evidence.file)} · ${esc(l.evidence.locator)}</div>
-            <div class="eq-text">"${esc(l.evidence.quote)}"</div>
-          </div>
-          <div class="gs-rel-actions">
-            <button class="btn btn-ok btn-sm" data-set="confirmed"><i class="fa-solid fa-check"></i>confirm</button>
-            <button class="btn btn-danger btn-sm" data-set="rejected"><i class="fa-solid fa-xmark"></i>reject</button>
-          </div>
-        </div>`;
-      }).join("")}`;
-
-    $$(".gs-rel-item [data-set]", side).forEach((btn) =>
-      btn.addEventListener("click", () => {
-        const idx = +btn.closest(".gs-rel-item").dataset.relIdx;
-        graphLinks[idx].status = btn.dataset.set;
-        if (SI_DATA.graph.links[idx]) SI_DATA.graph.links[idx].status = btn.dataset.set; /* 元データも同期 */
-        linkSel
-          .attr("stroke", (l) => STATUS_COLOR[l.status])
-          .attr("stroke-dasharray", (l) => (l.status === "rejected" ? "4 4" : l.status === "unconfirmed" ? "6 3" : null))
-          .attr("marker-end", (l) => `url(#arrow-${l.status})`);
-        selectNode(d);
-        toast(`relation を ${btn.dataset.set} に更新しました(queue 経由で保存)`);
-      })
-    );
-  }
-
-  /* ============================================================
-   * Alias Review
-   * ============================================================ */
-  function renderAliases() {
-    $("#alias-list").innerHTML = SI_DATA.aliases
-      .map((al) => {
-        const confPct = Math.round(al.confidence * 100);
-        const done = al.status !== "pending";
-        return `
-      <article class="alias-card" data-id="${al.id}">
-        <div class="alias-pair">
-          <span class="alias-term">${esc(al.a)}</span>
-          <span class="alias-eq"><i class="fa-solid fa-arrows-left-right"></i></span>
-          <span class="alias-term">${esc(al.b)}</span>
-          <span class="judge-tag j-${al.llm}">LLM: ${al.llm}</span>
-          ${done ? `<span class="status-tag ${al.status === "confirmed" ? "st-accepted" : "st-dismissed"}">${al.status}</span>` : ""}
-        </div>
-        <div class="evidence-quote" style="margin-top:10px;">
-          <div class="eq-src"><i class="fa-solid fa-file-excel"></i>${esc(al.evidence.file)} · ${esc(al.evidence.locator)}</div>
-          <div class="eq-text">"${esc(al.evidence.quote)}"</div>
-        </div>
-        <ul class="alias-signals">${al.signals.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
-        <div class="alias-footer">
-          ${done ? "" : `
-            <button class="btn btn-ok btn-sm" data-al="confirmed"><i class="fa-solid fa-check"></i>same として確定</button>
-            <button class="btn btn-danger btn-sm" data-al="rejected"><i class="fa-solid fa-xmark"></i>却下</button>`}
-          <span class="conf" style="margin-left:auto;">confidence ${confPct}%</span>
-        </div>
-      </article>`;
-      })
-      .join("");
-
-    $$("#alias-list [data-al]").forEach((btn) =>
-      btn.addEventListener("click", () => {
-        const al = SI_DATA.aliases.find((a) => a.id === btn.closest(".alias-card").dataset.id);
-        al.status = btn.dataset.al;
-        renderAliases();
-        updateBadges();
-        toast(`${al.id}: ${al.a} ↔ ${al.b} を ${btn.dataset.al} にしました`);
-      })
-    );
-  }
-  renderAliases();
-
-  /* ============================================================
-   * Jobs
-   * ============================================================ */
-  $("#jobs-table tbody").innerHTML = SI_DATA.jobs
-    .map(
-      (j) => `
-    <tr>
-      <td class="mono" style="font-size:12px;">${j.id}</td>
-      <td><b>${esc(j.type)}</b></td>
-      <td style="color:var(--c-text-2);">${esc(j.target)}</td>
-      <td><span class="job-status js-${j.status}">${j.status}</span></td>
-      <td>${j.external ? '<span class="ext-badge"><i class="fa-solid fa-cloud-arrow-up"></i> 承認済み</span>' : '<span class="local-badge"><i class="fa-solid fa-lock"></i> local</span>'}</td>
-      <td class="mono" style="font-size:12px;">${j.time}</td>
-      <td class="mono" style="font-size:12px;">${j.duration}</td>
-    </tr>`
-    )
-    .join("");
-
-  /* ---------- Badges ---------- */
   function updateBadges() {
-    const openImpacts = SI_DATA.impacts.filter((i) => i.status === "open").length;
-    const pendingAliases = SI_DATA.aliases.filter((a) => a.status === "pending").length;
-    $("#badge-impacts").textContent = openImpacts;
-    $("#badge-aliases").textContent = pendingAliases;
-    $("#badge-impacts").style.display = openImpacts ? "" : "none";
-    $("#badge-aliases").style.display = pendingAliases ? "" : "none";
+    const impacts = reportImpacts();
+    const openImpacts = impacts.filter((item) => item.priority !== "hidden").length;
+    const aliasCount = (state.aliases?.candidates || fallback.aliases || []).filter((item) => (item.status || "pending") === "pending").length;
+    const impactBadge = $("#badge-impacts");
+    const aliasBadge = $("#badge-aliases");
+    if (impactBadge) {
+      impactBadge.textContent = openImpacts;
+      impactBadge.style.display = openImpacts ? "" : "none";
+    }
+    if (aliasBadge) {
+      aliasBadge.textContent = aliasCount;
+      aliasBadge.style.display = aliasCount ? "" : "none";
+    }
   }
-  updateBadges();
+
+  function setupSearch() {
+    $("#impact-search")?.addEventListener("input", (event) => {
+      state.impactQuery = event.target.value;
+      renderImpacts();
+    });
+  }
+
+  async function start() {
+    setupNavigation();
+    ensureWorkflowPanel();
+    setupSearch();
+    renderAll();
+    try {
+      await loadSession();
+      await resolveProject();
+      await refreshAll();
+    } catch (error) {
+      toast(`実データAPIに接続できません: ${error.message}`);
+      renderAll();
+    }
+    showView(new URL(window.location.href).pathname.split("/").pop() === "graph" ? "graph" : "dashboard");
+  }
+
+  document.addEventListener("DOMContentLoaded", start);
 })();

@@ -25,6 +25,7 @@ from specimpact.dirty_excel.ingestion import (
     inspect_dirty_excel,
     list_graph_proposals,
 )
+from specimpact.dirty_excel.models import DirtyCell, DirtyRegion
 from specimpact.embeddings import rebuild_embeddings
 from specimpact.graphrag import (
     configure_llm,
@@ -76,6 +77,7 @@ MUTATING_ACTIONS = {
     "ingest_dirty_excel",
     "analyze",
     "analyze_text",
+    "analyze_text_llm_first",
     "analyze_llm_first",
     "change_parse",
     "aliases_suggest",
@@ -223,6 +225,95 @@ def evidence_data(
     return [item.model_dump() for item in items]
 
 
+def design_documents_data(
+    project: Project,
+    evidence_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Return source-document previews with evidence-addressable highlights."""
+    store = store_for(project)
+    selected = set(evidence_ids or _latest_report_evidence_ids(store))
+    documents = store.read("documents", Document)
+    chunks = store.read("chunks", Chunk)
+    evidence = store.read("evidence", Evidence)
+    dirty_cells = store.read("dirty_cells", DirtyCell)
+    dirty_regions = store.read("dirty_regions", DirtyRegion)
+
+    evidence_by_file: dict[str, list[Evidence]] = {}
+    for item in evidence:
+        evidence_by_file.setdefault(item.source_location.file, []).append(item)
+    cells_by_file: dict[str, list[DirtyCell]] = {}
+    for cell in dirty_cells:
+        cells_by_file.setdefault(cell.file_path, []).append(cell)
+    regions_by_file: dict[str, list[DirtyRegion]] = {}
+    for region in dirty_regions:
+        workbook = next(
+            (cell.file_path for cell in dirty_cells if cell.workbook_id == region.workbook_id),
+            region.workbook_id,
+        )
+        regions_by_file.setdefault(workbook, []).append(region)
+
+    by_file: dict[str, dict[str, Any]] = {}
+    for document in documents:
+        by_file[document.path] = {
+            "document_id": document.document_id,
+            "title": document.title,
+            "file": document.path,
+            "document_type": document.document_type,
+        }
+    for file_name in {*evidence_by_file, *cells_by_file, *regions_by_file}:
+        by_file.setdefault(
+            file_name,
+            {
+                "document_id": None,
+                "title": Path(file_name).name,
+                "file": file_name,
+                "document_type": "design_document",
+            },
+        )
+
+    chunk_text_by_doc: dict[str, list[Chunk]] = {}
+    for chunk in chunks:
+        chunk_text_by_doc.setdefault(chunk.document_id, []).append(chunk)
+
+    previews = []
+    for file_name, base in sorted(by_file.items(), key=lambda item: item[0]):
+        file_evidence = evidence_by_file.get(file_name, [])
+        highlighted = [item for item in file_evidence if item.evidence_id in selected]
+        doc_id = base.get("document_id")
+        rows = _source_rows(project, file_name, file_evidence, selected)
+        if not rows and doc_id:
+            rows = _chunk_rows(chunk_text_by_doc.get(doc_id, []), file_evidence, selected)
+        cells = _dirty_cell_rows(cells_by_file.get(file_name, []), selected)
+        regions = [
+            {
+                "region_id": region.region_id,
+                "sheet_name": region.sheet_name,
+                "range": region.range,
+                "region_type": region.region_type,
+                "highlight": bool(set(region.evidence_ids) & selected),
+                "evidence_ids": region.evidence_ids,
+                "rendered_text": region.rendered_text[:2000],
+            }
+            for region in regions_by_file.get(file_name, [])
+        ]
+        previews.append(
+            {
+                **base,
+                "highlight_count": len(highlighted),
+                "evidence_count": len(file_evidence),
+                "evidence": [_evidence_summary(item) for item in file_evidence],
+                "rows": rows,
+                "cells": cells,
+                "regions": regions,
+            }
+        )
+
+    return {
+        "selected_evidence_ids": sorted(selected),
+        "documents": previews,
+    }
+
+
 def report_data(project: Project) -> dict[str, Any]:
     store = store_for(project)
     report = json.loads((latest_run_dir(store) / "report.json").read_text(encoding="utf-8"))
@@ -346,7 +437,12 @@ def external_preview(project: Project, action: str, params: dict[str, Any]) -> d
     dataset_case_count = _dataset_case_count(project, action, params)
     llm = config["llm"]
     dirty_llm = action == "ingest_dirty_excel" and bool(params.get("llm"))
-    graph_llm = action in {"ingest", "analyze", "analyze_llm_first"} and not no_llm
+    graph_llm = action in {
+        "ingest",
+        "analyze",
+        "analyze_llm_first",
+        "analyze_text_llm_first",
+    } and not no_llm
     alias_llm = action == "aliases_suggest" and bool(params.get("llm", True)) and not no_llm
     if (dirty_llm or graph_llm or alias_llm) and is_external_llm(llm):
         if action == "ingest":
@@ -375,6 +471,22 @@ def external_preview(project: Project, action: str, params: dict[str, Any]) -> d
                     "purpose": "alias resolution judgement",
                     "item_count": len(store.read("entities", Entity)),
                 }
+            )
+        elif action == "analyze_text_llm_first":
+            common = {"provider": llm.get("provider"), "model": llm.get("model")}
+            purposes.extend(
+                [
+                    {
+                        **common,
+                        "purpose": "natural language change extraction",
+                        "item_count": 1,
+                    },
+                    {
+                        **common,
+                        "purpose": "GraphRAG impact hypothesis generation",
+                        "item_count": len(store.read("artifacts", Artifact)),
+                    },
+                ]
             )
         else:
             purposes.extend(_analyze_llm_transmissions(project, store, params, llm))
@@ -492,6 +604,26 @@ def execute(project: Project, action: str, params: dict[str, Any]) -> dict[str, 
             change_path,
             yes=approved,
             no_llm=True,
+            confirm=confirm,
+        )
+        result = {"run_id": report.run_id, "candidates": len(report.impacts)}
+    elif action == "analyze_text_llm_first":
+        body = str(params.get("body", "")).strip()
+        if not body:
+            raise ValueError("Change request text is required")
+        source = str(params.get("design_document", "")).strip()
+        if not body.startswith("#"):
+            heading = "GUI Change Request"
+            body = f"# {heading}\n\n{body}\n"
+        if source:
+            body = f"{body.rstrip()}\n\n## Selected Design Document\n\n{source}\n"
+        change_path = store.root / "gui" / "change_request.md"
+        store.write_text(change_path, body)
+        report = analyze_change_llm_first(
+            store,
+            change_path,
+            yes=approved,
+            no_llm=bool(params.get("no_llm")),
             confirm=confirm,
         )
         result = {"run_id": report.run_id, "candidates": len(report.impacts)}
@@ -641,6 +773,162 @@ def _counts(store: LocalStore) -> dict[str, int]:
 def _latest_run_id(store: LocalStore) -> str | None:
     path = store.root / "latest_run"
     return path.read_text(encoding="utf-8").strip() if path.exists() else None
+
+
+def _latest_report_evidence_ids(store: LocalStore) -> list[str]:
+    try:
+        report = json.loads((latest_run_dir(store) / "report.json").read_text(encoding="utf-8"))
+    except ValueError:
+        return []
+    ids: set[str] = set()
+    for group in ("must_review", "should_review", "may_review"):
+        for impact in report.get(group, []):
+            ids.update(impact.get("evidence_ids", []))
+    return sorted(ids)
+
+
+def _source_rows(
+    project: Project,
+    file_name: str,
+    evidence: list[Evidence],
+    selected: set[str],
+) -> list[dict[str, Any]]:
+    path = _resolve_project_file(project, file_name)
+    if path is None or not _looks_text(path):
+        return []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except UnicodeDecodeError:
+        return []
+    evidence_by_line: dict[int, list[Evidence]] = {}
+    for item in evidence:
+        for line in range(item.source_location.line_start, item.source_location.line_end + 1):
+            evidence_by_line.setdefault(line, []).append(item)
+    wanted = _line_numbers_to_show(lines, evidence_by_line, selected)
+    return [
+        {
+            "line": line_no,
+            "text": lines[line_no - 1],
+            "highlight": any(
+                item.evidence_id in selected for item in evidence_by_line.get(line_no, [])
+            ),
+            "evidence_ids": [item.evidence_id for item in evidence_by_line.get(line_no, [])],
+        }
+        for line_no in wanted
+    ]
+
+
+def _chunk_rows(
+    chunks: list[Chunk],
+    evidence: list[Evidence],
+    selected: set[str],
+) -> list[dict[str, Any]]:
+    evidence_by_line: dict[int, list[Evidence]] = {}
+    for item in evidence:
+        for line in range(item.source_location.line_start, item.source_location.line_end + 1):
+            evidence_by_line.setdefault(line, []).append(item)
+    rows = []
+    for chunk in sorted(chunks, key=lambda item: item.line_start)[:80]:
+        highlight = any(
+            item.evidence_id in selected
+            for line in range(chunk.line_start, chunk.line_end + 1)
+            for item in evidence_by_line.get(line, [])
+        )
+        rows.append(
+            {
+                "line": chunk.line_start,
+                "text": chunk.text,
+                "highlight": highlight,
+                "evidence_ids": sorted(
+                    {
+                        item.evidence_id
+                        for line in range(chunk.line_start, chunk.line_end + 1)
+                        for item in evidence_by_line.get(line, [])
+                    }
+                ),
+            }
+        )
+    return rows
+
+
+def _dirty_cell_rows(cells: list[DirtyCell], selected: set[str]) -> list[dict[str, Any]]:
+    useful = [cell for cell in cells if cell.value not in (None, "")]
+    highlighted = [cell for cell in useful if cell.evidence_id in selected]
+    if highlighted:
+        sheet_names = {cell.sheet_name for cell in highlighted}
+        min_row = min(cell.row for cell in highlighted)
+        max_row = max(cell.row for cell in highlighted)
+        min_col = min(cell.column for cell in highlighted)
+        max_col = max(cell.column for cell in highlighted)
+        useful = [
+            cell
+            for cell in useful
+            if cell.sheet_name in sheet_names
+            and min_row - 4 <= cell.row <= max_row + 4
+            and min_col - 3 <= cell.column <= max_col + 3
+        ]
+    else:
+        useful = useful[:240]
+    return [
+        {
+            "sheet_name": cell.sheet_name,
+            "cell": cell.cell,
+            "row": cell.row,
+            "column": cell.column,
+            "value": cell.value,
+            "merged_range": cell.merged_range,
+            "comment": cell.comment,
+            "hyperlink": cell.hyperlink,
+            "hidden": cell.is_hidden_row or cell.is_hidden_col,
+            "highlight": cell.evidence_id in selected,
+            "evidence_ids": [cell.evidence_id],
+        }
+        for cell in sorted(useful, key=lambda item: (item.sheet_name, item.row, item.column))[:400]
+    ]
+
+
+def _line_numbers_to_show(
+    lines: list[str],
+    evidence_by_line: dict[int, list[Evidence]],
+    selected: set[str],
+) -> list[int]:
+    highlighted = [
+        line_no
+        for line_no, items in evidence_by_line.items()
+        if any(item.evidence_id in selected for item in items)
+    ]
+    if not highlighted:
+        return list(range(1, min(len(lines), 120) + 1))
+    wanted: set[int] = set()
+    for line_no in highlighted:
+        wanted.update(range(max(1, line_no - 4), min(len(lines), line_no + 4) + 1))
+    return sorted(wanted)
+
+
+def _resolve_project_file(project: Project, file_name: str) -> Path | None:
+    path = Path(file_name)
+    candidates = [path] if path.is_absolute() else [Path(project.path) / path, path]
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved.is_file():
+            return resolved
+    return None
+
+
+def _looks_text(path: Path) -> bool:
+    return path.suffix.lower() in {
+        ".md",
+        ".txt",
+        ".csv",
+        ".tsv",
+        ".json",
+        ".jsonl",
+        ".yml",
+        ".yaml",
+        ".sql",
+        ".ddl",
+        ".openapi",
+    }
 
 
 def _health_check(store: LocalStore) -> dict[str, Any] | None:

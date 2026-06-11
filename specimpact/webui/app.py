@@ -27,6 +27,7 @@ from specimpact.webui.services import (
     aliases_data,
     copy_demo,
     demo_source,
+    design_documents_data,
     dirty_excel_data,
     evidence_data,
     execute,
@@ -294,6 +295,10 @@ def create_app(
     @app.get("/api/projects/{project_id}/evidence")
     def evidence(project_id: str, evidence_id: list[str] | None = Query(None)):
         return {"evidence": evidence_data(_project(app, project_id), evidence_id)}
+
+    @app.get("/api/projects/{project_id}/design-documents")
+    def design_documents(project_id: str, evidence_id: list[str] | None = Query(None)):
+        return design_documents_data(_project(app, project_id), evidence_id)
 
     @app.get("/api/projects/{project_id}/report")
     def report(project_id: str):
