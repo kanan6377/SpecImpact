@@ -454,7 +454,7 @@ async function loadReport() {
   $("#report").innerHTML = ["must_review", "should_review", "may_review", "hidden"]
     .map(
       (group) =>
-        `<section class="priority"><h3>${group} (${report[group].length})</h3>${report[group]
+        `<section class="priority priority-${group}"><h3>${group} (${report[group].length})</h3>${report[group]
           .map(
             (item, index) =>
               `<details ${index === 0 ? "open" : ""}><summary>${escapeHtml(
@@ -681,7 +681,7 @@ function graphStyles() {
     {
       selector: "node",
       style: {
-        "background-color": "#2563eb",
+        "background-color": "#4f46e5",
         "border-color": "#ffffff",
         "border-width": 2,
         color: "#163052",
@@ -703,34 +703,45 @@ function graphStyles() {
     },
     {
       selector: 'node[kind="entity"]',
-      style: { "background-color": "#0f766e", shape: "ellipse" },
+      style: { "background-color": "#0891b2", shape: "ellipse" },
     },
     {
       selector: 'node[kind="reference"]',
-      style: { "background-color": "#64748b", shape: "diamond" },
+      style: { "background-color": "#94a3b8", shape: "diamond" },
     },
     {
       selector: "edge",
       style: {
         "curve-style": "bezier",
         "line-color": "#cbd5e1",
-        opacity: 0.16,
+        opacity: 0.2,
         "target-arrow-color": "#cbd5e1",
         "target-arrow-shape": "triangle",
         width: 1.4,
       },
     },
     {
+      selector: 'edge[status="unconfirmed"]',
+      style: {
+        "line-color": "#f59e0b",
+        "line-style": "dashed",
+        "line-dash-pattern": [7, 4],
+        opacity: 0.4,
+        "target-arrow-color": "#f59e0b",
+      },
+    },
+    {
       selector: 'edge[status="confirmed"]',
-      style: { "line-color": "#0f766e", opacity: 0.28, "target-arrow-color": "#0f766e", width: 2 },
+      style: { "line-color": "#059669", opacity: 0.4, "target-arrow-color": "#059669", width: 2 },
     },
     {
       selector: 'edge[status="rejected"]',
       style: {
-        "line-color": "#dc2626",
+        "line-color": "#cbd5e1",
         "line-style": "dashed",
-        opacity: 0.34,
-        "target-arrow-color": "#dc2626",
+        "line-dash-pattern": [3, 4],
+        opacity: 0.3,
+        "target-arrow-color": "#cbd5e1",
       },
     },
     {
