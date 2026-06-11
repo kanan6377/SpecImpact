@@ -297,7 +297,6 @@ SpecImpact は Excel の見た目を完全理解するツールではありま�
 - [リリース手順](docs/release.md)
 - [コントリビューション](CONTRIBUTING.md)
 - [セキュリティ](SECURITY.md)
-- [GUI redesign sandbox](examples/gui_redesign_sandbox/README_JA.md)
 
 ## GitHub 説明文の推奨
 

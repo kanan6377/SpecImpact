@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpecImpact Console — UX リデザイン・プロトタイプ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="css/console.css" />
+</head>
+<body>
+  <div id="app-shell">
+    <!-- ================= Sidebar ================= -->
+    <aside id="sidebar" aria-label="メインナビゲーション">
+      <div class="brand">
+        <div class="brand-logo">SI</div>
+        <div>
+          <div class="brand-name">SpecImpact</div>
+          <div class="brand-sub">LOCAL CONSOLE</div>
+        </div>
+      </div>
+
+      <div class="nav-section-label">ワークフロー</div>
+      <button class="nav-item active" data-view="dashboard"><i class="fa-solid fa-gauge-high"></i>ダッシュボード</button>
+      <button class="nav-item" data-view="impacts"><i class="fa-solid fa-bolt"></i>影響レビュー<span class="nav-badge" id="badge-impacts">8</span></button>
+      <button class="nav-item" data-view="graph"><i class="fa-solid fa-circle-nodes"></i>Graph Explorer</button>
+      <button class="nav-item" data-view="aliases"><i class="fa-solid fa-arrows-left-right"></i>Alias レビュー<span class="nav-badge" id="badge-aliases">3</span></button>
+
+      <div class="nav-section-label">運用</div>
+      <button class="nav-item" data-view="jobs"><i class="fa-solid fa-list-check"></i>ジョブ履歴</button>
+      <button class="nav-item" data-view="settings"><i class="fa-solid fa-gear"></i>設定</button>
+
+      <div class="sidebar-footer">
+        <div class="privacy-card">
+          <div class="pc-title"><i class="fa-solid fa-shield-halved"></i>Privacy Doctor</div>
+          <div class="kv"><span>Bind</span><b>127.0.0.1</b></div>
+          <div class="kv"><span>Backend</span><b>local JSONL</b></div>
+          <div class="kv"><span>外部送信</span><b>承認制</b></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ================= Main ================= -->
+    <div id="main">
+      <header id="topbar">
+        <button class="project-picker" data-demo-toast="プロトタイプのため案件切替はモックです" aria-label="案件を切り替える">
+          <span class="dot"></span>
+          カード入会システム 改修案件
+          <i class="fa-solid fa-chevron-down"></i>
+        </button>
+        <span class="topbar-chip chip-llm"><i class="fa-solid fa-wand-magic-sparkles"></i>codex / default</span>
+        <span class="topbar-chip chip-local"><i class="fa-solid fa-lock"></i>127.0.0.1 ONLY</span>
+        <div class="spacer"></div>
+        <button class="btn btn-ghost btn-sm" data-demo-toast="プロトタイプのため取り込みはモックです（本実装では managed upload に接続）"><i class="fa-solid fa-file-import"></i>設計書を取り込む</button>
+        <button class="btn btn-primary btn-sm" id="btn-new-analyze"><i class="fa-solid fa-bolt"></i>変更影響を分析</button>
+      </header>
+
+      <div id="views">
+        <!-- ===== Dashboard ===== -->
+        <section class="view active" id="view-dashboard">
+          <div class="view-header">
+            <div class="view-kicker">Overview</div>
+            <h1 class="view-title">ダッシュボード</h1>
+            <p class="view-desc">設計書 → evidence graph → 変更影響レビューまでの進捗を一目で確認できます。LLM の出力は承認するまで確定されません。</p>
+          </div>
+
+          <div class="stat-grid" id="stat-grid"></div>
+
+          <div class="dash-cols">
+            <div class="card card-pad">
+              <h2 class="section-title"><i class="fa-solid fa-route"></i>次にやること</h2>
+              <div class="flow-steps">
+                <div class="flow-step done">
+                  <div class="flow-num"><i class="fa-solid fa-check"></i></div>
+                  <div class="flow-body">
+                    <b>設計書の取り込み</b>
+                    <p>8 workbooks をセル単位 evidence 付きで取り込み済み(dirty-excel モード)。</p>
+                  </div>
+                </div>
+                <div class="flow-step done">
+                  <div class="flow-num"><i class="fa-solid fa-check"></i></div>
+                  <div class="flow-body">
+                    <b>変更要求の分析</b>
+                    <p>「利用限度額上限変更」を Change Atom に分解し、影響候補 9 件を生成しました。</p>
+                  </div>
+                </div>
+                <div class="flow-step">
+                  <div class="flow-num">3</div>
+                  <div class="flow-body">
+                    <b>must_review 4 件のレビュー <span class="prio-badge prio-must">must_review</span></b>
+                    <p>直接 evidence と graph path を持つ候補です。最優先で確認してください。</p>
+                    <button class="btn btn-primary btn-sm" data-goto="impacts"><i class="fa-solid fa-arrow-right"></i>影響レビューを開く</button>
+                  </div>
+                </div>
+                <div class="flow-step">
+                  <div class="flow-num">4</div>
+                  <div class="flow-body">
+                    <b>Alias 候補 3 件の確認</b>
+                    <p>「利用限度額 ≒ ご利用可能枠」など、人間の判断が必要な表記揺れ候補があります。</p>
+                    <button class="btn btn-ghost btn-sm" data-goto="aliases">Alias レビューを開く</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="card card-pad" style="margin-bottom:16px;">
+                <h2 class="section-title"><i class="fa-solid fa-heart-pulse"></i>Project Pulse</h2>
+                <div class="pulse-row"><i class="fa-solid fa-circle-check ok"></i><span class="lbl">Evidence graph</span><span class="val">構築済み (126 evidence)</span></div>
+                <div class="pulse-row"><i class="fa-solid fa-circle-check ok"></i><span class="lbl">最新 run</span><span class="val">14:32 analyze</span></div>
+                <div class="pulse-row"><i class="fa-solid fa-triangle-exclamation warn"></i><span class="lbl">未確定 relation</span><span class="val">2 件</span></div>
+                <div class="pulse-row"><i class="fa-solid fa-triangle-exclamation warn"></i><span class="lbl">外部 LLM 送信</span><span class="val">job ごとに承認</span></div>
+              </div>
+              <div class="card card-pad">
+                <h2 class="section-title"><i class="fa-solid fa-chart-pie"></i>影響候補の内訳</h2>
+                <div style="height:190px;"><canvas id="impact-chart"></canvas></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===== Impact Review Board ===== -->
+        <section class="view" id="view-impacts">
+          <div class="view-header">
+            <div class="view-kicker">Impact Review Board</div>
+            <h1 class="view-title">影響レビュー</h1>
+            <p class="view-desc">出力は「影響確定」ではなく「レビュー候補」です。<b>must_review</b> は直接 evidence と graph path を持つ候補で、LLM の主張だけでは must_review になりません。</p>
+          </div>
+
+          <div class="change-banner">
+            <div class="cb-icon"><i class="fa-solid fa-code-pull-request"></i></div>
+            <div style="flex:1;">
+              <div class="cb-id">CHG-2026-0042 · LLM-first · 2026-06-10 14:32</div>
+              <div class="cb-title">利用限度額上限変更</div>
+              <div class="cb-raw">「入会申込画面の利用限度額上限を999万円から9999万円に変更する」</div>
+              <div class="cb-atoms">
+                <span class="atom-chip">
+                  <i class="fa-solid fa-atom" style="color:#4f46e5;"></i>
+                  利用限度額 <span class="arr">上限</span> <b>9,990,000</b> <span class="arr">→</span> <span class="to">99,990,000</span>
+                  <span class="arr">| 7桁→8桁</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="board-toolbar">
+            <div class="search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="search" id="impact-search" placeholder="候補名・理由・ファイル名で検索…" aria-label="影響候補を検索" />
+            </div>
+            <div class="filter-pills" id="impact-filters"></div>
+          </div>
+
+          <div class="impact-list" id="impact-list"></div>
+        </section>
+
+        <!-- ===== Graph Explorer ===== -->
+        <section class="view view-graph" id="view-graph">
+          <div class="graph-layout">
+            <div class="graph-canvas-wrap">
+              <svg id="graph-svg" role="img" aria-label="Evidence graph の可視化"></svg>
+              <div class="graph-toolbar">
+                <div class="search-box">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                  <input type="search" id="graph-search" placeholder="ノードを検索…" aria-label="ノードを検索" />
+                </div>
+                <button class="btn btn-ghost btn-sm" id="btn-graph-impact"><i class="fa-solid fa-bolt"></i>影響パスを強調</button>
+                <button class="btn btn-ghost btn-sm" id="btn-graph-reset"><i class="fa-solid fa-rotate-left"></i>リセット</button>
+              </div>
+              <div class="graph-legend">
+                <span class="legend-item"><span class="legend-swatch" style="background:#4f46e5;"></span>Artifact</span>
+                <span class="legend-item"><span class="legend-swatch" style="background:#0891b2;"></span>Entity</span>
+                <span class="legend-item"><span class="legend-swatch" style="background:#94a3b8;"></span>Document</span>
+                <span class="legend-item"><span class="legend-line" style="background:#10b981;"></span>confirmed</span>
+                <span class="legend-item"><span class="legend-line" style="background:#f59e0b;"></span>unconfirmed</span>
+                <span class="legend-item"><span class="legend-line" style="background:#cbd5e1;"></span>rejected</span>
+              </div>
+            </div>
+            <aside class="graph-side" id="graph-side" aria-label="選択中のノード詳細">
+              <div class="gs-empty">
+                <i class="fa-solid fa-hand-pointer"></i>
+                ノードをクリックすると<br />relation と evidence をレビューできます
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <!-- ===== Alias Review ===== -->
+        <section class="view" id="view-aliases">
+          <div class="view-header">
+            <div class="view-kicker">Alias Review</div>
+            <h1 class="view-title">Alias レビュー</h1>
+            <p class="view-desc">「利用限度額 / requestedCreditLimit / REQUESTED_CREDIT_LIMIT」のような表記揺れ候補を、evidence quote と LLM 判定付きでレビューします。<b>same</b> と確定した候補だけが影響分析の経路として使われます。</p>
+          </div>
+          <div id="alias-list"></div>
+        </section>
+
+        <!-- ===== Jobs ===== -->
+        <section class="view" id="view-jobs">
+          <div class="view-header">
+            <div class="view-kicker">Operations</div>
+            <h1 class="view-title">ジョブ履歴</h1>
+            <p class="view-desc">更新処理は案件ごとの queue で直列実行されます。外部 LLM 送信を伴う job は実行前に承認が必要です。</p>
+          </div>
+          <div class="card" style="overflow-x:auto;">
+            <table class="jobs-table" id="jobs-table">
+              <thead>
+                <tr><th>Job ID</th><th>種別</th><th>対象</th><th>状態</th><th>外部送信</th><th>時刻</th><th>所要</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ===== Settings ===== -->
+        <section class="view" id="view-settings">
+          <div class="view-header">
+            <div class="view-kicker">Settings / Privacy</div>
+            <h1 class="view-title">設定</h1>
+            <p class="view-desc">LLM provider ・embeddings・backend の設定。外部送信を伴う設定は常に明示され、job ごとに承認が必要です。</p>
+          </div>
+          <div class="dash-cols">
+            <div class="card card-pad">
+              <h2 class="section-title"><i class="fa-solid fa-wand-magic-sparkles"></i>LLM Provider</h2>
+              <div class="pulse-row"><i class="fa-solid fa-circle-check ok"></i><span class="lbl">Provider</span><span class="val mono">codex</span></div>
+              <div class="pulse-row"><i class="fa-solid fa-circle-check ok"></i><span class="lbl">Model</span><span class="val mono">default</span></div>
+              <div class="pulse-row"><i class="fa-solid fa-triangle-exclamation warn"></i><span class="lbl">外部送信</span><span class="val">job ごとに承認モーダル</span></div>
+              <div class="pulse-row"><i class="fa-solid fa-circle-check ok"></i><span class="lbl">Sandbox</span><span class="val">ephemeral / read-only</span></div>
+              <div style="margin-top:12px;"><button class="btn btn-ghost btn-sm" data-demo-toast="プロトタイプのため provider 変更はモックです"><i class="fa-solid fa-rotate"></i>provider を変更</button></div>
+            </div>
+            <div>
+              <div class="card card-pad" style="margin-bottom:16px;">
+                <h2 class="section-title"><i class="fa-solid fa-database"></i>Backend / Embeddings</h2>
+                <div class="pulse-row"><i class="fa-solid fa-circle-check ok"></i><span class="lbl">Backend</span><span class="val mono">local JSONL</span></div>
+                <div class="pulse-row"><i class="fa-solid fa-circle-check ok"></i><span class="lbl">Embeddings</span><span class="val mono">local</span></div>
+                <div class="pulse-row"><i class="fa-solid fa-circle-check ok"></i><span class="lbl">Bind</span><span class="val mono">127.0.0.1</span></div>
+              </div>
+              <div class="card card-pad">
+                <h2 class="section-title"><i class="fa-solid fa-shield-halved"></i>保存しないもの</h2>
+                <div class="pulse-row"><i class="fa-solid fa-ban" style="color:var(--c-must);"></i><span class="lbl">API key / prompt 本文 / raw response</span><span class="val">保存しない</span></div>
+                <div class="pulse-row"><i class="fa-solid fa-circle-check ok"></i><span class="lbl">graph JSONL / evidence quote / hash</span><span class="val">保存する</span></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="demo-ribbon">
+    <i class="fa-solid fa-flask"></i>
+    <span>これは <b>SpecImpact GUI リデザイン提案</b>のインタラクティブ・プロトタイプです(合成データ)。<a href="index.html" target="_top">提案の全体像はこちら →</a></span>
+    <button class="close-btn" onclick="this.parentElement.remove()" aria-label="閉じる"><i class="fa-solid fa-xmark"></i></button>
+  </div>
+
+  <div id="toast" role="status"><i class="fa-solid fa-circle-check"></i><span id="toast-msg"></span></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/console.js"></script>
+</body>
+</html>

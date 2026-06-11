@@ -1,0 +1,14 @@
+<!doctype html>
+<html><body><script>
+const iframe = document.createElement("iframe");
+iframe.src = "../preview-patched.html?page=impact-board";
+iframe.style.cssText = "width:1100px;height:600px;border:0;";
+document.body.appendChild(iframe);
+setTimeout(() => {
+  try {
+    const doc = iframe.contentDocument;
+    console.log("TOAST: " + (doc.querySelector("#toast")?.textContent || "(empty)"));
+    console.log("HTML: " + (doc.querySelector("#impact-decisions")?.innerHTML || "(empty)").slice(0, 300));
+  } catch (e) { console.log("FAIL: " + e.message); }
+}, 4500);
+</script></body></html>

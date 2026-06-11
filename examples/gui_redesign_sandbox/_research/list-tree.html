@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html><body><script>
+fetch("https://api.github.com/repos/kanan6377/SpecImpact/git/trees/main?recursive=1")
+  .then(r => r.json())
+  .then(j => {
+    const paths = j.tree.map(t => t.path);
+    const interesting = paths.filter(p =>
+      /gui|static|template|\.html|\.css|\.js|webapp|server/i.test(p));
+    console.log("TOTAL:" + paths.length);
+    interesting.forEach(p => console.log("HIT: " + p));
+    // also log top-level of specimpact/
+    paths.filter(p => p.startsWith("specimpact/") && p.split("/").length === 2)
+      .forEach(p => console.log("PKG: " + p));
+  })
+  .catch(e => console.log("ERR " + e));
+</script></body></html>

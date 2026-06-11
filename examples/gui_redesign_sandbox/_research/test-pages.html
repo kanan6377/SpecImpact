@@ -1,0 +1,24 @@
+<!doctype html>
+<html><body><script>
+const pages = ["analyze", "impact-board", "aliases", "dirty-excel", "jobs"];
+let done = 0;
+pages.forEach((page, i) => {
+  const iframe = document.createElement("iframe");
+  iframe.src = "../preview-patched.html?page=" + page;
+  iframe.style.cssText = "width:1100px;height:600px;border:0;";
+  document.body.appendChild(iframe);
+  setTimeout(() => {
+    try {
+      const doc = iframe.contentDocument;
+      const checks = {
+        "analyze": () => "priority sections=" + doc.querySelectorAll(".priority").length + " colored=" + doc.querySelectorAll(".priority-must_review").length,
+        "impact-board": () => "decision rows=" + doc.querySelectorAll("#impact-decisions tbody tr").length + " prio pills=" + doc.querySelectorAll(".status.must_review").length,
+        "aliases": () => "candidate rows=" + doc.querySelectorAll("#aliases-result tbody tr").length + " same-group h3=" + (doc.querySelector("#aliases-result h3")?.textContent || "none"),
+        "dirty-excel": () => "proposals=" + doc.querySelectorAll("#dirty-proposals details").length + " regions=" + doc.querySelectorAll("#dirty-regions details").length,
+        "jobs": () => "jobs=" + doc.querySelectorAll("#jobs-list .job").length + " failed-hint=" + (doc.querySelector("#jobs-list")?.textContent.includes("Next:") ? "yes" : "no"),
+      };
+      console.log(page.toUpperCase() + " :: " + checks[page]());
+    } catch (e) { console.log(page + " FAIL: " + e.message); }
+  }, 4000 + i * 200);
+});
+</script></body></html>

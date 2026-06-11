@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpecImpact 改善提案 — スターを集めるOSSにするための広報・UX・実装プラン</title>
+  <meta name="description" content="SIerの汚いExcel設計書をLLM+GraphRAGで変更影響レビューに変えるOSS『SpecImpact』を、スターを集めるプロダクトに育てるための広報戦略・GUIリデザイン・実装改善の提案。" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Inter", "Noto Sans JP", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"],
+          },
+          colors: {
+            ink: "#101828",
+            brand: { 50: "#eef2ff", 100: "#e0e7ff", 500: "#6366f1", 600: "#4f46e5", 700: "#4338ca" },
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    .grad-text { background: linear-gradient(120deg, #4f46e5, #9333ea, #db2777); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .hero-grid { background-image: radial-gradient(circle at 1px 1px, #e4e7ec 1px, transparent 0); background-size: 28px 28px; }
+    .card-hover { transition: transform .18s ease, box-shadow .18s ease; }
+    .card-hover:hover { transform: translateY(-3px); box-shadow: 0 16px 40px -12px rgba(16,24,40,.16); }
+  </style>
+</head>
+<body class="font-sans text-ink bg-white antialiased">
+
+  <!-- ===== Nav ===== -->
+  <header class="sticky top-0 z-40 bg-white/85 backdrop-blur border-b border-gray-200">
+    <nav class="max-w-6xl mx-auto px-5 h-14 flex items-center gap-6" aria-label="グローバルナビゲーション">
+      <a href="#hero-section" class="flex items-center gap-2 font-bold">
+        <span class="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-600 to-purple-600 text-white grid place-items-center text-xs font-extrabold">SI</span>
+        SpecImpact <span class="text-xs font-semibold text-brand-600 bg-brand-50 rounded-full px-2 py-0.5">改善提案</span>
+      </a>
+      <div class="hidden md:flex items-center gap-5 text-sm font-medium text-gray-600 ml-auto">
+        <a href="#diagnosis-section" class="hover:text-ink">現状診断</a>
+        <a href="#ux-section" class="hover:text-ink">GUI/UX</a>
+        <a href="#growth-section" class="hover:text-ink">広報戦略</a>
+        <a href="#impl-section" class="hover:text-ink">実装改善</a>
+        <a href="console.html" class="px-3.5 py-1.5 rounded-lg bg-brand-600 text-white font-semibold hover:bg-brand-700">
+          <i class="fa-solid fa-flask mr-1.5"></i>新GUIデモ
+        </a>
+      </div>
+    </nav>
+  </header>
+
+  <!-- ===== Hero ===== -->
+  <section id="hero-section" class="hero-grid">
+    <div class="max-w-6xl mx-auto px-5 pt-16 pb-14 md:pt-24 md:pb-20">
+      <p class="font-mono text-xs font-semibold text-brand-600 tracking-widest uppercase mb-4">
+        github.com/kanan6377/SpecImpact — Growth & UX Proposal
+      </p>
+      <h1 class="text-4xl md:text-[3.4rem] font-extrabold leading-[1.15] tracking-tight max-w-4xl">
+        アイディアはそのまま。<br />
+        <span class="grad-text">「刺さる伝え方」と「触りたくなるUX」</span>で<br class="hidden md:block" />
+        スターが集まるOSSへ。
+      </h1>
+      <p class="mt-6 text-gray-600 text-base md:text-lg leading-relaxed max-w-3xl">
+        SpecImpact のコア — <b>「SIerの汚いExcel設計書を evidence 付きの変更影響レビューに変える」</b> — は、
+        世界的に見ても珍しい強いアイディアです。足りないのは技術ではなく、
+        <b>10秒で価値が伝わる広報</b>と<b>30秒で「すごい」と思わせるGUI</b>。このページはその具体的な改善プランです。
+      </p>
+      <div class="mt-8 flex flex-wrap gap-3">
+        <a href="console.html" class="px-6 py-3 rounded-xl bg-brand-600 text-white font-bold shadow-lg shadow-brand-600/25 hover:bg-brand-700 transition">
+          <i class="fa-solid fa-flask mr-2"></i>リデザイン版GUIを触ってみる
+        </a>
+        <a href="strategy.html" class="px-6 py-3 rounded-xl border border-gray-300 font-bold text-gray-700 hover:border-gray-400 bg-white transition">
+          <i class="fa-solid fa-map mr-2"></i>90日成長プレイブック
+        </a>
+      </div>
+      <div class="mt-10 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl">
+        <div class="bg-white border border-gray-200 rounded-xl p-4"><div class="text-2xl font-extrabold text-brand-600">10秒</div><div class="text-xs text-gray-500 mt-1 font-medium">READMEで価値が伝わるまでの目標時間</div></div>
+        <div class="bg-white border border-gray-200 rounded-xl p-4"><div class="text-2xl font-extrabold text-brand-600">3分</div><div class="text-xs text-gray-500 mt-1 font-medium">インストール不要デモ体験の目標時間</div></div>
+        <div class="bg-white border border-gray-200 rounded-xl p-4"><div class="text-2xl font-extrabold text-brand-600">4本柱</div><div class="text-xs text-gray-500 mt-1 font-medium">広報チャネル(記事・動画・コミュニティ・英語圏)</div></div>
+        <div class="bg-white border border-gray-200 rounded-xl p-4"><div class="text-2xl font-extrabold text-brand-600">90日</div><div class="text-xs text-gray-500 mt-1 font-medium">スター獲得ロードマップの期間</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Diagnosis ===== -->
+  <section id="diagnosis-section" class="bg-gray-50 border-y border-gray-200">
+    <div class="max-w-6xl mx-auto px-5 py-16 md:py-20">
+      <p class="font-mono text-xs font-semibold text-brand-600 tracking-widest uppercase mb-3">01 — Diagnosis</p>
+      <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight">現状診断:アイディア S級、伝え方 C級</h2>
+      <p class="mt-4 text-gray-600 max-w-3xl leading-relaxed">リポジトリのREADME・GUIマニュアル・スクリーンショットを分析した結果、「中身は良いのに伝わらない」典型パターンが見つかりました。</p>
+
+      <div class="mt-10 grid md:grid-cols-2 gap-5">
+        <div class="bg-white rounded-2xl border border-gray-200 p-6">
+          <h3 class="font-bold text-lg flex items-center gap-2"><i class="fa-solid fa-circle-check text-emerald-500"></i>強み(変えない)</h3>
+          <ul class="mt-4 space-y-3 text-sm text-gray-600 leading-relaxed">
+            <li class="flex gap-3"><i class="fa-solid fa-star text-amber-400 mt-0.5"></i><span><b>唯一無二の課題設定</b> — 「結合セル・別紙参照・"同上" だらけの dirty Excel」を真正面から扱うOSSは世界でもほぼ存在しない</span></li>
+            <li class="flex gap-3"><i class="fa-solid fa-star text-amber-400 mt-0.5"></i><span><b>誠実な設計思想</b> — 「LLMの主張だけで must_review にしない」verifier の安全側設計は、エンタープライズで信頼される最大の差別化要素</span></li>
+            <li class="flex gap-3"><i class="fa-solid fa-star text-amber-400 mt-0.5"></i><span><b>ローカル完結 & 承認制の外部送信</b> — 秘匿性の高いSIer案件にそのまま持ち込める</span></li>
+            <li class="flex gap-3"><i class="fa-solid fa-star text-amber-400 mt-0.5"></i><span><b>Obsidian 連携・golden test</b> など、細部の作り込みが既に丁寧</span></li>
+          </ul>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-200 p-6">
+          <h3 class="font-bold text-lg flex items-center gap-2"><i class="fa-solid fa-triangle-exclamation text-rose-500"></i>スターを阻む5つのボトルネック</h3>
+          <ul class="mt-4 space-y-3 text-sm text-gray-600 leading-relaxed">
+            <li class="flex gap-3"><span class="font-mono text-rose-500 font-bold">#1</span><span><b>READMEが「説明書」で「デモ」がない</b> — 最初の1スクロールにGIF・Before/Afterがなく、価値の証明まで遠い</span></li>
+            <li class="flex gap-3"><span class="font-mono text-rose-500 font-bold">#2</span><span><b>体験までの距離が長い</b> — clone → pip install → LLM設定が必要。スターの大半は「インストール前」に決まる</span></li>
+            <li class="flex gap-3"><span class="font-mono text-rose-500 font-bold">#3</span><span><b>GUIの情報設計が弱い</b> — グラフのラベル衝突・evidence の埋没・優先度の視覚的弱さで「すごさ」が伝わらない</span></li>
+            <li class="flex gap-3"><span class="font-mono text-rose-500 font-bold">#4</span><span><b>日本語のみで市場が1/20</b> — "dirty Excel spec" は海外SI・金融・製造でも刺さるのに英語導線ゼロ</span></li>
+            <li class="flex gap-3"><span class="font-mono text-rose-500 font-bold">#5</span><span><b>ストーリーの主語がツール</b> — 「機能一覧」ではなく「あの地獄の影響調査が変わる」という読者の物語になっていない</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== UX ===== -->
+  <section id="ux-section">
+    <div class="max-w-6xl mx-auto px-5 py-16 md:py-20">
+      <p class="font-mono text-xs font-semibold text-brand-600 tracking-widest uppercase mb-3">02 — GUI / UX Redesign</p>
+      <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight">GUIリデザイン:<span class="grad-text">「レビューの作業台」</span>として再設計</h2>
+      <p class="mt-4 text-gray-600 max-w-3xl leading-relaxed">
+        現GUIの最大の問題は「機能が画面に並んでいるだけ」で、ユーザーの仕事(=影響候補を根拠付きで潰していく)に沿っていないこと。
+        実際に動くプロトタイプを作りました。<b>そのまま実装の設計図として使えます。</b>
+      </p>
+
+      <div class="mt-8 rounded-2xl border border-gray-200 overflow-hidden shadow-xl shadow-gray-200/60">
+        <div class="bg-gray-800 px-4 py-2.5 flex items-center gap-2">
+          <span class="w-3 h-3 rounded-full bg-rose-400"></span><span class="w-3 h-3 rounded-full bg-amber-400"></span><span class="w-3 h-3 rounded-full bg-emerald-400"></span>
+          <span class="ml-3 text-xs text-gray-400 font-mono">localhost:8765 — SpecImpact Console (Redesign Prototype)</span>
+          <a href="console.html" class="ml-auto text-xs font-semibold text-indigo-300 hover:text-white"><i class="fa-solid fa-up-right-from-square mr-1"></i>フルスクリーンで開く</a>
+        </div>
+        <iframe src="console.html" title="SpecImpact Console リデザイン・プロトタイプ" class="w-full bg-white" style="height: 620px; border: 0;"></iframe>
+      </div>
+
+      <div class="mt-10 grid md:grid-cols-3 gap-5">
+        <div class="card-hover bg-white rounded-2xl border border-gray-200 p-6">
+          <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 grid place-items-center text-lg mb-4"><i class="fa-solid fa-bolt"></i></div>
+          <h3 class="font-bold">影響レビューを主役に</h3>
+          <p class="mt-2 text-sm text-gray-600 leading-relaxed">機能別メニューではなく <b>must / should / may のトリアージボード</b>を中心に。1候補=1カードで「根拠 → graph path → 必要アクション → 判断ボタン」が完結。Jiraのバックログを消化する感覚でレビューできます。</p>
+        </div>
+        <div class="card-hover bg-white rounded-2xl border border-gray-200 p-6">
+          <div class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 grid place-items-center text-lg mb-4"><i class="fa-solid fa-quote-left"></i></div>
+          <h3 class="font-bold">Evidence を常に1クリック以内に</h3>
+          <p class="mt-2 text-sm text-gray-600 leading-relaxed">SpecImpactの魂は「引用元セルまで遡れる」こと。<b>ファイル名+セル範囲+引用文をカード内に直接埋め込み</b>、グラフでもエッジ選択で即表示。「LLMの判定」は作業仮説として明確に分離表示します。</p>
+        </div>
+        <div class="card-hover bg-white rounded-2xl border border-gray-200 p-6">
+          <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 grid place-items-center text-lg mb-4"><i class="fa-solid fa-circle-nodes"></i></div>
+          <h3 class="font-bold">グラフは「読める」密度に</h3>
+          <p class="mt-2 text-sm text-gray-600 leading-relaxed">力学レイアウト+衝突回避+ラベルの白フチでラベル衝突を解消。<b>「影響パスを強調」ボタン</b>で変更要求に関係するサブグラフだけを浮かび上がらせ、relation の confirm/reject をその場で実行できます。</p>
+        </div>
+        <div class="card-hover bg-white rounded-2xl border border-gray-200 p-6">
+          <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 grid place-items-center text-lg mb-4"><i class="fa-solid fa-route"></i></div>
+          <h3 class="font-bold">「次にやること」ガイド</h3>
+          <p class="mt-2 text-sm text-gray-600 leading-relaxed">ダッシュボードを統計の羅列から<b>ステップ式の導線</b>に変更。「取り込み済み → 分析済み → must_review 4件が未レビュー」と、いま何をすべきかが常に明確。未処理件数はナビにバッジ表示。</p>
+        </div>
+        <div class="card-hover bg-white rounded-2xl border border-gray-200 p-6">
+          <div class="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 grid place-items-center text-lg mb-4"><i class="fa-solid fa-shield-halved"></i></div>
+          <h3 class="font-bold">プライバシーを常時可視化</h3>
+          <p class="mt-2 text-sm text-gray-600 leading-relaxed">「127.0.0.1 ONLY」「外部送信は承認制」はSpecImpact最大のセールスポイント。設定の奥ではなく<b>サイドバー常設の Privacy Doctor カード</b>とトップバーのチップで常に見せます。</p>
+        </div>
+        <div class="card-hover bg-white rounded-2xl border border-gray-200 p-6">
+          <div class="w-10 h-10 rounded-xl bg-cyan-50 text-cyan-600 grid place-items-center text-lg mb-4"><i class="fa-solid fa-palette"></i></div>
+          <h3 class="font-bold">統一デザイントークン</h3>
+          <p class="mt-2 text-sm text-gray-600 leading-relaxed">must=赤 / should=橙 / may=青、confirmed=緑 / unconfirmed=橙 / rejected=灰 の<b>セマンティックカラーを全画面で統一</b>。Inter + Noto Sans JP + JetBrains Mono の3書体で「コード/ID」と「説明文」を視覚的に分離。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Growth ===== -->
+  <section id="growth-section" class="bg-ink text-white">
+    <div class="max-w-6xl mx-auto px-5 py-16 md:py-20">
+      <p class="font-mono text-xs font-semibold text-indigo-400 tracking-widest uppercase mb-3">03 — Growth Strategy</p>
+      <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight">広報戦略:スターは「共感 → 体験 → 拡散」で生まれる</h2>
+      <p class="mt-4 text-gray-400 max-w-3xl leading-relaxed">機能を宣伝するのではなく、「Excel設計書の影響調査で消耗した経験」への共感から入る。要点は4つです(詳細は<a href="strategy.html" class="text-indigo-300 underline underline-offset-2">90日プレイブック</a>へ)。</p>
+
+      <div class="mt-10 grid md:grid-cols-2 gap-5">
+        <div class="bg-white/5 border border-white/10 rounded-2xl p-6">
+          <div class="flex items-center gap-3 mb-3">
+            <span class="font-mono text-indigo-400 font-bold">柱1</span>
+            <h3 class="font-bold text-lg">README を「30秒の映画予告編」に</h3>
+          </div>
+          <ul class="space-y-2 text-sm text-gray-300 leading-relaxed">
+            <li><i class="fa-solid fa-check text-indigo-400 mr-2"></i>冒頭に <b>15秒GIF</b>:dirty Excel → 影響候補カード → セル引用、の流れだけ見せる</li>
+            <li><i class="fa-solid fa-check text-indigo-400 mr-2"></i>1行キャッチ:<span class="font-mono text-xs bg-white/10 rounded px-2 py-0.5">「その仕様変更、どこに波及する?」をExcel設計書のまま答えるツール</span></li>
+            <li><i class="fa-solid fa-check text-indigo-400 mr-2"></i>Before/After 表:「3日かかる目視grep」vs「evidence付き候補リスト」</li>
+            <li><i class="fa-solid fa-check text-indigo-400 mr-2"></i>英語README(README.en.md)を同時整備し、トップにバッジで言語切替</li>
+          </ul>
+        </div>
+        <div class="bg-white/5 border border-white/10 rounded-2xl p-6">
+          <div class="flex items-center gap-3 mb-3">
+            <span class="font-mono text-indigo-400 font-bold">柱2</span>
+            <h3 class="font-bold text-lg">「インストール不要」の体験デモ</h3>
+          </div>
+          <ul class="space-y-2 text-sm text-gray-300 leading-relaxed">
+            <li><i class="fa-solid fa-check text-indigo-400 mr-2"></i>分析済みサンプル結果を静的サイト化した <b>ライブデモ</b>(本プロトタイプがその雛形)をGitHub Pagesで公開</li>
+            <li><i class="fa-solid fa-check text-indigo-400 mr-2"></i><span class="font-mono text-xs bg-white/10 rounded px-2 py-0.5">pipx run specimpact demo</span> で合成サンプル一発体験(LLM不要の --no-llm 経路)</li>
+            <li><i class="fa-solid fa-check text-indigo-400 mr-2"></i>PyPI 公開 + GitHub Codespaces バッジで「3分以内に動く」を保証</li>
+          </ul>
+        </div>
+        <div class="bg-white/5 border border-white/10 rounded-2xl p-6">
+          <div class="flex items-center gap-3 mb-3">
+            <span class="font-mono text-indigo-400 font-bold">柱3</span>
+            <h3 class="font-bold text-lg">「あるある」起点のコンテンツ発信</h3>
+          </div>
+          <ul class="space-y-2 text-sm text-gray-300 leading-relaxed">
+            <li><i class="fa-solid fa-check text-indigo-400 mr-2"></i>Qiita/Zenn:「結合セルと"同上"だらけのExcel設計書をLLMに読ませて影響調査を自動化した話」— 技術記事ではなく<b>体験記</b>として</li>
+            <li><i class="fa-solid fa-check text-indigo-400 mr-2"></i>X/Twitter:dirty Excel のスクショ + 解析結果のビフォーアフターを1枚画像で</li>
+            <li><i class="fa-solid fa-check text-indigo-400 mr-2"></i>発表枠:JJUG・DevelopersIO・社内SE系LT、JAWS等の「レガシー改善」文脈</li>
+            <li><i class="fa-solid fa-check text-indigo-400 mr-2"></i>Obsidianコミュニティへの逆輸入(Canvas出力はObsidianユーザーに刺さる)</li>
+          </ul>
+        </div>
+        <div class="bg-white/5 border border-white/10 rounded-2xl p-6">
+          <div class="flex items-center gap-3 mb-3">
+            <span class="font-mono text-indigo-400 font-bold">柱4</span>
+            <h3 class="font-bold text-lg">英語圏 & コミュニティ受け入れ態勢</h3>
+          </div>
+          <ul class="space-y-2 text-sm text-gray-300 leading-relaxed">
+            <li><i class="fa-solid fa-check text-indigo-400 mr-2"></i>Hacker News「Show HN: Impact analysis for messy Excel specs (common in Japanese SI)」— "日本のSI文化" 自体が良いフックになる</li>
+            <li><i class="fa-solid fa-check text-indigo-400 mr-2"></i>r/dataengineering, r/ExperiencedDevs, awesome-llm / awesome-graphrag リストへのPR</li>
+            <li><i class="fa-solid fa-check text-indigo-400 mr-2"></i><b>good first issue</b> を10本用意(ローダー追加・出力フォーマット等の独立タスク)</li>
+            <li><i class="fa-solid fa-check text-indigo-400 mr-2"></i>リリースノートを「物語形式」で書き、X とGitHub Releaseで毎回発信</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mt-8 text-center">
+        <a href="strategy.html" class="inline-block px-6 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-400 font-bold transition">
+          <i class="fa-solid fa-map mr-2"></i>週次タスクまで落とした90日プレイブックを見る
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Implementation ===== -->
+  <section id="impl-section" class="bg-gray-50 border-b border-gray-200">
+    <div class="max-w-6xl mx-auto px-5 py-16 md:py-20">
+      <p class="font-mono text-xs font-semibold text-brand-600 tracking-widest uppercase mb-3">04 — Implementation</p>
+      <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight">実装改善:スターに直結する順に</h2>
+      <p class="mt-4 text-gray-600 max-w-3xl leading-relaxed">「正しさ」より「最初の5分の体験」に投資します。優先度順のバックログです。</p>
+
+      <div class="mt-10 space-y-4">
+        <div class="bg-white rounded-xl border border-gray-200 p-5 flex flex-col md:flex-row md:items-center gap-4">
+          <span class="font-mono text-xs font-bold bg-rose-50 text-rose-600 rounded-md px-2.5 py-1 w-fit shrink-0">P0</span>
+          <div class="flex-1">
+            <h3 class="font-bold">`specimpact demo` コマンド + PyPI 公開</h3>
+            <p class="text-sm text-gray-600 mt-1 leading-relaxed">合成サンプルの ingest → analyze → GUI 起動までを1コマンドで。LLM 設定不要(--no-llm 経路)で確実に動く。「pip install specimpact && specimpact demo」がREADMEの最初のコードブロックになる。</p>
+          </div>
+          <span class="text-xs font-semibold text-gray-400 shrink-0">体験距離の短縮</span>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 p-5 flex flex-col md:flex-row md:items-center gap-4">
+          <span class="font-mono text-xs font-bold bg-rose-50 text-rose-600 rounded-md px-2.5 py-1 w-fit shrink-0">P0</span>
+          <div class="flex-1">
+            <h3 class="font-bold">GUIをこのプロトタイプの設計に刷新</h3>
+            <p class="text-sm text-gray-600 mt-1 leading-relaxed">影響レビューボード(カード型・優先度色・evidence埋め込み)/ 読めるグラフ(衝突回避・影響パス強調)/ ステップ式ダッシュボード。スクリーンショット映えがそのまま広報資産になる。</p>
+          </div>
+          <span class="text-xs font-semibold text-gray-400 shrink-0">「すごい」の瞬間を作る</span>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 p-5 flex flex-col md:flex-row md:items-center gap-4">
+          <span class="font-mono text-xs font-bold bg-amber-50 text-amber-600 rounded-md px-2.5 py-1 w-fit shrink-0">P1</span>
+          <div class="flex-1">
+            <h3 class="font-bold">HTML静的レポート出力(`specimpact report --format html`)</h3>
+            <p class="text-sm text-gray-600 mt-1 leading-relaxed">影響レビュー結果を単一HTMLで出力 → そのまま上司・顧客に共有できる。共有されたHTML自体がフッターの「Generated by SpecImpact」リンク経由で新規ユーザーを連れてくる、最強の自己増殖チャネル。</p>
+          </div>
+          <span class="text-xs font-semibold text-gray-400 shrink-0">バイラルループ</span>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 p-5 flex flex-col md:flex-row md:items-center gap-4">
+          <span class="font-mono text-xs font-bold bg-amber-50 text-amber-600 rounded-md px-2.5 py-1 w-fit shrink-0">P1</span>
+          <div class="flex-1">
+            <h3 class="font-bold">英語化(README.en / GUI i18n / サンプルの英語版)</h3>
+            <p class="text-sm text-gray-600 mt-1 leading-relaxed">"messy Excel specs" は海外でも普遍的な課題。GUI文言は辞書ファイル方式で日英切替を実装し、英語の合成サンプル(注文管理システム等)を1セット追加する。</p>
+          </div>
+          <span class="text-xs font-semibold text-gray-400 shrink-0">市場を20倍に</span>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 p-5 flex flex-col md:flex-row md:items-center gap-4">
+          <span class="font-mono text-xs font-bold bg-blue-50 text-blue-600 rounded-md px-2.5 py-1 w-fit shrink-0">P2</span>
+          <div class="flex-1">
+            <h3 class="font-bold">CI バッジ・GitHub Actions・Codespaces 対応</h3>
+            <p class="text-sm text-gray-600 mt-1 leading-relaxed">pytest / ruff / release-check を Actions 化してバッジ表示。devcontainer.json を追加し「Open in Codespaces」でブラウザだけで試せるように。信頼感の演出はスターの転換率を上げる。</p>
+          </div>
+          <span class="text-xs font-semibold text-gray-400 shrink-0">信頼の可視化</span>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 p-5 flex flex-col md:flex-row md:items-center gap-4">
+          <span class="font-mono text-xs font-bold bg-blue-50 text-blue-600 rounded-md px-2.5 py-1 w-fit shrink-0">P2</span>
+          <div class="flex-1">
+            <h3 class="font-bold">MCP サーバー化 / エディタ連携</h3>
+            <p class="text-sm text-gray-600 mt-1 leading-relaxed">影響分析を MCP tool として公開すれば、Claude Code / Cursor などから「この変更の影響は?」と聞ける。いまもっとも拡散力のある「AIエージェント連携」文脈に乗れる。</p>
+          </div>
+          <span class="text-xs font-semibold text-gray-400 shrink-0">トレンド接続</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== CTA ===== -->
+  <section class="max-w-6xl mx-auto px-5 py-16 md:py-20 text-center">
+    <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight">まずは新しいGUIを触ってみてください</h2>
+    <p class="mt-4 text-gray-600 max-w-2xl mx-auto leading-relaxed">「利用限度額を999万円→9999万円に変更する」という合成シナリオで、画面 → チェック仕様 → API → DB → 外部IF → テストまで影響が波及する様子を、evidence 付きでレビューできます。</p>
+    <div class="mt-8 flex flex-wrap justify-center gap-3">
+      <a href="console.html" class="px-7 py-3.5 rounded-xl bg-brand-600 text-white font-bold shadow-lg shadow-brand-600/25 hover:bg-brand-700 transition"><i class="fa-solid fa-flask mr-2"></i>新GUIデモを開く</a>
+      <a href="strategy.html" class="px-7 py-3.5 rounded-xl border border-gray-300 font-bold text-gray-700 hover:border-gray-400 transition"><i class="fa-solid fa-map mr-2"></i>90日プレイブック</a>
+      <a href="https://github.com/kanan6377/SpecImpact" target="_blank" rel="noopener" class="px-7 py-3.5 rounded-xl bg-gray-900 text-white font-bold hover:bg-gray-700 transition"><i class="fa-brands fa-github mr-2"></i>元リポジトリ</a>
+    </div>
+  </section>
+
+  <footer class="border-t border-gray-200 py-8 text-center text-xs text-gray-400">
+    SpecImpact 改善提案 — GUIプロトタイプは合成データ(synthetic data)で動作するクライアントサイドのみのデモです。
+  </footer>
+</body>
+</html>

@@ -59,6 +59,7 @@ pythonpath = ["."]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+extend-exclude = ["examples/gui_redesign_sandbox"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]

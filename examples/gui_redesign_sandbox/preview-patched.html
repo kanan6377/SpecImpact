@@ -1,0 +1,250 @@
+<!doctype html>
+<!--
+  SpecImpact 実GUI(パッチ適用版)のローカル再現ハーネス
+  - patched/specimpact/webui/templates/index.html と同じ DOM 構造
+  - patched/specimpact/webui/static/app.css / app.js を実際に読み込む
+  - FastAPI バックエンドの代わりに fetch をモックして全ページを検証
+-->
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SpecImpact 実GUI パッチ検証ハーネス</title>
+    <link rel="stylesheet" href="patched/specimpact/webui/static/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/cytoscape@3/dist/cytoscape.min.js"></script>
+    <script>
+      /* ============ fetch モック(FastAPI の代替) ============ */
+      const MOCK = {
+        "/api/session": { csrf_token: "mock-csrf" },
+        "/api/projects": { projects: [{ project_id: "p1", display_name: "カード入会システム 改修案件", path: "C:/work/card-entry" }] },
+        "overview": {
+          counts: { documents: 12, artifacts: 34, entities: 40, relations: 80, evidence: 126 },
+          latest_run: "run-2026-06-10-1432",
+          backend: "local",
+          llm: { enabled: true, provider: "codex", model: "default", external_transmission: true },
+          embeddings: { enabled: true, provider: "local" },
+          openai_api_key_available: false,
+          codex_cli_available: true,
+          privacy_doctor: "OK: bind=127.0.0.1\nOK: backend=local JSONL\nOK: no api keys stored",
+          health_check: { workbooks: 8, sheets: 31, detected_artifacts: 34, possible_relations: 80, merged_cells: 412, hidden_sheets: 2, alias_candidates: [1,2,3], warnings: [] },
+          dirty_excel: null,
+        },
+        "jobs": { jobs: [
+          { job_id: "j1", action: "analyze_llm_first", state: "succeeded", created_at: "2026-06-10 14:32", result_summary: { candidates: 9 } },
+          { job_id: "j2", action: "ingest_dirty_excel", state: "succeeded", created_at: "2026-06-10 14:02", result_summary: { workbooks: 8 } },
+          { job_id: "j3", action: "aliases_suggest", state: "failed", created_at: "2026-06-10 13:50", error_summary: "LLM provider not configured" },
+        ]},
+        "runs": { runs: [{ run_id: "run-2026-06-10-1432", title: "利用限度額上限変更", candidate_count: 9 }] },
+        "report": {
+          must_review: [
+            { display_name: "入会申込画面 利用限度額", artifact_id: "scr.card_entry.apply", reason: "画面項目定義に上限値の直接記載", relation_paths: ["利用限度額 -DEFINED_IN-> 入会申込画面"], evidence: [{ evidence_id: "ev-001", source_location: { file: "画面項目定義書.xlsx", line_start: 12, line_end: 12 }, quote: "利用限度額 | 上限 9,990,000 円" }] },
+            { display_name: "T_CARD_APPLICATION.REQUESTED_CREDIT_LIMIT", artifact_id: "db.t_card_application", reason: "NUMBER(7) では8桁を格納できない", relation_paths: ["requestedCreditLimit -PERSISTED_TO-> REQUESTED_CREDIT_LIMIT"], evidence: [{ evidence_id: "ev-004", source_location: { file: "テーブル定義書.xlsx", line_start: 18, line_end: 18 }, quote: "REQUESTED_CREDIT_LIMIT | NUMBER(7) | NOT NULL" }] },
+          ],
+          should_review: [
+            { display_name: "与信審査IF IF-301", artifact_id: "if.credit_check.if301", reason: "固定長7桁の連携項目", relation_paths: ["REQUESTED_CREDIT_LIMIT -SENT_VIA-> IF-301"], evidence: [] },
+          ],
+          may_review: [
+            { display_name: "月次集計バッチ B-220", artifact_id: "batch.b220", reason: "金額帯区分の見直し要否", relation_paths: [], evidence: [] },
+          ],
+          hidden: [],
+        },
+        "graph": {
+          nodes: [
+            { data: { id: "ent.credit_limit", label: "利用限度額", kind: "entity", type: "論理項目", evidence_ids: ["ev-001"] } },
+            { data: { id: "scr.apply", label: "入会申込画面", kind: "artifact", type: "SCREEN", evidence_ids: ["ev-001"] } },
+            { data: { id: "api.submit", label: "カード入会申込API", kind: "artifact", type: "API", evidence_ids: [] } },
+            { data: { id: "db.t_card", label: "T_CARD_APPLICATION", kind: "artifact", type: "DB", evidence_ids: ["ev-004"] } },
+            { data: { id: "ref.besshi", label: "別紙A", kind: "reference", type: "REF", evidence_ids: [] } },
+          ],
+          edges: [
+            { data: { id: "r1", source: "ent.credit_limit", target: "scr.apply", label: "DEFINED_IN", status: "confirmed", method: "rule", evidence_ids: ["ev-001"] } },
+            { data: { id: "r2", source: "ent.credit_limit", target: "api.submit", label: "REQUEST_FIELD", status: "unconfirmed", method: "llm", evidence_ids: [] } },
+            { data: { id: "r3", source: "api.submit", target: "db.t_card", label: "PERSISTED_TO", status: "confirmed", method: "rule", evidence_ids: ["ev-004"] } },
+            { data: { id: "r4", source: "scr.apply", target: "ref.besshi", label: "REFERS", status: "rejected", method: "llm", evidence_ids: [] } },
+          ],
+          relations: [
+            { relation_id: "r1", relation_type: "DEFINED_IN", source_id: "ent.credit_limit", target_id: "scr.apply", status: "confirmed" },
+            { relation_id: "r2", relation_type: "REQUEST_FIELD", source_id: "ent.credit_limit", target_id: "api.submit", status: "unconfirmed" },
+            { relation_id: "r3", relation_type: "PERSISTED_TO", source_id: "api.submit", target_id: "db.t_card", status: "confirmed" },
+            { relation_id: "r4", relation_type: "REFERS", source_id: "scr.apply", target_id: "ref.besshi", status: "rejected" },
+          ],
+          artifacts: [1, 2, 3],
+          entities: [1],
+        },
+        "evidence": { evidence: [{ evidence_id: "ev-001", source_location: { file: "画面項目定義書.xlsx", line_start: 12, line_end: 12 }, quote: "利用限度額 | 上限 9,990,000 円(999万円)" }] },
+        "aliases": { aliases: { "ent.credit_limit": ["requestedCreditLimit"] }, suggestions: [], candidates: [
+          { candidate_id: "AL-101", target_id: "ent.credit_limit", entity_a_id: "利用限度額", entity_b_id: "requestedCreditLimit", aliases: ["requestedCreditLimit"], judgement: "same", status: "pending", confidence_label: "high", llm_reason: "対応表に明示マッピングあり", evidence_quotes: ["requestedCreditLimit … 画面「利用限度額」と対応"], relation_context: ["申込画面→API が一致"], compared_entity_ids: ["ent.requestedCreditLimit"] },
+          { candidate_id: "AL-103", target_id: "ent.credit_limit", entity_a_id: "利用限度額", entity_b_id: "ご利用可能枠", aliases: ["ご利用可能枠"], judgement: "unsure", status: "pending", confidence_label: "low", llm_reason: "申込時希望額と審査後決定額の可能性", evidence_quotes: ["ご利用可能枠は審査により決定されます"], relation_context: [], compared_entity_ids: [] },
+        ]},
+        "impact-decisions": { decisions: [
+          { impact_id: "imp-001", display_name: "入会申込画面 利用限度額", candidate_node_id: "scr.apply", review_priority: "must_review", impact_type: "値域変更", impact_reason: "上限値の直接記載", required_actions: ["定義書更新", "注記確認"], evidence_ids: ["ev-001"], status: "unreviewed", reason: "", warnings: [] },
+          { impact_id: "imp-004", display_name: "T_CARD_APPLICATION", candidate_node_id: "db.t_card", review_priority: "must_review", impact_type: "DDL変更", impact_reason: "NUMBER(7) 桁あふれ", required_actions: ["ALTER TABLE"], evidence_ids: ["ev-004"], status: "accepted", reason: "修正対象", warnings: [] },
+          { impact_id: "imp-008", display_name: "月次集計バッチ B-220", candidate_node_id: "batch.b220", review_priority: "may_review", impact_type: "集計区分", impact_reason: "金額帯区分の業務確認", required_actions: [], evidence_ids: [], status: "unreviewed", reason: "", warnings: ["evidence なし"] },
+        ]},
+        "dirty-excel": { summary: { workbooks: 8, regions: 54 }, proposals: [
+          { proposal_id: "gp-001", region_id: "rg-12", status: "proposed", extraction_method: "llm", result: { nodes: [{ node_type: "SCREEN_ITEM", display_name: "利用限度額" }], edges: [{ source_temp_id: "t1", relation_type: "DEFINED_IN", target_temp_id: "t2" }], evidence_ids: ["ev-001"], warnings: [], unresolved_mentions: [] } },
+        ], regions: [
+          { sheet_name: "申込画面", range: "B10:D20", region_type: "screen_item_table", rendered_text: "利用限度額 | 数値 | 上限 9,990,000 円" },
+        ]},
+      };
+
+      const realFetch = window.fetch;
+      window.fetch = (url, options) => {
+        const path = String(url);
+        let body = null;
+        if (MOCK[path]) body = MOCK[path];
+        else {
+          const key = Object.keys(MOCK).find((k) => !k.startsWith("/") && path.includes("/" + k.split("?")[0]));
+          if (key) body = MOCK[key];
+          else if (options && options.method && options.method !== "GET") body = { job: { action: "mock", job_id: "j-mock" }, project: { project_id: "p1" }, required: false, transmissions: [] };
+          else if (path.includes("external-preview")) body = { required: false, transmissions: [] };
+          else body = {};
+        }
+        if (path.includes("external-preview")) body = { required: false, transmissions: [] };
+        return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
+      };
+
+    </script>
+    <script defer src="patched/specimpact/webui/static/app.js"></script>
+  </head>
+  <body data-page="dashboard">
+    <a class="skip-link" href="#main-content">メインコンテンツへ移動</a>
+    <header class="topbar">
+      <a class="brand" href="#">
+        <span class="brand-mark">SI</span>
+        <span><strong>SpecImpact</strong><small>GRAPH IMPACT CONSOLE</small></span>
+      </a>
+      <div class="project-switcher">
+        <label for="project-select">案件</label>
+        <select id="project-select"><option value="">案件を選択</option></select>
+        <button class="button ghost" id="open-project-dialog">案件を追加</button>
+        <button class="button ghost" id="remove-project" aria-haspopup="dialog">登録解除</button>
+      </div>
+      <span class="local-badge">LOOPBACK ONLY</span>
+    </header>
+    <div class="layout">
+      <aside class="sidebar">
+        <nav aria-label="メインナビゲーション">
+          <span class="nav-label">はじめる</span>
+          <a href="?page=dashboard" data-nav="dashboard">概要</a>
+          <a href="?page=demo" data-nav="demo">ガイド付きサンプル</a>
+          <span class="nav-label">ワークフロー</span>
+          <a href="?page=ingest" data-nav="ingest">Ingest</a>
+          <a href="?page=dirty-excel" data-nav="dirty-excel">Dirty Excel</a>
+          <a href="?page=analyze" data-nav="analyze">Analyze / Report</a>
+          <a href="?page=impact-board" data-nav="impact-board">Impact Board</a>
+          <a href="?page=graph" data-nav="graph">Graph Explorer</a>
+          <a href="?page=aliases" data-nav="aliases">Aliases</a>
+          <span class="nav-label">運用</span>
+          <a href="?page=settings" data-nav="settings">Settings</a>
+          <a href="?page=tools" data-nav="tools">Tools</a>
+          <a href="?page=jobs" data-nav="jobs">Jobs</a>
+        </nav>
+        <div class="sidebar-note">
+          <strong>Evidence, not vibes.</strong>
+          <span>候補、relation path、引用を残す local-first 影響分析。</span>
+        </div>
+      </aside>
+      <main class="content" id="main-content">
+        <section class="page" data-view="dashboard">
+          <div class="hero">
+            <div class="hero-copy">
+              <p class="eyebrow">LOCAL-FIRST GRAPH IMPACT ENGINE</p>
+              <h1>設計変更の爆風半径を、証拠つきで追跡する。</h1>
+              <p>SpecImpact は LLM で設計書を evidence graph / GraphRAG に変換し、変更要求から review candidate、relation path、引用行をまとめて出します。判断は人間、根拠は保存。</p>
+              <div class="hero-actions">
+                <button class="button primary" data-action="init">案件を初期化</button>
+                <a class="button ghost" href="?page=demo">サンプルで試す</a>
+                <a class="button ghost" href="?page=analyze">影響分析へ</a>
+              </div>
+              <div class="badge-row">
+                <span>127.0.0.1 only</span>
+                <span>JSONL state</span>
+                <span>evidence-backed</span>
+                <span>Codex CLI ready</span>
+              </div>
+            </div>
+            <div class="terminal-card" aria-label="SpecImpact workflow">
+              <div class="terminal-bar"><span></span><span></span><span></span></div>
+              <pre><code>$ specimpact ingest docs --aliases aliases.yml
+ graph: artifacts, entities, relations, evidence
+$ specimpact analyze changes/change.md
+ candidates: must / should / may
+ proof: relation paths + quotes</code></pre>
+            </div>
+          </div>
+          <div class="metric-grid" id="metrics"></div>
+          <div class="grid two">
+            <article class="panel"><h2>Project pulse</h2><div id="project-pulse" class="pulse-list"></div></article>
+            <article class="panel"><h2>Privacy doctor</h2><pre id="privacy-doctor">案件を選択してください。</pre></article>
+          </div>
+          <article class="panel"><h2>最近の Jobs</h2><div id="dashboard-jobs"></div></article>
+        </section>
+        <section class="page" data-view="analyze">
+          <div class="page-head"><div><p class="eyebrow">CHANGE REVIEW COCKPIT</p><h1>Analyze / Report</h1></div></div>
+          <article class="panel analysis-cockpit">
+            <div><h2>現在の解析モード</h2><div id="analysis-mode" class="mode-card"></div></div>
+            <div class="pipeline"><span>Change</span><span>Entity extract</span><span>Graph walk</span><span>Batch rerank</span><span>Evidence report</span></div>
+          </article>
+          <article class="panel notice"><strong>このレポートは影響確定結果ではなく、レビュー候補です。</strong><span>must_review は「影響あり」ではなく「必ず確認すべき」です。</span></article>
+          <div class="grid report-layout"><article class="panel"><h2>Run history</h2><div id="run-history"></div></article><article class="panel"><h2>Latest report</h2><div id="report"></div></article></div>
+        </section>
+        <section class="page" data-view="impact-board">
+          <div class="page-head"><div><p class="eyebrow">IMPACT REVIEW BOARD</p><h1>Impact Board</h1></div></div>
+          <article class="panel"><h2>Decisions</h2><div id="impact-decisions"></div></article>
+        </section>
+        <section class="page" data-view="graph">
+          <div class="page-head"><div><p class="eyebrow">LOCAL KNOWLEDGE GRAPH</p><h1>Graph Explorer</h1></div></div>
+          <article class="panel graph-toolbar">
+            <div class="filterbar">
+              <label>検索<input id="graph-search" type="search" placeholder="node 名または ID"></label>
+              <label>Status<select id="graph-status"><option value="">すべて</option><option>confirmed</option><option>unconfirmed</option><option>rejected</option></select></label>
+              <label>Extraction<select id="graph-method"><option value="">すべて</option><option>rule</option><option>llm</option></select></label>
+            </div>
+            <div class="toolbar-actions">
+              <button class="button primary" id="refresh-graph">絞り込み</button>
+              <button class="button ghost" id="graph-fit">全体表示</button>
+              <button class="button ghost" id="graph-reset">リセット</button>
+            </div>
+          </article>
+          <div class="graph-summary">
+            <div id="graph-stats" class="graph-stats" aria-live="polite"></div>
+            <div class="graph-legend" aria-label="Graph 凡例">
+              <span><i class="legend-dot artifact"></i>Artifact</span>
+              <span><i class="legend-dot entity"></i>Entity</span>
+              <span><i class="legend-dot reference"></i>Reference</span>
+              <span><i class="legend-line confirmed"></i>Confirmed</span>
+              <span><i class="legend-line unconfirmed"></i>Unconfirmed</span>
+              <span><i class="legend-line rejected"></i>Rejected</span>
+            </div>
+          </div>
+          <p id="graph-view-status" class="graph-view-status" role="status" aria-live="polite">主要 node の近傍を表示します。</p>
+          <div class="grid graph-layout"><article class="panel graph-panel"><div id="graph-canvas" role="img" aria-label="knowledge graph" tabindex="0"></div></article><aside class="panel graph-detail-panel"><h2>選択項目と Evidence</h2><div id="graph-detail" class="graph-detail"><p>node または edge を選択してください。</p></div></aside></div>
+          <article class="panel"><h2>Relations</h2><div class="table-wrap"><table><thead><tr><th>Type</th><th>Source</th><th>Target</th><th>Status</th><th>Review</th></tr></thead><tbody id="relation-table"></tbody></table></div></article>
+        </section>
+        <section class="page" data-view="aliases">
+          <div class="page-head"><div><p class="eyebrow">NAME RESOLUTION</p><h1>Aliases</h1></div><button class="button primary" data-action="aliases_suggest">候補を作成</button></div>
+          <article class="panel"><h2>Aliases と Suggestions</h2><div id="aliases-result"></div></article>
+        </section>
+        <section class="page" data-view="dirty-excel">
+          <div class="page-head"><div><p class="eyebrow">DIRTY EXCEL REVIEW CONSOLE</p><h1>Dirty Excel</h1></div></div>
+          <div class="grid two"><article class="panel"><h2>Summary</h2><pre id="dirty-summary"></pre></article><article class="panel"><h2>Graph proposals</h2><div id="dirty-proposals"></div></article></div>
+          <article class="panel"><h2>Regions</h2><div id="dirty-regions"></div></article>
+        </section>
+        <section class="page" data-view="jobs">
+          <div class="page-head"><div><p class="eyebrow">PROJECT QUEUE</p><h1>Jobs</h1></div></div>
+          <article class="panel"><div id="jobs-list"></div></article>
+        </section>
+      </main>
+    </div>
+    <div class="page-status visually-hidden" id="page-status" role="status" aria-live="polite"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <dialog id="project-dialog"><form method="dialog"><h2>案件を追加</h2><label>Directory<input name="path" required></label><label>Display name<input name="display_name"></label><label class="check"><input type="checkbox" name="create"> 新規ディレクトリを作成</label><div class="dialog-actions"><button class="button ghost" value="cancel">Cancel</button><button class="button primary" value="default" id="save-project">追加</button></div></form></dialog>
+    <dialog id="remove-project-dialog"><h2>案件登録を解除</h2><p>registry から登録だけを解除します。</p><div class="dialog-actions"><button class="button ghost" id="cancel-remove-project">Cancel</button><button class="button danger" id="confirm-remove-project">登録解除</button></div></dialog>
+    <dialog id="external-dialog"><h2>外部送信チェックポイント</h2><div id="external-details"></div><div class="dialog-actions"><button class="button ghost" id="external-cancel">Cancel</button><button class="button primary" id="external-approve">承認</button></div></dialog>
+    <script>
+      /* deferred な app.js が読む前に data-page を確定させる(inline は defer より先に実行) */
+      document.body.dataset.page = new URLSearchParams(location.search).get("page") || "dashboard";
+    </script>
+  </body>
+</html>

@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="description" content="SpecImpact の localhost 専用設計変更影響分析コンソール">
+    <meta name="robots" content="noindex,nofollow">
+    <meta name="theme-color" content="#0f172a">
+    <title>SpecImpact Local Console</title>
+    <link rel="stylesheet" href="/static/app.css">
+    <script defer src="/static/vendor/cytoscape.min.js"></script>
+    <script defer src="/static/app.js"></script>
+  </head>
+  <body data-page="{{ page }}">
+    <a class="skip-link" href="#main-content">メインコンテンツへ移動</a>
+    <header class="topbar">
+      <a class="brand" href="/">
+        <span class="brand-mark">SI</span>
+        <span><strong>SpecImpact</strong><small>GRAPH IMPACT CONSOLE</small></span>
+      </a>
+      <div class="project-switcher">
+        <label for="project-select">案件</label>
+        <select id="project-select"><option value="">案件を選択</option></select>
+        <button class="button ghost" id="open-project-dialog">案件を追加</button>
+        <button class="button ghost" id="remove-project" aria-haspopup="dialog">登録解除</button>
+      </div>
+      <span class="local-badge">LOOPBACK ONLY</span>
+    </header>
+    <div class="layout">
+      <aside class="sidebar">
+        <nav aria-label="メインナビゲーション">
+          <a href="/ui/dashboard" data-nav="dashboard">概要</a>
+          <a href="/ui/demo" data-nav="demo">ガイド付きサンプル</a>
+          <a href="/ui/ingest" data-nav="ingest">Ingest</a>
+          <a href="/ui/dirty-excel" data-nav="dirty-excel">Dirty Excel</a>
+          <a href="/ui/analyze" data-nav="analyze">Analyze / Report</a>
+          <a href="/ui/impact-board" data-nav="impact-board">Impact Board</a>
+          <a href="/ui/graph" data-nav="graph">Graph Explorer</a>
+          <a href="/ui/aliases" data-nav="aliases">Aliases</a>
+          <a href="/ui/settings" data-nav="settings">Settings</a>
+          <a href="/ui/tools" data-nav="tools">Tools</a>
+          <a href="/ui/jobs" data-nav="jobs">Jobs</a>
+        </nav>
+        <div class="sidebar-note">
+          <strong>Evidence, not vibes.</strong>
+          <span>候補、relation path、引用を残す local-first 影響分析。</span>
+        </div>
+      </aside>
+      <main class="content" id="main-content">
+        <section class="page" data-view="dashboard">
+          <div class="hero">
+            <div class="hero-copy">
+              <p class="eyebrow">LOCAL-FIRST GRAPH IMPACT ENGINE</p>
+              <h1>設計変更の爆風半径を、証拠つきで追跡する。</h1>
+              <p>SpecImpact は LLM で設計書を evidence graph / GraphRAG に変換し、変更要求から review candidate、relation path、引用行をまとめて出します。判断は人間、根拠は保存。</p>
+              <div class="hero-actions">
+                <button class="button primary" data-action="init">案件を初期化</button>
+                <a class="button ghost" href="/ui/demo">サンプルで試す</a>
+                <a class="button ghost" href="/ui/analyze">影響分析へ</a>
+              </div>
+              <div class="badge-row">
+                <span>127.0.0.1 only</span>
+                <span>JSONL state</span>
+                <span>evidence-backed</span>
+                <span>Codex CLI ready</span>
+              </div>
+            </div>
+            <div class="terminal-card" aria-label="SpecImpact workflow">
+              <div class="terminal-bar"><span></span><span></span><span></span></div>
+              <pre><code>$ specimpact ingest docs --aliases aliases.yml
+ graph: artifacts, entities, relations, evidence
+$ specimpact analyze changes/change.md
+ candidates: must / should / may
+ proof: relation paths + quotes
+$ specimpact why "カード入会申込API"
+ because evidence beats guesswork</code></pre>
+            </div>
+          </div>
+          <div class="metric-grid" id="metrics"></div>
+          <div class="grid three story-grid">
+            <article class="panel feature-card"><span class="feature-kicker">01</span><h2>LLM-first GraphRAG</h2><p>Markdown、OpenAPI、DDL、CSV、Excel を evidence graph に変換。ローカルルールは fallback と検証に使います。</p></article>
+            <article class="panel feature-card"><span class="feature-kicker">02</span><h2>Codex CLI ready</h2><p>Codex CLI、OpenAI API、Ollama を provider として利用。外部 provider は job 単位の承認つきです。</p></article>
+            <article class="panel feature-card"><span class="feature-kicker">03</span><h2>証拠を閉じ込める</h2><p>job 履歴に本文や raw response は保存しません。trace は hash と安全な要約だけを残します。</p></article>
+          </div>
+          <div class="grid two">
+            <article class="panel"><h2>Project pulse</h2><div id="project-pulse" class="pulse-list"></div></article>
+            <article class="panel"><h2>Privacy doctor</h2><pre id="privacy-doctor">案件を選択してください。</pre></article>
+          </div>
+          <article class="panel"><h2>最近の Jobs</h2><div id="dashboard-jobs"></div></article>
+        </section>
+        <section class="page" data-view="demo">
+          <div class="page-head"><div><p class="eyebrow">GUIDED SAMPLE</p><h1>ガイド付きサンプル</h1><p><code>credit_card_enrollment</code> のコピーで一連の操作を確認します。</p></div></div>
+          <article class="panel guide"><div class="step">01</div><div><h2>サンプル案件を作成</h2><p><code>examples/</code> 原本は変更せず、GUI 用 workspace にコピーします。</p><button class="button primary" id="create-demo">サンプルを作成</button></div></article>
+          <article class="panel guide"><div class="step">02</div><div><h2>ローカル解析を実行</h2><p>init、Markdown ingest、analyze を順に実行します。</p><button class="button" data-action="demo_run">サンプル解析を実行</button></div></article>
+          <article class="panel guide"><div class="step">03</div><div><h2>根拠と graph を確認</h2><p>Analyze / Report と Graph Explorer で候補、relation path、引用を確認します。</p><a class="button ghost" href="/ui/analyze">レポートへ</a><a class="button ghost" href="/ui/graph">Graph へ</a></div></article>
+        </section>
+        <section class="page" data-view="ingest">
+          <div class="page-head"><div><p class="eyebrow">SOURCE LOADING</p><h1>Ingest</h1><p>local path または managed upload から設計情報を読み込みます。</p></div></div>
+          <div class="grid two">
+            <article class="panel"><h2>Markdown / text directory</h2><form data-job="ingest"><label>Docs directory<input name="path" required placeholder="docs"></label><label>Aliases YAML<input name="aliases" placeholder="aliases.yml"></label><label class="check"><input type="checkbox" name="no_llm"> LLM を一時的に使用しない</label><button class="button primary">Ingest</button></form></article>
+            <article class="panel"><h2>Structured loaders</h2><form data-job="ingest_openapi"><label>OpenAPI<input name="path" required placeholder="structured/api.yml"></label><button class="button">OpenAPI ingest</button></form><form data-job="ingest_ddl"><label>DDL<input name="path" required placeholder="structured/schema.sql"></label><button class="button">DDL ingest</button></form><form data-job="ingest_csv"><label>CSV<input name="path" required placeholder="structured/table.csv"></label><button class="button">CSV ingest</button></form><form data-job="ingest_excel"><label>Excel<input name="path" required placeholder="docs または structured/table.xlsx"></label><label>Profile<input name="profile" placeholder="sier"></label><label>Aliases YAML<input name="aliases" placeholder="aliases.yml"></label><button class="button">Excel ingest</button></form></article>
+          </div>
+          <article class="panel"><h2>Excel Health Check</h2><div id="health-check" class="pulse-list"></div></article>
+          <article class="panel"><h2>Managed upload</h2><p>ファイルは案件内の <code>.specimpact/uploads/</code> に新規保存されます。</p><form id="upload-form"><label>Workflow<select name="workflow"><option>docs</option><option>change</option><option>aliases</option><option>openapi</option><option>ddl</option><option>table</option><option>review</option><option>eval</option></select></label><label>Files<input type="file" name="files" multiple required></label><button class="button">Upload</button></form><pre id="upload-result"></pre></article>
+        </section>
+        <section class="page" data-view="dirty-excel">
+          <div class="page-head"><div><p class="eyebrow">DIRTY EXCEL REVIEW CONSOLE</p><h1>Dirty Excel</h1><p>セル番地、region、LLM/ルール抽出提案を確認します。</p></div></div>
+          <article class="panel"><form data-job="ingest_dirty_excel" class="inline-form"><label>Excel path<input name="path" required placeholder="docs または workbook.xlsx"></label><label>Aliases YAML<input name="aliases" placeholder="aliases.yml"></label><label class="check"><input type="checkbox" name="llm" checked> configured LLM で region 抽出</label><button class="button primary">Dirty Excel ingest</button></form></article>
+          <div class="grid two"><article class="panel"><h2>Summary</h2><pre id="dirty-summary"></pre></article><article class="panel"><h2>Graph proposals</h2><div id="dirty-proposals"></div></article></div>
+          <article class="panel"><h2>Regions</h2><div id="dirty-regions"></div></article>
+        </section>
+        <section class="page" data-view="analyze">
+          <div class="page-head"><div><p class="eyebrow">CHANGE REVIEW COCKPIT</p><h1>Analyze / Report</h1><p>変更要求を local graph に照合し、任意の LLM で候補をまとめて精査します。</p></div><div><a class="button ghost download" data-format="markdown">Markdown</a><a class="button ghost download" data-format="json">JSON</a><a class="button ghost download" data-format="excel">Excel</a></div></div>
+          <article class="panel analysis-cockpit">
+            <div>
+              <h2>現在の解析モード</h2>
+              <div id="analysis-mode" class="mode-card"></div>
+            </div>
+            <div class="pipeline">
+              <span>Change</span>
+              <span>Entity extract</span>
+              <span>Graph walk</span>
+              <span>Batch rerank</span>
+              <span>Evidence report</span>
+            </div>
+          </article>
+          <article class="panel"><form data-job="analyze_llm_first" class="inline-form"><label>Change request<input name="path" required placeholder="changes/利用限度額上限変更.md"></label><button class="button primary">LLM-first impact analysis</button></form><p class="field-help">Change Atom と GraphRAG から evidence 付き候補を作ります。</p></article>
+          <article class="panel"><form data-job="analyze" class="inline-form"><label>Change request<input name="path" required placeholder="changes/change_credit_limit.md"></label><label class="check"><input type="checkbox" name="no_llm"> local-only / --no-llm</label><button class="button">Rule-compatible analyze</button></form><p class="field-help">互換・debug 用の従来解析です。外部 provider を使う job は送信前に必ず確認します。</p></article>
+          <article class="panel"><h2>変更依頼テキスト</h2><form data-job="analyze_text"><label>Change request text<textarea name="body" required rows="6" placeholder="入会申込画面の「利用限度額」の上限を999万円から9999万円に変更する。"></textarea></label><button class="button primary">テキストから解析</button></form><p class="field-help">入力内容は案件内のローカルファイルに保存して解析します。外部送信は行いません。</p></article>
+          <article class="panel notice"><strong>このレポートは影響確定結果ではなく、レビュー候補です。</strong><span>must_review は「影響あり」ではなく「必ず確認すべき」です。</span></article>
+          <div class="grid report-layout"><article class="panel"><h2>Run history</h2><div id="run-history"></div></article><article class="panel"><h2>Latest report</h2><div id="report"></div></article></div>
+        </section>
+        <section class="page" data-view="impact-board">
+          <div class="page-head"><div><p class="eyebrow">IMPACT REVIEW BOARD</p><h1>Impact Board</h1><p>影響候補の人間判断を保存します。</p></div></div>
+          <article class="panel"><form data-job="impact_status" class="inline-form"><label>Impact ID<input name="impact_id" required placeholder="impact.change.xxx.artifact.id"></label><label>Status<select name="status"><option>accepted</option><option>rejected</option><option>needs_investigation</option><option>implemented</option><option>tested</option><option>closed</option><option>unreviewed</option></select></label><label>Reason<input name="reason"></label><button class="button primary">Status 更新</button></form></article>
+          <article class="panel"><h2>Decisions</h2><div id="impact-decisions"></div></article>
+        </section>
+        <section class="page" data-view="graph">
+          <div class="page-head"><div><p class="eyebrow">LOCAL KNOWLEDGE GRAPH</p><h1>Graph Explorer</h1><p>node、relation、evidence を確認し、relation status を更新します。</p></div></div>
+          <article class="panel graph-toolbar">
+            <div class="filterbar">
+              <label>検索<input id="graph-search" type="search" placeholder="node 名または ID"></label>
+              <label>Status<select id="graph-status"><option value="">すべて</option><option>confirmed</option><option>unconfirmed</option><option>rejected</option></select></label>
+              <label>Extraction<select id="graph-method"><option value="">すべて</option><option>rule</option><option>llm</option></select></label>
+            </div>
+            <div class="toolbar-actions">
+              <button class="button primary" id="refresh-graph">絞り込み</button>
+              <button class="button ghost" id="graph-fit">全体表示</button>
+              <button class="button ghost" id="graph-reset">リセット</button>
+            </div>
+          </article>
+          <div class="graph-summary">
+            <div id="graph-stats" class="graph-stats" aria-live="polite"></div>
+            <div class="graph-legend" aria-label="Graph 凡例">
+              <span><i class="legend-dot artifact"></i>Artifact</span>
+              <span><i class="legend-dot entity"></i>Entity</span>
+              <span><i class="legend-dot reference"></i>Reference</span>
+              <span><i class="legend-line confirmed"></i>Confirmed</span>
+              <span><i class="legend-line unconfirmed"></i>Unconfirmed</span>
+              <span><i class="legend-line rejected"></i>Rejected</span>
+            </div>
+          </div>
+          <p id="graph-view-status" class="graph-view-status" role="status" aria-live="polite">主要 node の近傍を表示します。検索または relation 一覧から対象を選択できます。</p>
+          <div class="grid graph-layout"><article class="panel graph-panel"><div id="graph-canvas" role="img" aria-label="設計要素と関係を表示する knowledge graph。node または edge を選択すると詳細を表示します。" aria-describedby="graph-view-status" tabindex="0"></div></article><aside class="panel graph-detail-panel" aria-labelledby="graph-detail-title"><h2 id="graph-detail-title">選択項目と Evidence</h2><div id="graph-detail" class="graph-detail"><p>node または edge を選択してください。</p></div></aside></div>
+          <article class="panel"><h2>Relations</h2><div class="table-wrap"><table><thead><tr><th>Type</th><th>Source</th><th>Target</th><th>Status</th><th>Review</th></tr></thead><tbody id="relation-table"></tbody></table></div></article>
+        </section>
+        <section class="page" data-view="aliases">
+          <div class="page-head"><div><p class="eyebrow">NAME RESOLUTION</p><h1>Aliases</h1><p>候補の作成、承認、拒否、追加、削除を行います。</p></div><button class="button primary" data-action="aliases_suggest">候補を作成</button></div>
+          <article class="panel"><form data-job="alias_decide" class="inline-form"><label>Target ID<input name="target_id" required></label><label>Alias<input name="alias" required></label><label>Status<select name="status"><option>approved</option><option>rejected</option></select></label><button class="button">反映</button></form></article>
+          <article class="panel"><form data-job="alias_remove" class="inline-form"><label>Target ID<input name="target_id" required></label><label>Alias<input name="alias" required></label><button class="button ghost">削除</button></form></article>
+          <article class="panel"><h2>Aliases と Suggestions</h2><div id="aliases-result"></div></article>
+        </section>
+        <section class="page" data-view="settings">
+          <div class="page-head"><div><p class="eyebrow">PROVIDER LAB</p><h1>Settings</h1><p>API key は保存せず、環境変数と CLI availability だけを表示します。</p></div></div>
+          <div class="grid two"><article class="panel"><h2>LLM co-pilot</h2><div id="llm-status"></div><form data-job="llm_configure"><label>Provider<select name="provider"><option>openai</option><option>ollama</option><option>codex</option><option>fake</option></select></label><label>Model<input name="model" required placeholder="Codex CLI では default も指定できます"></label><label>Ollama base URL<input name="base_url" placeholder="http://localhost:11434"></label><p class="field-help">Codex provider はログイン済み Codex CLI を ephemeral / read-only / batch rerank で呼び出します。</p><button class="button">Configure</button></form><button class="button ghost" data-action="llm_disable">Disable</button></article><article class="panel"><h2>Embeddings</h2><form data-job="embeddings_rebuild"><label>Provider<select name="provider"><option>local</option><option>openai</option></select></label><label>Model<input name="model"></label><button class="button">Rebuild</button></form><h2>Backend</h2><form data-job="backend_set"><label>Backend<select name="backend"><option>local</option><option>neo4j</option></select></label><label>Neo4j URI<input name="uri" placeholder="bolt://localhost:7687"></label><button class="button">Apply</button></form></article></div>
+        </section>
+        <section class="page" data-view="tools">
+          <div class="page-head"><div><p class="eyebrow">ADVANCED OPERATIONS</p><h1>Tools</h1><p>評価、baseline、graph diff、review import、Obsidian export を queue で実行します。</p></div></div>
+          <div class="grid two"><article class="panel"><h2>Queued tools</h2><form data-job="eval"><label>Expected JSON<input name="expected"></label><label>Dataset YAML<input name="dataset"></label><button class="button">Eval</button></form><form data-job="release_check"><label>Dataset YAML<input name="dataset" required></label><button class="button">Release check</button></form><form data-job="review_import"><label>Review JSON<input name="path" required></label><button class="button">Review import</button></form></article><article class="panel"><h2>Graph and export</h2><form data-job="baseline_create"><label>Baseline name<input name="name" required></label><button class="button">Baseline create</button></form><form data-job="graph_diff"><label>Baseline name<input name="name" required></label><button class="button">Graph diff</button></form><form data-job="obsidian_export"><label>Output directory<input name="path" required></label><button class="button">Obsidian export</button></form><h2>Read-only</h2><button class="button ghost" data-tool="status">Project status</button><button class="button ghost" data-tool="privacy">Privacy doctor</button><form data-tool-form="why"><label>Why artifact<input name="name" required></label><button class="button ghost">Why</button></form><form data-tool-form="why_not"><label>Why-not artifact<input name="name" required></label><button class="button ghost">Why-not</button></form><pre id="tool-result"></pre></article></div>
+        </section>
+        <section class="page" data-view="jobs">
+          <div class="page-head"><div><p class="eyebrow">PROJECT QUEUE</p><h1>Jobs</h1><p>案件単位で直列化された処理の状態と安全な要約を表示します。</p></div></div>
+          <article class="panel"><div id="jobs-list"></div></article>
+        </section>
+      </main>
+    </div>
+    <div class="page-status visually-hidden" id="page-status" role="status" aria-live="polite"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <dialog id="project-dialog" aria-labelledby="project-dialog-title"><form method="dialog"><h2 id="project-dialog-title">案件を追加</h2><label>Directory<input name="path" required placeholder="C:\work\my-system-impact"></label><label>Display name<input name="display_name"></label><label class="check"><input type="checkbox" name="create"> 新規ディレクトリを作成</label><div class="dialog-actions"><button class="button ghost" value="cancel">Cancel</button><button class="button primary" value="default" id="save-project">追加</button></div></form></dialog>
+    <dialog id="remove-project-dialog" aria-labelledby="remove-project-dialog-title" aria-describedby="remove-project-dialog-description"><h2 id="remove-project-dialog-title">案件登録を解除</h2><p id="remove-project-dialog-description">registry から登録だけを解除します。案件ディレクトリと解析データは削除しません。</p><div class="dialog-actions"><button class="button ghost" id="cancel-remove-project">Cancel</button><button class="button danger" id="confirm-remove-project">登録解除</button></div></dialog>
+    <dialog id="external-dialog" aria-labelledby="external-dialog-title" aria-describedby="external-dialog-description"><h2 id="external-dialog-title">外部送信チェックポイント</h2><p id="external-dialog-description">この job では外部 provider への送信が発生します。承認は今回の job にのみ有効で、保存されません。</p><div id="external-details"></div><div class="dialog-actions"><button class="button ghost" id="external-cancel">Cancel</button><button class="button primary" id="external-approve">内容を確認して承認</button></div></dialog>
+  </body>
+</html>
