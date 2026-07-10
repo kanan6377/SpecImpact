@@ -168,7 +168,8 @@ verified:
 4. Unified Review Queue and transactional proposal decisions.
 5. Source versioning, graph diff, and stale evidence propagation.
 6. Private validation of new evidence-proof techniques before any public implementation.
-7. Obsidian integration, accessibility, performance, documentation, and release validation.
+7. Obsidian integration, audit, replay, privacy, and failure recovery.
+8. Accessibility, performance, metadata, documentation, and release validation.
 
 Each phase receives its own review file and must pass `pytest -q`, `ruff check .`, compile checks,
 and relevant browser verification before the next phase begins.

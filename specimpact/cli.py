@@ -9,6 +9,7 @@ from typing import Any
 
 import typer
 
+from specimpact import __version__
 from specimpact.core import (
     analyze_change,
     explain_why,
@@ -80,6 +81,25 @@ excel_app = typer.Typer(help="Inspect and lint Excel design workbooks.")
 change_app = typer.Typer(help="Parse and inspect structured change atoms.")
 changes_app = typer.Typer(help="List parsed changes.")
 impacts_app = typer.Typer(help="Manage impact review decisions.")
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(__version__)
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show the installed SpecImpact version and exit.",
+    ),
+) -> None:
+    """Run SpecImpact commands."""
 app.add_typer(aliases_app, name="aliases")
 app.add_typer(inspect_app, name="inspect")
 app.add_typer(relations_app, name="relations")

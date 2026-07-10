@@ -185,12 +185,16 @@ def test_gui_pages_security_project_upload_and_init_job(tmp_path: Path) -> None:
             assert '/static/dist/app.js' in page_response.text
         shell = client.get("/ui/dashboard").text
         assert "Evidence Review Workspace" in shell
+        assert 'name="robots" content="noindex, nofollow"' in shell
+        assert 'name="theme-color" content="#f5f6f8"' in shell
         assert "fonts.googleapis.com" not in shell
         assert "cdn.jsdelivr.net" not in shell
         assert "/static/data.js" not in shell
         bundle = client.get("/static/dist/app.js")
         assert bundle.status_code == 200
         assert "SI_DATA" not in bundle.text
+        assert "showModal" in bundle.text
+        assert "window.confirm" not in bundle.text
         assert client.get("/static/dist/app.css").status_code == 200
         redirect = client.get(
             "/ui/analyze?project_id=project-one",

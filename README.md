@@ -223,11 +223,17 @@ python -m pip install -e ".[gui]"
 specimpact gui
 ```
 
+導入済みversionは`specimpact --version`で確認できます。
+
 `Obsidian`画面では、現在のArtifact / Evidence / Change / Impact件数と生成先を確認してから、
 linked note、Dataview用frontmatter、CanvasをVaultへ出力できます。同じ画面でLLM送信の
 provider、model、purpose、件数、redaction有無、hashと最新review replayを確認できます。
 prompt本文、設計書本文、raw responseは表示しません。`ジョブと監査`画面は失敗した処理ごとに
 再実行前の確認事項を表示します。
+
+GUIはキーボード操作、visible focus、skip link、native external-transmission dialog、390px幅の
+review flowに対応します。Graphは選択欄からキーボードでも要素を確認でき、Cytoscape bundleは
+Graph画面を開くまで読み込みません。localhost専用アプリのためHTMLは`noindex, nofollow`です。
 
 GUI は `127.0.0.1` のみに bind します。
 

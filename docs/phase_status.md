@@ -418,3 +418,35 @@ Completion checklist:
 
 Notes: Obsidian is a review projection. Local JSONL remains the system of record, and external
 transmission still requires explicit approval.
+
+## v1.2.0 UX Phase 8
+
+Status: complete
+
+Scope:
+- keyboard and focus accessibility
+- responsive review behavior
+- graph keyboard alternative and lazy loading
+- localhost metadata and final release documentation
+
+Completion checklist:
+- [x] External transmission uses a native dialog instead of `window.confirm`
+- [x] Skip link and visible focus are available
+- [x] Graph elements are selectable without pointer input
+- [x] Mobile review starts with candidates and opens Inspector on selection
+- [x] Cytoscape loads only on the Graph view
+- [x] Tertiary contrast and letter spacing are corrected
+- [x] Localhost pages are marked noindex
+- [x] Desktop/mobile browser verification is complete
+- [x] Package version is 1.2.0
+- [x] README and manuals updated
+- [x] `docs/reviews/v1.2.0-ux-phase-8.md` written
+- [x] Full pytest passes (145 tests)
+- [x] Full ruff check passes
+- [x] compileall passes
+- [x] release-check passes (21 cases)
+- [x] 1.2.0 wheel builds with packaged GUI assets
+- [x] `specimpact --version` reports 1.2.0
+
+Notes: The Graph canvas retains an adjacent semantic selection control. The packaged frontend has
+no runtime CDN or remote font dependency.

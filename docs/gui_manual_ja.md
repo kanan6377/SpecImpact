@@ -171,6 +171,18 @@ retrieval、impact件数を表示し、分析を追跡できるようにしま�
 
 ## 8. Frontend開発
 
+アクセシビリティ契約:
+
+- 最初のTab移動でskip linkからmainへ移動できる
+- icon-only buttonにはaccessible nameがある
+- 外部送信確認はnative dialogで開き、キャンセルを初期focusにする
+- Graphはcanvasだけに依存せず、選択欄からキーボードでもnode/relationをInspectorへ表示できる
+- 狭幅の変更レビューは候補一覧から始まり、候補選択後にInspectorを開く
+- `prefers-reduced-motion`ではloop/transition時間を最小化する
+
+Cytoscapeはdynamic importされます。DashboardなどGraph以外の初期表示ではgraph chunkを取得せず、
+Graph画面を開いた時だけ読み込みます。production HTMLはlocalhost用のため検索indexを禁止します。
+
 利用者はNode.jsを必要としません。`specimpact/webui/static/dist/` のbuild済み資産をPython packageに
 同梱します。GUIを変更する開発者だけが次を実行します。
 

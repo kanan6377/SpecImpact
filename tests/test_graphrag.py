@@ -43,6 +43,12 @@ from specimpact.store import LocalStore
 runner = CliRunner()
 
 
+def test_cli_reports_package_version() -> None:
+    result = runner.invoke(app, ["--version"])
+    assert result.exit_code == 0
+    assert result.stdout.strip() == "1.2.0"
+
+
 def test_external_payload_redaction_covers_common_customer_identifiers() -> None:
     payload = {
         "text": (

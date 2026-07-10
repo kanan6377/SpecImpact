@@ -1,4 +1,4 @@
-import cytoscape from "cytoscape";
+import type { Core } from "cytoscape";
 import {
   AlertTriangle,
   Bolt,
@@ -192,6 +192,7 @@ export function App() {
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">メインコンテンツへ移動</a>
       <Sidebar view={view} onNavigate={navigate} overview={overview} />
       <div className="app-main">
         <Topbar
@@ -202,7 +203,7 @@ export function App() {
           onProjectChange={selectProject}
           onRefresh={refresh}
         />
-        <main className={`app-content view-${view}`}>
+        <main id="main-content" className={`app-content view-${view}`} tabIndex={-1}>
           {error && <ErrorBanner message={error} onRetry={() => void bootstrap()} />}
           {!error && loading && <LoadingState label="案件データを読み込んでいます" />}
           {!error && !loading && !projectId && <NoProject onProjectCreated={activateProject} />}
@@ -382,6 +383,49 @@ const SOURCE_MODES: Record<SourceMode, { label: string; accept: string; workflow
   csv: { label: "CSV", accept: ".csv", workflow: "table", action: "ingest_csv" },
 };
 
+function useTransmissionApproval() {
+  const [transmissions, setTransmissions] = useState<Array<Record<string, unknown>> | null>(null);
+  const resolver = useRef<((approved: boolean) => void) | null>(null);
+
+  useEffect(() => () => resolver.current?.(false), []);
+
+  const requestApproval = useCallback((items: Array<Record<string, unknown>>) => new Promise<boolean>((resolve) => {
+    resolver.current = resolve;
+    setTransmissions(items);
+  }), []);
+
+  const decide = useCallback((approved: boolean) => {
+    const resolve = resolver.current;
+    resolver.current = null;
+    setTransmissions(null);
+    resolve?.(approved);
+  }, []);
+
+  return {
+    requestApproval,
+    transmissionDialog: transmissions
+      ? <TransmissionDialog transmissions={transmissions} onDecision={decide} />
+      : null,
+  };
+}
+
+function TransmissionDialog({ transmissions, onDecision }: {
+  transmissions: Array<Record<string, unknown>>;
+  onDecision: (approved: boolean) => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    dialogRef.current?.showModal();
+    return () => dialogRef.current?.close();
+  }, []);
+  return <dialog ref={dialogRef} className="transmission-dialog" aria-labelledby="transmission-title" aria-describedby="transmission-description" onCancel={(event) => { event.preventDefault(); onDecision(false); }}>
+    <div className="dialog-heading"><ShieldCheck size={20} aria-hidden="true" /><div><p className="eyebrow">External transmission</p><h2 id="transmission-title">外部LLMへの送信確認</h2></div></div>
+    <p id="transmission-description">次の処理では設計情報を外部providerへ送信します。送信先と目的を確認してください。</p>
+    <dl className="transmission-list">{transmissions.map((item, index) => <div key={`${String(item.purpose)}-${index}`}><dt>{String(item.purpose ?? "analysis")}</dt><dd><strong>{String(item.provider ?? "provider")} / {String(item.model ?? "model")}</strong><span>{String(item.item_count_label ?? item.item_count ?? "件数未確定")}</span></dd></div>)}</dl>
+    <div className="dialog-actions"><button type="button" className="secondary-button" autoFocus onClick={() => onDecision(false)}>キャンセル</button><button type="button" className="primary-button" onClick={() => onDecision(true)}>内容を確認して実行</button></div>
+  </dialog>;
+}
+
 function SourceLibrary({ projectId, overview, sources, onRefresh }: {
   projectId: string;
   overview: Overview | null;
@@ -393,6 +437,7 @@ function SourceLibrary({ projectId, overview, sources, onRefresh }: {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const { requestApproval, transmissionDialog } = useTransmissionApproval();
 
   const addSources = async () => {
     if (!files.length) {
@@ -416,7 +461,7 @@ function SourceLibrary({ projectId, overview, sources, onRefresh }: {
         if (mode === "dirty_excel") params.llm = true;
         if (mode === "docs") params.no_llm = false;
         const preview = await api.externalPreview(projectId, definition.action, params);
-        const approved = !preview.required || window.confirm(formatTransmissionPreview(preview.transmissions));
+        const approved = !preview.required || await requestApproval(preview.transmissions);
         if (!approved) throw new Error("外部送信を承認しなかったため、取り込みを中止しました。");
         const created = await api.enqueue(projectId, definition.action, params, approved, "upload");
         await waitForJob(projectId, created.job.job_id);
@@ -438,7 +483,7 @@ function SourceLibrary({ projectId, overview, sources, onRefresh }: {
       <section className="source-import section-panel" aria-label="設計書を追加">
         <div className="source-mode" aria-label="設計書の種類">
           {(Object.entries(SOURCE_MODES) as Array<[SourceMode, typeof SOURCE_MODES[SourceMode]]>).map(([key, item]) => (
-            <button type="button" key={key} className={mode === key ? "active" : ""} onClick={() => { setMode(key); setFiles([]); }}>{item.label}</button>
+            <button type="button" key={key} className={mode === key ? "active" : ""} aria-pressed={mode === key} onClick={() => { setMode(key); setFiles([]); }}>{item.label}</button>
           ))}
         </div>
         <label className="file-picker">
@@ -461,6 +506,7 @@ function SourceLibrary({ projectId, overview, sources, onRefresh }: {
           {(source.warnings.length > 0 || source.stale_count > 0) && <span className="source-warning" title={[...source.warnings, source.stale_count ? `${source.stale_count} stale records` : ""].filter(Boolean).join("\n")}><AlertTriangle size={15} />{source.warnings.length + source.stale_count}</span>}
         </article>)}</div> : <EmptyState icon={FolderOpen} title="設計書はまだありません" body="上の追加欄から文書、Dirty Excel、OpenAPI、DDL、CSVを取り込めます。" />}
       </section>
+      {transmissionDialog}
     </div>
   );
 }
@@ -491,7 +537,8 @@ function ImpactWorkspace({ projectId, report, design, onDesignChange, onRefresh 
   const [changeText, setChangeText] = useState("");
   const [analysisState, setAnalysisState] = useState<"idle" | "running">("idle");
   const [message, setMessage] = useState("");
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(() => window.matchMedia("(min-width: 881px)").matches);
+  const { requestApproval, transmissionDialog } = useTransmissionApproval();
 
   useEffect(() => {
     if (selectionReady || !design) return;
@@ -531,6 +578,7 @@ function ImpactWorkspace({ projectId, report, design, onDesignChange, onRefresh 
 
   const selectImpact = async (impact: RankedImpact) => {
     setSelectedImpactId(impact.artifact_id);
+    setInspectorOpen(true);
     try {
       const nextDesign = await api.designDocuments(projectId, impact.evidence_ids);
       onDesignChange(nextDesign);
@@ -554,7 +602,7 @@ function ImpactWorkspace({ projectId, report, design, onDesignChange, onRefresh 
     const params = { body: changeText.trim(), design_document: selectedDoc?.document_id ?? selectedDocument };
     try {
       const preview = await api.externalPreview(projectId, "analyze_text_llm_first", params);
-      const approved = !preview.required || window.confirm(formatTransmissionPreview(preview.transmissions));
+      const approved = !preview.required || await requestApproval(preview.transmissions);
       if (!approved) {
         setMessage("分析をキャンセルしました。");
         setAnalysisState("idle");
@@ -604,7 +652,7 @@ function ImpactWorkspace({ projectId, report, design, onDesignChange, onRefresh 
         {message && <p className="inline-status" role="status">{message}</p>}
         <div className="review-workspace">
           <section className="candidate-pane" aria-label="影響候補">
-            <div className="pane-toolbar"><label className="search-control"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="候補を検索" /></label><span>{filtered.length}</span></div>
+            <div className="pane-toolbar"><label className="search-control"><Search size={15} /><input aria-label="影響候補を検索" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="候補を検索" /></label><span>{filtered.length}</span></div>
             <div className="candidate-list">
               {filtered.length ? filtered.map((impact) => <ImpactRow key={impact.artifact_id} impact={impact} selected={selectedImpact?.artifact_id === impact.artifact_id} onSelect={() => void selectImpact(impact)} />) : <EmptyState icon={FileSearch} title="候補がありません" body="変更内容を分析するか、検索条件を変更してください。" compact />}
             </div>
@@ -616,6 +664,7 @@ function ImpactWorkspace({ projectId, report, design, onDesignChange, onRefresh 
         </div>
       </section>
       {inspectorOpen && <ImpactInspector impact={selectedImpact} onClose={() => setInspectorOpen(false)} onRevealEvidence={revealEvidence} />}
+      {transmissionDialog}
     </div>
   );
 }
@@ -674,33 +723,39 @@ function StatusTag({ value }: { value: string }) {
 
 function GraphView({ graph }: { graph: GraphData | null }) {
   const container = useRef<HTMLDivElement>(null);
-  const graphInstance = useRef<cytoscape.Core | null>(null);
+  const graphInstance = useRef<Core | null>(null);
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
   const [search, setSearch] = useState("");
   useEffect(() => {
     if (!container.current || !graph?.nodes.length) return;
-    const instance = cytoscape({
-      container: container.current,
-      elements: [...graph.nodes, ...graph.edges],
-      layout: { name: "cose", animate: false, fit: true, padding: 48 },
-      style: [
-        { selector: "node", style: { "background-color": "#64748b", label: "data(label)", color: "#334155", "font-size": 11, "text-valign": "bottom", "text-margin-y": 8, width: 28, height: 28 } },
-        { selector: 'node[kind = "artifact"]', style: { "background-color": "#4f46e5", width: 34, height: 34 } },
-        { selector: 'node[kind = "entity"]', style: { "background-color": "#0891b2" } },
-        { selector: "edge", style: { width: 1.5, "line-color": "#cbd5e1", "target-arrow-color": "#cbd5e1", "target-arrow-shape": "triangle", "curve-style": "bezier", label: "data(label)", "font-size": 8, color: "#64748b" } },
-        { selector: 'edge[status = "confirmed"]', style: { "line-color": "#16a34a", "target-arrow-color": "#16a34a" } },
-        { selector: 'edge[status = "unconfirmed"]', style: { "line-color": "#d97706", "target-arrow-color": "#d97706", "line-style": "dashed" } },
-        { selector: 'node[stale = true]', style: { "border-color": "#dc2626", "border-width": 4 } },
-        { selector: 'edge[stale = true]', style: { "line-color": "#dc2626", "target-arrow-color": "#dc2626", "line-style": "dashed", width: 3 } },
-        { selector: ".dim", style: { opacity: 0.12 } },
-        { selector: ":selected", style: { "border-color": "#f59e0b", "border-width": 4 } },
-      ],
+    let active = true;
+    let instance: Core | null = null;
+    void import("cytoscape").then(({ default: cytoscape }) => {
+      if (!active || !container.current) return;
+      instance = cytoscape({
+        container: container.current,
+        elements: [...graph.nodes, ...graph.edges],
+        layout: { name: "cose", animate: false, fit: true, padding: 48 },
+        style: [
+          { selector: "node", style: { "background-color": "#64748b", label: "data(label)", color: "#334155", "font-size": 11, "text-valign": "bottom", "text-margin-y": 8, width: 28, height: 28 } },
+          { selector: 'node[kind = "artifact"]', style: { "background-color": "#4f46e5", width: 34, height: 34 } },
+          { selector: 'node[kind = "entity"]', style: { "background-color": "#0891b2" } },
+          { selector: "edge", style: { width: 1.5, "line-color": "#cbd5e1", "target-arrow-color": "#cbd5e1", "target-arrow-shape": "triangle", "curve-style": "bezier", label: "data(label)", "font-size": 8, color: "#64748b" } },
+          { selector: 'edge[status = "confirmed"]', style: { "line-color": "#16a34a", "target-arrow-color": "#16a34a" } },
+          { selector: 'edge[status = "unconfirmed"]', style: { "line-color": "#d97706", "target-arrow-color": "#d97706", "line-style": "dashed" } },
+          { selector: "node[?stale]", style: { "border-color": "#dc2626", "border-width": 4 } },
+          { selector: "edge[?stale]", style: { "line-color": "#dc2626", "target-arrow-color": "#dc2626", "line-style": "dashed", width: 3 } },
+          { selector: ".dim", style: { opacity: 0.12 } },
+          { selector: ":selected", style: { "border-color": "#f59e0b", "border-width": 4 } },
+        ],
+      });
+      graphInstance.current = instance;
+      instance.on("tap", "node, edge", (event) => setSelected(event.target.data() as Record<string, unknown>));
     });
-    graphInstance.current = instance;
-    instance.on("tap", "node, edge", (event) => setSelected(event.target.data() as Record<string, unknown>));
     return () => {
+      active = false;
       graphInstance.current = null;
-      instance.destroy();
+      instance?.destroy();
     };
   }, [graph]);
   useEffect(() => {
@@ -719,7 +774,7 @@ function GraphView({ graph }: { graph: GraphData | null }) {
     <div className="graph-page">
       <ViewHeader eyebrow="Knowledge graph" title="ナレッジグラフ" description="設計要素、relation、evidenceの接続を確認します。" />
       <div className="graph-workspace">
-        <section className="graph-stage"><div className="graph-tools"><label className="search-control"><Search size={15} /><input id="graph-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ノードを検索" /></label></div>{graph?.nodes.length ? <div id="graph-canvas" ref={container} aria-label="設計要素と関係を表示するknowledge graph" /> : <EmptyState icon={Network} title="グラフがありません" body="設計書を取り込むとグラフが表示されます。" />}</section>
+        <section className="graph-stage"><div className="graph-tools"><label className="search-control"><Search size={15} /><input id="graph-search" aria-label="グラフを検索" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ノードを検索" /></label><select aria-label="グラフ要素を選択" value={String(selected?.id ?? "")} onChange={(event) => { const id = event.target.value; const element = [...(graph?.nodes ?? []), ...(graph?.edges ?? [])].find((item) => String(item.data.id) === id); setSelected(element?.data ?? null); }}><option value="">要素を選択</option>{graph?.nodes.map((node) => <option value={node.data.id} key={node.data.id}>{String(node.data.label ?? node.data.id)}</option>)}{graph?.edges.map((edge) => <option value={edge.data.id} key={edge.data.id}>{String(edge.data.label ?? edge.data.id)}</option>)}</select></div>{graph?.nodes.length ? <div id="graph-canvas" ref={container} role="img" aria-label="設計要素と関係を表示するknowledge graph。上部の選択欄からキーボードでも要素を確認できます。" /> : <EmptyState icon={Network} title="グラフがありません" body="設計書を取り込むとグラフが表示されます。" />}</section>
         <aside className="graph-inspector">{selected ? <><p className="eyebrow">Selection</p><h2>{String(selected.label ?? selected.id)}</h2><dl className="property-list">{Object.entries(selected).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{Array.isArray(value) ? value.join(", ") : String(value)}</dd></div>)}</dl></> : <EmptyState icon={CircleDot} title="要素を選択" body="ノードまたはrelationを選択すると詳細を表示します。" compact />}</aside>
       </div>
     </div>
@@ -785,7 +840,7 @@ function ReviewQueueView({ projectId, queue, onRefresh }: { projectId: string; q
   return <div className="page page-reviews">
     <ViewHeader eyebrow="Unified review queue" title="レビュー" description="Graph proposal、Alias、relation、Impactを根拠と同じ画面で判断します。" />
     <section className="review-summary" aria-label="レビュー件数"><div><span>Actionable</span><strong>{queue?.summary.actionable ?? 0}</strong></div><div><span>Total</span><strong>{queue?.summary.total ?? 0}</strong></div>{Object.entries(queue?.summary.by_kind ?? {}).map(([key, count]) => <div key={key}><span>{REVIEW_KIND_LABELS[key] ?? key}</span><strong>{count}</strong></div>)}</section>
-    <div className="review-filters"><div className="source-mode" aria-label="レビュー種類"><button className={kind === "all" ? "active" : ""} onClick={() => setKind("all")}>すべて</button>{Object.entries(REVIEW_KIND_LABELS).map(([key, label]) => <button key={key} className={kind === key ? "active" : ""} onClick={() => setKind(key)}>{label}</button>)}</div><label>状態<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="actionable">要確認</option><option value="all">すべて</option><option value="stale">stale</option><option value="accepted">accepted</option><option value="rejected">rejected</option><option value="confirmed">confirmed</option><option value="reviewed">reviewed</option><option value="closed">closed</option></select></label></div>
+    <div className="review-filters"><div className="source-mode" aria-label="レビュー種類"><button className={kind === "all" ? "active" : ""} aria-pressed={kind === "all"} onClick={() => setKind("all")}>すべて</button>{Object.entries(REVIEW_KIND_LABELS).map(([key, label]) => <button key={key} className={kind === key ? "active" : ""} aria-pressed={kind === key} onClick={() => setKind(key)}>{label}</button>)}</div><label>状態<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="actionable">要確認</option><option value="all">すべて</option><option value="stale">stale</option><option value="accepted">accepted</option><option value="rejected">rejected</option><option value="confirmed">confirmed</option><option value="reviewed">reviewed</option><option value="closed">closed</option></select></label></div>
     {message && <p className="form-message" role="status">{message}</p>}
     <section className="unified-review section-panel">
       <div className="review-list" aria-label="レビュー項目">{filtered.length ? filtered.map((item) => <button type="button" className={`review-row ${selected?.item_id === item.item_id ? "selected" : ""}`} key={item.item_id} onClick={() => setSelectedId(item.item_id)}><span className={`priority-dot ${item.priority}`} /><span><small>{REVIEW_KIND_LABELS[item.kind]}</small><strong>{item.title}</strong><em>{item.subtitle}</em></span><StatusTag value={item.status} /></button>) : <EmptyState icon={ClipboardCheck} title="該当するレビューはありません" body="filterを変更するか、設計書を取り込んでください。" compact />}</div>
@@ -881,12 +936,12 @@ function IntegrationsView({ projectId, data, onRefresh }: { projectId: string; d
         {replay ? <dl className="settings-list">{Object.entries(replay).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{String(value ?? "—")}</dd></div>)}</dl> : <EmptyState icon={RefreshCw} title="Replayはありません" body="LLM-first分析後に再現metadataが表示されます。" compact />}
       </section>
     </div>
-    <section className="table-panel audit-panel"><div className="section-heading"><span><ShieldCheck size={17} />LLM transmission audit</span><small>{audit.length} events · {sessions.length} sessions</small></div><table className="jobs-table"><thead><tr><th>Purpose</th><th>Provider / Model</th><th>Items</th><th>Redaction</th><th>Source hash</th><th>Created</th></tr></thead><tbody>{audit.slice().reverse().map((event, index) => <tr key={`${String(event.prompt_hash)}-${index}`}><td>{String(event.purpose ?? "—")}</td><td><strong>{String(event.provider ?? "—")}</strong><small>{String(event.model ?? "—")}</small></td><td>{String(event.item_count ?? "—")}</td><td><StatusTag value={event.redacted ? "redacted" : "unchanged"} /></td><td><code>{String(event.source_hash ?? "—").slice(0, 16)}</code></td><td>{event.created_at ? formatDate(String(event.created_at)) : "—"}</td></tr>)}</tbody></table>{!audit.length && <EmptyState icon={ShieldCheck} title="LLM送信履歴はありません" body="外部送信を含む処理の安全なmetadataだけを表示します。" compact />}</section>
+    <section className="table-panel audit-panel"><div className="section-heading"><span><ShieldCheck size={17} />LLM transmission audit</span><small>{audit.length} events · {sessions.length} sessions</small></div><table className="jobs-table"><caption className="sr-only">LLM送信監査履歴</caption><thead><tr><th>Purpose</th><th>Provider / Model</th><th>Items</th><th>Redaction</th><th>Source hash</th><th>Created</th></tr></thead><tbody>{audit.slice().reverse().map((event, index) => <tr key={`${String(event.prompt_hash)}-${index}`}><td>{String(event.purpose ?? "—")}</td><td><strong>{String(event.provider ?? "—")}</strong><small>{String(event.model ?? "—")}</small></td><td>{String(event.item_count ?? "—")}</td><td><StatusTag value={event.redacted ? "redacted" : "unchanged"} /></td><td><code>{String(event.source_hash ?? "—").slice(0, 16)}</code></td><td>{event.created_at ? formatDate(String(event.created_at)) : "—"}</td></tr>)}</tbody></table>{!audit.length && <EmptyState icon={ShieldCheck} title="LLM送信履歴はありません" body="外部送信を含む処理の安全なmetadataだけを表示します。" compact />}</section>
   </div>;
 }
 
 function JobsView({ jobs }: { jobs: Job[] }) {
-  return <div className="page"><ViewHeader eyebrow="Operations" title="ジョブと監査" description="案件内の更新処理は順番に実行されます。失敗時は復旧方法を確認できます。" /><section className="table-panel"><table className="jobs-table"><thead><tr><th>Action</th><th>State</th><th>Input</th><th>Created</th><th>Finished</th><th>Recovery</th></tr></thead><tbody>{jobs.map((job) => <tr key={job.job_id}><td><strong>{job.action}</strong><small>{job.job_id.slice(0, 10)}</small></td><td><StatusTag value={job.state} /></td><td>{job.input_kind}</td><td>{formatDate(job.created_at)}</td><td>{job.finished_at ? formatDate(job.finished_at) : "—"}</td><td className="recovery-cell">{job.state === "failed" ? recoveryHint(job) : "—"}</td></tr>)}</tbody></table>{!jobs.length && <EmptyState icon={ListChecks} title="ジョブ履歴はありません" body="更新処理を実行すると履歴が保存されます。" />}</section></div>;
+  return <div className="page"><ViewHeader eyebrow="Operations" title="ジョブと監査" description="案件内の更新処理は順番に実行されます。失敗時は復旧方法を確認できます。" /><section className="table-panel"><table className="jobs-table"><caption className="sr-only">案件ジョブ履歴と復旧手順</caption><thead><tr><th>Action</th><th>State</th><th>Input</th><th>Created</th><th>Finished</th><th>Recovery</th></tr></thead><tbody>{jobs.map((job) => <tr key={job.job_id}><td><strong>{job.action}</strong><small>{job.job_id.slice(0, 10)}</small></td><td><StatusTag value={job.state} /></td><td>{job.input_kind}</td><td>{formatDate(job.created_at)}</td><td>{job.finished_at ? formatDate(job.finished_at) : "—"}</td><td className="recovery-cell">{job.state === "failed" ? recoveryHint(job) : "—"}</td></tr>)}</tbody></table>{!jobs.length && <EmptyState icon={ListChecks} title="ジョブ履歴はありません" body="更新処理を実行すると履歴が保存されます。" />}</section></div>;
 }
 
 function recoveryHint(job: Job): string {
@@ -982,11 +1037,6 @@ function NoProject({ onProjectCreated }: { onProjectCreated: (project: Project) 
 function formatDate(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.valueOf()) ? value : new Intl.DateTimeFormat("ja-JP", { dateStyle: "short", timeStyle: "short" }).format(date);
-}
-
-function formatTransmissionPreview(transmissions: Array<Record<string, unknown>>): string {
-  const details = transmissions.map((item) => `${String(item.provider ?? "provider")} / ${String(item.model ?? "model")} / ${String(item.purpose ?? "analysis")} / ${String(item.item_count_label ?? item.item_count ?? "件数未確定")}`).join("\n");
-  return `外部LLMへ次のデータを送信します。\n\n${details}\n\nこのジョブを実行しますか？`;
 }
 
 function parentPath(path: string): string {
