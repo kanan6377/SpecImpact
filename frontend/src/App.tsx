@@ -84,6 +84,13 @@ function updateReviewUrl(projectId: string, impactId: string, sourceId: string, 
   window.history.replaceState({}, "", `/ui/impact-board?${params.toString()}`);
 }
 
+function updateSourceUrl(projectId: string, sourceId: string): void {
+  const params = new URLSearchParams();
+  params.set("project_id", projectId);
+  if (sourceId) params.set("source", sourceId);
+  window.history.replaceState({}, "", `/ui/sources?${params.toString()}`);
+}
+
 function reviewParam(name: string): string {
   return new URLSearchParams(window.location.search).get(name) ?? "";
 }
@@ -313,7 +320,7 @@ function ActiveView(props: {
   onNavigate: (view: ViewName) => void;
 }) {
   if (props.view === "dashboard") return <Dashboard overview={props.overview} report={props.report} jobs={props.jobs} onNavigate={props.onNavigate} />;
-  if (props.view === "sources") return <SourceLibrary projectId={props.projectId} overview={props.overview} sources={props.sources} onRefresh={props.onRefresh} />;
+  if (props.view === "sources") return <SourceLibrary projectId={props.projectId} overview={props.overview} sources={props.sources} design={props.design} onRefresh={props.onRefresh} />;
   if (props.view === "impact-board") return <ImpactWorkspace {...props} />;
   if (props.view === "graph") return <GraphView graph={props.graph} />;
   if (props.view === "reviews") return <ReviewQueueView projectId={props.projectId} queue={props.reviews} onRefresh={props.onRefresh} />;
@@ -426,18 +433,48 @@ function TransmissionDialog({ transmissions, onDecision }: {
   </dialog>;
 }
 
-function SourceLibrary({ projectId, overview, sources, onRefresh }: {
+function SourceLibrary({ projectId, overview, sources, design, onRefresh }: {
   projectId: string;
   overview: Overview | null;
   sources: SourceSummary[];
+  design: DesignDocuments | null;
   onRefresh: () => Promise<void>;
 }) {
   const [mode, setMode] = useState<SourceMode>("dirty_excel");
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const initialSource = useRef(reviewParam("source")).current;
+  const [selectedSourceId, setSelectedSourceId] = useState(initialSource);
+  const [sourceQuery, setSourceQuery] = useState("");
+  const [viewerQuery, setViewerQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const previewRef = useRef<HTMLElement>(null);
   const { requestApproval, transmissionDialog } = useTransmissionApproval();
+
+  useEffect(() => {
+    if (!sources.length) return;
+    if (!sources.some((source) => source.source_id === selectedSourceId)) {
+      setSelectedSourceId(sources[0].source_id);
+    }
+  }, [selectedSourceId, sources]);
+
+  const filteredSources = sources.filter((source) =>
+    `${source.title} ${source.path} ${source.source_type}`.toLocaleLowerCase().includes(sourceQuery.toLocaleLowerCase()),
+  );
+  const selectedSource = sources.find((source) => source.source_id === selectedSourceId) ?? sources[0];
+  const selectedDocument = design?.documents.find((document) =>
+    document.document_id === selectedSource?.source_id || sameSourcePath(document.file, selectedSource?.path),
+  );
+
+  const selectSource = (source: SourceSummary) => {
+    setSelectedSourceId(source.source_id);
+    setViewerQuery("");
+    updateSourceUrl(projectId, source.source_id);
+    if (window.matchMedia("(max-width: 680px)").matches) {
+      window.requestAnimationFrame(() => previewRef.current?.scrollIntoView({ block: "start" }));
+    }
+  };
 
   const addSources = async () => {
     if (!files.length) {
@@ -496,19 +533,32 @@ function SourceLibrary({ projectId, overview, sources, onRefresh }: {
         </button>
       </section>
       {message && <p className="form-message" role="status">{message}</p>}
-      <section className="source-library section-panel">
-        <div className="section-heading"><span><FolderOpen size={17} />Source Library</span><small>{sources.length} sources</small></div>
-        {sources.length ? <div className="source-list">{sources.map((source) => <article className="source-item" key={source.source_id}>
-          <div className="source-icon">{source.source_type.includes("excel") ? <FileSpreadsheet size={19} /> : <FileText size={19} />}</div>
-          <div className="source-copy"><strong>{source.title}</strong><small title={source.path}>{source.path}</small></div>
-          <StatusTag value={source.stale_count > 0 ? "stale" : source.status} />
-          <dl className="source-facts"><div><dt>Version</dt><dd>{source.version_count}</dd></div><div><dt>Evidence</dt><dd>{source.evidence_count}</dd></div><div><dt>Artifacts</dt><dd>{source.artifact_count}</dd></div><div><dt>Relations</dt><dd>{source.relation_count}</dd></div>{source.sheet_count > 0 && <div><dt>Sheets</dt><dd>{source.sheet_count}</dd></div>}</dl>
-          {(source.warnings.length > 0 || source.stale_count > 0) && <span className="source-warning" title={[...source.warnings, source.stale_count ? `${source.stale_count} stale records` : ""].filter(Boolean).join("\n")}><AlertTriangle size={15} />{source.warnings.length + source.stale_count}</span>}
-        </article>)}</div> : <EmptyState icon={FolderOpen} title="設計書はまだありません" body="上の追加欄から文書、Dirty Excel、OpenAPI、DDL、CSVを取り込めます。" />}
+      <section className="source-browser section-panel" aria-label="設計書ライブラリとプレビュー">
+        <aside className="source-catalog" aria-label="設計書一覧">
+          <div className="source-catalog-heading"><div><FolderOpen size={18} /><strong>設計書</strong><span>{sources.length}</span></div><label className="search-control"><Search size={16} /><input aria-label="設計書を検索" value={sourceQuery} onChange={(event) => setSourceQuery(event.target.value)} placeholder="名前・パスで検索" /></label></div>
+          {filteredSources.length ? <div className="source-list">{filteredSources.map((source) => <button type="button" className={`source-item ${selectedSource?.source_id === source.source_id ? "selected" : ""}`} aria-pressed={selectedSource?.source_id === source.source_id} key={source.source_id} onClick={() => selectSource(source)}>
+            <span className="source-icon">{source.source_type.includes("excel") ? <FileSpreadsheet size={20} /> : <FileText size={20} />}</span>
+            <span className="source-copy"><strong>{source.title}</strong><small title={source.path}>{source.path}</small><span className="source-row-meta"><span>{source.evidence_count} evidence</span><span>{source.artifact_count} artifacts</span>{source.sheet_count > 0 && <span>{source.sheet_count} sheets</span>}</span></span>
+            <span className="source-state"><StatusTag value={source.stale_count > 0 ? "stale" : source.status} />{(source.warnings.length > 0 || source.stale_count > 0) && <span className="source-warning" title={[...source.warnings, source.stale_count ? `${source.stale_count} stale records` : ""].filter(Boolean).join("\n")}><AlertTriangle size={15} />{source.warnings.length + source.stale_count}</span>}</span>
+          </button>)}</div> : <EmptyState icon={FolderOpen} title="設計書が見つかりません" body={sources.length ? "検索条件を変更してください。" : "上の追加欄から設計書を取り込めます。"} compact />}
+        </aside>
+        <section className="source-preview" ref={previewRef} aria-label="設計書プレビュー">
+          {selectedSource ? <>
+            <header className="source-preview-header"><div className="source-preview-title"><span className="source-icon">{selectedSource.source_type.includes("excel") ? <FileSpreadsheet size={20} /> : <FileText size={20} />}</span><div><p className="eyebrow">Document preview</p><h2>{selectedSource.title}</h2><p title={selectedSource.path}>{selectedSource.path}</p></div></div><div className="source-preview-facts"><StatusTag value={selectedSource.stale_count > 0 ? "stale" : selectedSource.status} /><span>v{selectedSource.version_count || 1}</span><span>{selectedSource.evidence_count} evidence</span></div></header>
+            <div className="source-viewer-toolbar"><label className="search-control"><Search size={16} /><input aria-label="開いている設計書内を検索" value={viewerQuery} onChange={(event) => setViewerQuery(event.target.value)} placeholder="この設計書内を検索" /></label><span>{selectedDocument?.cells.length ? "Excel cell viewer" : "Document viewer"}</span></div>
+            <DocumentViewer document={selectedDocument} focusedEvidenceId="" query={viewerQuery} />
+          </> : <EmptyState icon={FileText} title="設計書を選択" body="左の一覧を選ぶと、ここで内容を確認できます。" />}
+        </section>
       </section>
       {transmissionDialog}
     </div>
   );
+}
+
+function sameSourcePath(left: string | undefined, right: string | undefined): boolean {
+  if (!left || !right) return false;
+  const normalize = (value: string) => value.replaceAll("\\", "/").toLocaleLowerCase();
+  return normalize(left) === normalize(right);
 }
 
 type RankedImpact = Impact & { priority: string };
@@ -679,8 +729,11 @@ function ImpactRow({ impact, selected, onSelect }: { impact: RankedImpact; selec
   );
 }
 
-function DocumentViewer({ document, focusedEvidenceId }: { document: DesignDocument | undefined; focusedEvidenceId: string }) {
+function DocumentViewer({ document, focusedEvidenceId, query = "" }: { document: DesignDocument | undefined; focusedEvidenceId: string; query?: string }) {
   const viewer = useRef<HTMLDivElement>(null);
+  const [sheet, setSheet] = useState("all");
+  const sheets = useMemo(() => Array.from(new Set(document?.cells.map((cell) => cell.sheet_name) ?? [])), [document?.cells]);
+  useEffect(() => setSheet("all"), [document?.file]);
   useEffect(() => {
     if (!focusedEvidenceId || !viewer.current) return;
     const target = Array.from(viewer.current.querySelectorAll<HTMLElement>("[data-evidence-ids]")).find((element) =>
@@ -689,13 +742,24 @@ function DocumentViewer({ document, focusedEvidenceId }: { document: DesignDocum
     target?.scrollIntoView({ block: "center" });
   }, [document?.file, focusedEvidenceId]);
   if (!document) return <EmptyState icon={FileText} title="設計書がありません" body="この案件には表示可能な設計書がありません。" />;
+  const term = query.trim().toLocaleLowerCase();
   if (document.cells.length) {
-    return <div className="document-scroll" ref={viewer}><table className="cell-table"><thead><tr><th>Sheet</th><th>Cell</th><th>Value</th></tr></thead><tbody>{document.cells.map((cell) => <tr key={`${cell.sheet_name}-${cell.cell}`} data-evidence-ids={cell.evidence_ids.join(" ")} className={`${cell.highlight ? "highlight" : ""} ${cell.evidence_ids.includes(focusedEvidenceId) ? "evidence-focus" : ""}`}><td>{cell.sheet_name}</td><td><code>{cell.cell}</code>{cell.merged_range && <small>{cell.merged_range}</small>}</td><td>{cell.value}</td></tr>)}</tbody></table></div>;
+    const cells = document.cells.filter((cell) =>
+      (sheet === "all" || cell.sheet_name === sheet)
+      && (!term || `${cell.sheet_name} ${cell.cell} ${cell.value ?? ""}`.toLocaleLowerCase().includes(term)),
+    );
+    return <div className="document-viewer"><div className="document-controls"><label>Sheet<select value={sheet} onChange={(event) => setSheet(event.target.value)}><option value="all">すべて ({document.cells.length})</option>{sheets.map((name) => <option value={name} key={name}>{name}</option>)}</select></label><span>{cells.length} cells</span></div><div className="document-scroll" ref={viewer}>{cells.length ? <table className="cell-table"><thead><tr><th>Sheet</th><th>Cell</th><th>Value</th></tr></thead><tbody>{cells.map((cell) => <tr key={`${cell.sheet_name}-${cell.cell}`} data-evidence-ids={cell.evidence_ids.join(" ")} className={`${cell.highlight ? "highlight" : ""} ${cell.evidence_ids.includes(focusedEvidenceId) ? "evidence-focus" : ""}`}><td>{cell.sheet_name}</td><td><code>{cell.cell}</code>{cell.merged_range && <small>{cell.merged_range}</small>}</td><td>{cell.value}</td></tr>)}</tbody></table> : <ViewerEmpty />}</div></div>;
   }
   if (document.rows.length) {
-    return <div className="document-scroll source-code" ref={viewer}>{document.rows.map((row) => <div data-evidence-ids={row.evidence_ids.join(" ")} className={`source-row ${row.highlight ? "highlight" : ""} ${row.evidence_ids.includes(focusedEvidenceId) ? "evidence-focus" : ""}`} key={row.line}><span>{row.line}</span><code>{row.text || " "}</code></div>)}</div>;
+    const rows = document.rows.filter((row) => !term || row.text.toLocaleLowerCase().includes(term));
+    return <div className="document-viewer"><div className="document-scroll source-code" ref={viewer}>{rows.length ? rows.map((row) => <div data-evidence-ids={row.evidence_ids.join(" ")} className={`source-row ${row.highlight ? "highlight" : ""} ${row.evidence_ids.includes(focusedEvidenceId) ? "evidence-focus" : ""}`} key={row.line}><span>{row.line}</span><code>{row.text || " "}</code></div>) : <ViewerEmpty />}</div></div>;
   }
-  return <div className="document-scroll evidence-fallback" ref={viewer}>{document.evidence.map((evidence) => <article data-evidence-ids={evidence.evidence_id} className={evidence.evidence_id === focusedEvidenceId ? "evidence-focus" : ""} key={evidence.evidence_id}><code>{evidence.evidence_id}</code><p>{evidence.quote}</p></article>)}</div>;
+  const evidence = document.evidence.filter((item) => !term || `${item.evidence_id} ${item.quote}`.toLocaleLowerCase().includes(term));
+  return <div className="document-viewer"><div className="document-scroll evidence-fallback" ref={viewer}>{evidence.length ? evidence.map((item) => <article data-evidence-ids={item.evidence_id} className={item.evidence_id === focusedEvidenceId ? "evidence-focus" : ""} key={item.evidence_id}><code>{item.evidence_id}</code><p>{item.quote}</p></article>) : <ViewerEmpty />}</div></div>;
+}
+
+function ViewerEmpty() {
+  return <div className="viewer-empty"><Search size={22} /><strong>一致する内容がありません</strong><span>検索語またはシートを変更してください。</span></div>;
 }
 
 function ImpactInspector({ impact, onClose, onRevealEvidence }: { impact: RankedImpact | undefined; onClose: () => void; onRevealEvidence: (evidenceId: string) => void }) {

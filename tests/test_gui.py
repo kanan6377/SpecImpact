@@ -11,6 +11,7 @@ from urllib.parse import quote
 import pytest
 from fastapi.testclient import TestClient
 
+from specimpact.dirty_excel.ingestion import ingest_dirty_excel
 from specimpact.llm_graph.schemas import (
     AliasCandidate,
     ExtractedNode,
@@ -195,6 +196,8 @@ def test_gui_pages_security_project_upload_and_init_job(tmp_path: Path) -> None:
         assert "SI_DATA" not in bundle.text
         assert "showModal" in bundle.text
         assert "window.confirm" not in bundle.text
+        assert "設計書プレビュー" in bundle.text
+        assert "この設計書内を検索" in bundle.text
         assert client.get("/static/dist/app.css").status_code == 200
         redirect = client.get(
             "/ui/analyze?project_id=project-one",
@@ -460,6 +463,23 @@ def test_design_documents_endpoint_filters_to_selected_evidence(tmp_path: Path) 
     body = response.json()
     assert body["selected_evidence_ids"] == [evidence_id]
     assert any(document["highlight_count"] for document in body["documents"])
+
+
+def test_design_documents_data_returns_dirty_excel_cells_for_inline_viewer(
+    tmp_path: Path,
+) -> None:
+    project = ProjectRegistry(tmp_path / "registry").create(tmp_path / "project")
+    store = LocalStore(Path(project.path) / ".specimpact")
+    workbook = Path("examples/dirty_sier_excel/docs/01_画面設計_結合セルあり.xlsx")
+
+    ingest_dirty_excel(store, workbook)
+    data = design_documents_data(project, evidence_ids=[])
+
+    document = next(item for item in data["documents"] if item["cells"])
+    assert document["cells"]
+    assert {cell["sheet_name"] for cell in document["cells"]}
+    assert all(cell["cell"] for cell in document["cells"])
+    assert any(cell["value"] for cell in document["cells"])
 
 
 def test_source_library_summarizes_managed_ingest_and_endpoint(tmp_path: Path) -> None:

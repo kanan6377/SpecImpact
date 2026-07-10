@@ -286,7 +286,9 @@ GUI は `127.0.0.1` のみに bind します。
 - 設定とプライバシー
 
 案件が未登録の場合は、GUI内で案件フォルダーを作成するか、ガイド付きサンプルを生成できます。
-設計書画面はMarkdown/text、Dirty Excel、OpenAPI、DDL、CSVのmanaged uploadに対応します。
+設計書画面はMarkdown/text、Dirty Excel、OpenAPI、DDL、CSVのmanaged uploadに対応します。設計書名を
+押すと同じ画面の右ペインに内容が開きます。名前・パスによる一覧検索、本文・セル値の文書内検索、
+Dirty Excelのsheet切替を利用でき、evidence対象の行またはcellは黄色で表示されます。
 変更レビューは、選択した起点設計書のdocument IDと関連graph要素を分析contextへ含めます。
 候補、設計書、evidenceの選択はURLへ保存され、evidenceを押すと引用元の行またはcellへ移動します。
 設計書の再取り込みでhashが変わるとsource versionとgraph diffが追加され、旧evidenceに依存する

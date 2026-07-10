@@ -450,3 +450,23 @@ Completion checklist:
 
 Notes: The Graph canvas retains an adjacent semantic selection control. The packaged frontend has
 no runtime CDN or remote font dependency.
+
+## v1.2.0 Source Viewer UX
+
+Scope:
+- SharePoint-style inline source selection and preview
+- source-list and in-document search
+- Dirty Excel sheet and cell-address navigation
+- responsive stacked viewer for narrow screens
+
+Completion checklist:
+- [x] Source selection opens the document without leaving the page
+- [x] Selected source is persisted in the URL
+- [x] Markdown/text rows and Dirty Excel cells remain evidence-highlighted
+- [x] Dirty Excel sheets can be selected in the viewer
+- [x] Desktop and mobile layouts are responsive
+- [x] README and manuals updated
+- [x] `docs/reviews/v1.2.0-source-viewer.md` written
+
+Notes: This is a cell-addressed evidence viewer, not an Office-compatible workbook renderer. Images,
+shapes, formulas as rendered values, and workbook editing remain outside the current scope.

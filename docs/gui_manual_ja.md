@@ -60,6 +60,13 @@ warningを表示します。`indexed` は文書として登録済みだがrelati
 evidenceを持つ状態です。`Version` は同じdocument IDで観測したhash世代数です。再取り込みでhashが
 変わると、その文書に依存する未解決stale件数を赤いstatusとwarning数で表示します。
 
+設計書名を押すと、SharePointのプレビューと同じように画面遷移せず右側のビューアで内容を開きます。
+左側では名前またはパスで設計書を絞り込み、右側では開いている設計書の本文またはセル値を検索できます。
+Markdown/textは行番号付きで、Dirty Excelはsheetとcell address付きの表として表示します。Excelでは
+sheet選択から表示範囲を切り替えられ、evidence対象は黄色でハイライトされます。選択中の設計書はURLの
+`source` queryへ保存されるため、再読み込みやURL共有でも同じ設計書を開けます。狭幅画面では一覧と
+ビューアを縦に並べ、設計書を選ぶとビューアまで自動で移動します。
+
 ## 4. 変更レビュー
 
 1. 上部barで案件を選ぶ

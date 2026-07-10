@@ -129,7 +129,7 @@ Evidence Review Workspaceは、設計書と影響候補を別画面へ分断せ�
 | 画面 | 用途 |
 | --- | --- |
 | 概要 | graph件数、次のレビュー、案件healthを確認 |
-| 設計書 | 原本追加、Dirty Excel / structured loader、Source Library |
+| 設計書 | 原本追加、検索可能な一覧、押下して開くインラインビューア、Excelシート切替 |
 | 変更レビュー | 自然文入力、影響候補、設計書ハイライト、Evidence Inspector |
 | ナレッジグラフ | node / relation探索、stale表示、キーボード選択 |
 | レビュー | Proposal、Alias、Relation、Impact、Graph Diffの判断 |
