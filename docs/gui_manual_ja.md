@@ -207,6 +207,7 @@ CSRF/session保護されたAPIを提供し、React/TypeScript frontendがそれ�
 - API keyと文書本文をjob logへ残さない
 - Graphの更新は案件queueと永続化serviceを経由する
 
-source version/stale表示はUX modernizationの後続phaseで追加します。
-進捗と完了条件は [UX Redesign Plan](ux_redesign_plan.md) と
+source version、graph diff、stale dependencyは実装済みです。Source Libraryでversion、
+Graphでstale node/relation、統一Review Queueで再レビュー対象を確認できます。
+設計判断と完了記録は [UX Redesign Plan](ux_redesign_plan.md) と
 [Phase Status](phase_status.md) を参照してください。

@@ -1,294 +1,239 @@
 # SpecImpact
 
-SpecImpact は、SIer でよくある汚い Excel 設計書を LLM で読み取り、GraphRAG と evidence 付きレビューで変更影響を管理する OSS です。
+<div align="center">
 
-> **UX modernization:** 現行GUIを、設計書・影響候補・evidence・人間判断を一つの文脈で扱う
-> Evidence Review Workspaceへ段階的に刷新しています。設計原則、現状監査、完了条件は
-> [UX Redesign Plan](docs/ux_redesign_plan.md) を参照してください。
+**汚いExcel設計書を、根拠付きの変更影響レビューへ。**
 
-設計書を投入すると、画面、API、DB、外部 IF、入力チェック、テスト仕様などを evidence graph に変換します。その後、変更依頼を自然文または Markdown で入力すると、Change Atom として構造化し、グラフ上の依存関係から影響候補を `must_review` / `should_review` / `may_review` / `hidden` に分類します。
+設計書をLLMとGraphRAGで構造化し、自然文の変更要求から
+影響候補・依存経路・該当セル・必要作業を提示するローカルファーストOSSです。
 
-SpecImpact の出力は「影響確定」ではなく「レビュー候補」です。LLM の主張だけで `must_review` にはせず、直接 evidence と graph path があるものだけを強く提示します。
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB)](https://www.python.org/)
+[![Version](https://img.shields.io/badge/version-1.2.0-4F46E5)](https://github.com/kanan6377/SpecImpact)
+[![License](https://img.shields.io/badge/license-Apache--2.0-0F766E)](LICENSE)
 
-## 特徴
+[5分で試す](#5分で試す) · [GUI](#gui) · [仕組み](#仕組み) · [マニュアル](docs/user_manual_ja.md)
 
-- LLM-first の初期導入: Codex CLI、OpenAI API、Ollama、fake provider に対応
-- Dirty Excel ingestion: 結合セル、複数表混在、同上、別紙参照、セル範囲 evidence を扱う
-- GraphRAG: 設計書から artifact、entity、relation、evidence を JSONL に保存
-- Alias review: `利用限度額`、`requestedCreditLimit`、`REQUESTED_CREDIT_LIMIT` などの表記揺れを候補化
-- LLM alias judgement: entity ペアごとに `same / related / different / unsure` を判定
-- Alias recall 強化: camelCase/snake_case 分解、名前トークン、疑似 embedding 類似、周辺 relation、近傍 evidence を候補生成に利用
-- LLM impact hypothesis: `impact_type`、`required_actions`、`warnings`、`uncertainty` を作業仮説として保存
-- Verifier: LLM だけの主張を `must_review` にしない安全側の分類
-- GUI: localhost 限定の Evidence Review Workspace。影響候補、設計書ハイライト、evidence、Graphを同じ案件文脈で確認
-- Obsidian export: Artifact / Evidence / Change / Impact note と Canvas を生成
-- OSS 向け評価: release-check、dirty Excel golden、Obsidian snapshot test を整備
+</div>
 
-標準導線は LLM-first です。ただし外部送信は明示設定と承認が必要です。ローカルだけで試す場合は `--no-llm` を使えます。
+![SpecImpact Evidence Review Workspace](docs/images/gui/dashboard.png)
 
-```text
-Standard provider: Codex CLI
-External transmission: preview + approval
-Local state: .specimpact/
-Backend: local JSONL
-Fallback: --no-llm
+> [!IMPORTANT]
+> v1.2.0はAlphaです。出力は影響の確定結果ではなく、人間が確認するレビュー候補です。
+
+## 解決する課題
+
+SIerの設計書では、同じ項目が画面、入力チェック、API、DB、外部IF、テスト仕様へ分散し、
+日本語名・camelCase・snake_caseも混在します。単純な全文検索では「見つかった箇所」は分かっても、
+**なぜ変更対象なのか、どの経路で依存しているのか、どこまで確認したか**が残りません。
+
+SpecImpactは設計書をevidence付きgraphへ変換し、変更管理を次の形にします。
+
+| 入力 | SpecImpactが行うこと | レビュー結果 |
+| --- | --- | --- |
+| Dirty Excel / Markdown / OpenAPI / DDL / CSV | セル・表・項目・relationを抽出 | Artifact / Entity / Evidence Graph |
+| 表記揺れ | LLMと周辺relationでalias候補を比較 | `same / related / different / unsure` |
+| 自然文の変更要求 | Change Atom化して関連subgraphを探索 | 影響候補、graph path、required actions |
+| 再取り込み | source hashとrelation差分を比較 | staleなrelation / impactを再レビュー |
+
+## 基本ワークフロー
+
+```mermaid
+flowchart LR
+    subgraph Onboarding["初期導入"]
+        A["設計書<br/>Excel / Markdown / API / DB"] --> B["正規化<br/>Workbook・Sheet・Cell・Region"]
+        B --> C["LLM構造抽出<br/>Node・Relation・Alias候補"]
+        C --> D["Evidence Graph<br/>local JSONL"]
+        D --> E["人間レビュー<br/>Proposal / Alias"]
+    end
+
+    subgraph Change["継続的な変更管理"]
+        F["自然文の変更要求"] --> G["Change Atom"]
+        G --> H["GraphRAG retrieval"]
+        D --> H
+        H --> I["LLM Impact Hypothesis"]
+        I --> J["Evidence Verifier"]
+        J --> K["Impact Review Board"]
+        K --> L["accepted → implemented<br/>→ tested → closed"]
+    end
 ```
 
-## インストール
+LLMの出力は確定情報ではなくproposal / hypothesisです。直接evidenceとgraph pathを検証できる候補だけを
+強く提示し、最終判断は人間が行います。
+
+## 主な機能
+
+- **Dirty Excel理解**: 結合セル、複数表、改訂履歴、コメント、リンク、非表示行列、同上、別紙参照を保持
+- **LLM-first GraphRAG**: Codex CLI、OpenAI API、Ollamaに対応
+- **Alias解決**: `利用限度額`、`requestedCreditLimit`、`REQUESTED_CREDIT_LIMIT`を根拠付きで比較
+- **変更影響分析**: `impact_type`、`required_actions`、`warnings`、`uncertainty`を作業仮説として生成
+- **Evidence Verifier**: LLMだけの主張を`must_review`へ昇格させない
+- **設計書ビューア**: 影響候補から該当行・Excelセルへ移動し、検索結果のようにハイライト
+- **統一Review Queue**: Graph Proposal、Alias、Relation、Impact、Graph Diffを同じ画面で判断
+- **Freshness管理**: 再取り込み時のsource version、graph diff、stale dependencyを永続化
+- **Obsidian連携**: Wiki link、frontmatter、Dataview、Canvas付きのknowledge graphを出力
+- **ローカルファースト**: JSONL backend、localhost GUI、外部送信preview、送信監査metadata
+
+## 5分で試す
+
+### 1. インストール
 
 ```powershell
 git clone https://github.com/kanan6377/SpecImpact.git
 cd SpecImpact
-python -m pip install -e .
-specimpact --help
-```
-
-GUI も使う場合:
-
-```powershell
 python -m pip install -e ".[gui]"
+specimpact --version
 ```
 
-## まず試す
+Python 3.11以降が必要です。
 
-Dirty Excel サンプルで、初期導入から変更影響レビューまで確認できます。
+### 2. GUIでガイド付きサンプルを開く
 
 ```powershell
-specimpact onboard .\examples\dirty_sier_excel\docs `
-  --provider codex `
-  --model default `
-  --aliases .\examples\dirty_sier_excel\aliases.yml
-
-specimpact analyze .\examples\dirty_sier_excel\changes\利用限度額上限変更.md --llm-first
-specimpact impacts list
-specimpact report --format markdown
-specimpact export-obsidian .\vault
+specimpact gui
 ```
 
-LLM を使わずに構造だけ試す場合:
+`http://127.0.0.1:8765`が開きます。案件が未登録の場合は**「ガイド付きサンプルを作成」**を選ぶと、
+外部LLMなしでレビュー画面を確認できます。
+
+### 3. CLIでローカル実行する
 
 ```powershell
 specimpact onboard .\examples\dirty_sier_excel\docs `
   --no-llm `
   --aliases .\examples\dirty_sier_excel\aliases.yml
+
+specimpact analyze `
+  .\examples\dirty_sier_excel\changes\利用限度額上限変更.md `
+  --llm-first --no-llm
+
+specimpact impacts list
+specimpact report --format markdown
 ```
 
-期待される流れ:
+LLMを使う標準導線:
 
-- Excel workbook がセル単位 evidence 付きで取り込まれる
-- 画面項目表、入力チェック、API 対応表、DB 定義、外部 IF、テストケースが region として検出される
-- LLM 抽出結果は Graph Proposal として保存され、承認前は未確定扱いになる
-- Alias 候補は evidence quote と周辺 relation 付きでレビューできる
-- 変更依頼は Change Atom に分解され、影響候補には required actions が付く
-- Obsidian では Dashboard、Artifacts、Evidence、Changes、Impacts、Canvas が生成される
+```powershell
+specimpact onboard .\examples\dirty_sier_excel\docs `
+  --provider codex --model default `
+  --aliases .\examples\dirty_sier_excel\aliases.yml
+```
 
-詳しいサンプル説明は [examples/dirty_sier_excel/README.md](examples/dirty_sier_excel/README.md) を参照してください。
+外部providerを利用する処理では、送信先・目的・件数を表示して承認を求めます。
 
-## 基本フロー
+## GUI
 
-### 1. LLM provider を設定する
+Evidence Review Workspaceは、設計書と影響候補を別画面へ分断せず、同じレビュー文脈で扱います。
+
+![Knowledge Graph Explorer](docs/images/gui/graph-explorer.png)
+
+| 画面 | 用途 |
+| --- | --- |
+| 概要 | graph件数、次のレビュー、案件healthを確認 |
+| 設計書 | 原本追加、Dirty Excel / structured loader、Source Library |
+| 変更レビュー | 自然文入力、影響候補、設計書ハイライト、Evidence Inspector |
+| ナレッジグラフ | node / relation探索、stale表示、キーボード選択 |
+| レビュー | Proposal、Alias、Relation、Impact、Graph Diffの判断 |
+| Obsidian | Vault export、LLM送信監査、review replay |
+| ジョブと監査 | 非同期処理、失敗理由、復旧手順 |
+
+GUIは`127.0.0.1`だけにbindし、runtime CDNやremote fontを使用しません。frontendはwheelへ同梱済みです。
+
+## 仕組み
+
+```mermaid
+flowchart TB
+    UI["React GUI / CLI"] --> API["FastAPI service / command services"]
+    API --> INGEST["Loaders<br/>Dirty Excel・Markdown・OpenAPI・DDL・CSV"]
+    INGEST --> GRAPH["Evidence / Domain Graph"]
+    API --> LLM["LLM provider<br/>Codex CLI・OpenAI・Ollama"]
+    LLM --> PROPOSAL["Graph Proposal / Alias / Impact Hypothesis"]
+    GRAPH --> RETRIEVAL["Hybrid retrieval"]
+    RETRIEVAL --> PROPOSAL
+    PROPOSAL --> VERIFY["Evidence verifier"]
+    VERIFY --> REVIEW["Review Queue / Impact Board"]
+    REVIEW --> STORE[".specimpact/<br/>local JSONL"]
+    GRAPH --> STORE
+    STORE --> OBSIDIAN["Obsidian Vault<br/>Notes・Dataview・Canvas"]
+```
+
+### データの扱い
+
+- 既定backendは案件内の`.specimpact/`に保存するlocal JSONL
+- 原本は`.specimpact/sources/original/`へ保持
+- Excel evidenceはworkbook / sheet / cell / range / quoteへ戻れる
+- LLM traceはprovider、model、purpose、hashなどの監査metadataだけを保存
+- source hashが変わると、依存するrelation / impactを`stale`として再レビューへ戻す
+
+### Impact priority
+
+| Priority | 意味 |
+| --- | --- |
+| `must_review` | 直接evidenceと明示graph pathがある |
+| `should_review` | 強い関連があるため確認すべき |
+| `may_review` | LLM推論または弱い関連を含む |
+| `hidden` | verifier条件を満たさず通常表示しない |
+
+`must_review`は「影響確定」ではありません。レビュー優先度です。
+
+## LLM provider
+
+| Provider | 用途 | 外部送信 |
+| --- | --- | --- |
+| Codex CLI | 標準のLLM-first導線 | 承認必須 |
+| OpenAI API | structured extraction / impact hypothesis | 承認必須 |
+| Ollama localhost | ローカルモデル | 不要 |
+| `--no-llm` | heuristic / graph-only fallback | なし |
 
 ```powershell
 specimpact llm configure --provider codex --model default
 specimpact llm status
 ```
 
-OpenAI API:
-
-```powershell
-specimpact llm configure --provider openai --model <model>
-```
-
-Ollama:
-
-```powershell
-specimpact llm configure --provider ollama --model <model> --base-url http://localhost:11434
-```
-
-外部送信したくない場合:
-
-```powershell
-specimpact llm disable
-```
-
-### 2. 設計書を取り込む
-
-Markdown / text:
-
-```powershell
-specimpact ingest .\docs --aliases .\aliases.yml
-```
-
-Dirty Excel:
-
-```powershell
-specimpact ingest .\docs --mode dirty-excel --aliases .\aliases.yml
-```
-
-または:
-
-```powershell
-specimpact ingest-dirty-excel .\docs --aliases .\aliases.yml
-```
-
-表形式 Excel:
-
-```powershell
-specimpact ingest-excel .\docs --profile sier --aliases .\aliases.yml
-```
-
-Excel の状態確認:
-
-```powershell
-specimpact excel inspect .\docs
-specimpact excel classify .\docs
-```
-
-### 3. 提案をレビューする
-
-Graph Proposal:
-
-```powershell
-specimpact graph proposals list
-specimpact graph proposals accept <proposal_id>
-specimpact graph proposals reject <proposal_id>
-```
-
-Alias:
-
-```powershell
-specimpact aliases suggest --llm
-specimpact aliases review
-specimpact aliases confirm <candidate_id>
-specimpact aliases reject-candidate <candidate_id>
-```
-
-`same` の候補だけが alias として確定できます。`related` は関連はあるが別概念、`different` は別概念、`unsure` は人間確認が必要な候補です。
-
-### 4. 変更影響を分析する
-
-```powershell
-specimpact change parse .\changes\change_request.md
-specimpact analyze .\changes\change_request.md --llm-first
-specimpact report --format markdown
-```
-
-自然文を直接渡すこともできます。
-
-```powershell
-specimpact change analyze "入会申込画面の利用限度額上限を999万円から9999万円に変更する"
-```
-
-Impact decision:
-
-```powershell
-specimpact changes list
-specimpact impacts list
-specimpact impacts set-status <impact_id> accepted --reason "画面/API/DBを修正対象にする"
-specimpact impacts set-status <impact_id> closed --reason "実装とテスト完了"
-```
-
-## Obsidian 連携
-
-SpecImpact は Obsidian を「レビュー用 knowledge graph」として使います。
+## Obsidian
 
 ```powershell
 specimpact export-obsidian .\vault
 ```
 
-生成される主なファイル:
+次の構成を生成します。
 
-- `SpecImpact/Dashboard.md`
-- `SpecImpact/Artifacts/*.md`
-- `SpecImpact/Evidence/*.md`
-- `SpecImpact/Changes/*.md`
-- `SpecImpact/Impacts/*.md`
-- `SpecImpact/Canvases/*.canvas`
-
-Artifact note には relation と evidence link が入り、Impact note には status、review priority、impact type、required actions が入ります。Dataview plugin を入れると未レビュー項目を一覧できます。
-
-旧形式の report コピーだけが必要な場合:
-
-```powershell
-specimpact export-obsidian .\vault --report-only
+```text
+SpecImpact/
+├── Dashboard.md
+├── Artifacts/
+├── Evidence/
+├── Changes/
+├── Impacts/
+└── Canvases/
 ```
 
-## GUI
+Artifact間のrelationは`[[Wiki Link]]`へ変換され、Impact statusやsource locationはfrontmatterへ入ります。
+SpecImpactのlocal JSONLがsource of truthで、Obsidianは探索とレビュー用のprojectionです。
 
-GUIは、設計書の投入から影響レビュー、証跡確認、Obsidian連携までを一つの案件内で扱う
-Evidence Review Workspaceです。LLMの提案は確定結果にせず、根拠と一緒に人間が判断します。
+## 安全性と設計原則
 
-```powershell
-python -m pip install -e ".[gui]"
-specimpact gui
-```
+1. **Evidence-first**: confidenceではなく、引用とrelation pathを示す
+2. **Review-assist**: 設計書を自動編集せず、最終判断を自動化しない
+3. **Local-first**: 外部providerを設定しない限り文書を外へ送らない
+4. **Inspectable**: proposal、判断、source version、graph diff、traceを永続化する
+5. **Alias-aware**: 文字列一致だけで同一概念と決めない
 
-導入済みversionは`specimpact --version`で確認できます。
+外部送信前には氏名、メール、電話番号、顧客番号、口座番号、URL、API key形式を検出・maskします。
+ただしredactionは補助策であり、送信previewと明示承認を省略しません。
 
-`Obsidian`画面では、現在のArtifact / Evidence / Change / Impact件数と生成先を確認してから、
-linked note、Dataview用frontmatter、CanvasをVaultへ出力できます。同じ画面でLLM送信の
-provider、model、purpose、件数、redaction有無、hashと最新review replayを確認できます。
-prompt本文、設計書本文、raw responseは表示しません。`ジョブと監査`画面は失敗した処理ごとに
-再実行前の確認事項を表示します。
+## 対応入力と制限
 
-GUIはキーボード操作、visible focus、skip link、native external-transmission dialog、390px幅の
-review flowに対応します。Graphは選択欄からキーボードでも要素を確認でき、Cytoscape bundleは
-Graph画面を開くまで読み込みません。localhost専用アプリのためHTMLは`noindex, nofollow`です。
+| 対応 | 状態 |
+| --- | --- |
+| Markdown / text | 対応 |
+| Dirty Excel `.xlsx` | セル・region・style・comment・hyperlink・hidden情報に対応 |
+| OpenAPI / DDL / CSV | structured loader対応 |
+| 画像・図形を含むExcel | 存在を警告し、意味解析は限定的 |
+| 画像だけのER図 | 未対応 |
 
-GUI は `127.0.0.1` のみに bind します。
+SpecImpactは設計書の見た目を完全理解するツールではありません。文字・表・セル構造を主な解析対象とします。
 
-案件が未登録でもGUI内で案件フォルダーの作成・登録、またはガイド付きサンプルの作成から
-開始できます。`設計書` 画面ではMarkdown/text、Dirty Excel、OpenAPI、DDL、CSVをmanaged uploadし、
-evidence、artifact、relation、sheetの取り込み件数をSource Libraryで確認できます。
-
-主な画面:
-
-- 概要: graph件数、次のレビュー、案件状態
-- 設計書: 原本追加、LLM-first取り込み、Source Library
-- 変更レビュー: 起点設計書のGraph Contextと自然文の変更要求、影響候補、設計書ハイライト、Evidence Inspector、選択位置deep link
-- ナレッジグラフ: Cytoscapeによるnode/relation探索
-- レビュー: Graph proposal、未解決参照、Alias、relation、Impact decisionの統一queue
-- ジョブと監査: 更新処理、状態、入力、実行時刻
-- 設定: LLM、保存先、Privacy Doctor
-
-旧GUIの `/ui/analyze`、`/ui/dirty-excel` などは、案件IDを保ったまま対応する現行画面へ
-redirectされます。実行時は外部CDNやNode.jsを必要とせず、wheelにコンパイル済みのfrontendを
-同梱します。frontendを変更する開発者だけが `frontend/` で `npm install` と `npm run build` を
-実行します。
-
-![Graph Explorer](docs/images/gui/graph-explorer.png)
-
-GUI の詳細は [docs/gui_manual_ja.md](docs/gui_manual_ja.md) を参照してください。
-
-## データモデル
-
-既存 v1 の `documents`、`artifacts`、`entities`、`relations`、`evidence` は維持しています。v2 では次の JSONL collection を追加します。
-
-- Dirty workbook / sheet / cell / region
-- Graph proposals
-- Alias candidates
-- Change requests / Change atoms
-- Impact hypotheses
-- Impact decisions
-- Source versions / graph diffs / stale records
-
-再取り込み時はdocument hashの変化をsource versionとして記録し、relationの追加・削除・変更を
-transaction ID付きgraph diffへ保存します。変更前evidenceに依存するnode、relation、Impactは
-`stale` となり、再レビュー後に解消されます。既存v1 collectionとreport schemaは変更しません。
-
-LLM の出力は `proposed_by_llm` または `unconfirmed` として扱い、レビューなしで確定情報にはしません。
-
-## 評価とテスト
-
-Dirty Excel benchmark には、以下の golden scenario を入れています。
-
-- 利用限度額上限変更
-- 電話番号桁数変更
-- 本人確認方式変更
-- 外部 IF 項目追加
-- DB 桁数変更
-
-開発時の確認:
+## 品質ゲート
 
 ```powershell
 pytest -q
@@ -297,50 +242,22 @@ python -m compileall -q specimpact
 specimpact release-check .\examples\evaluation\release_cases.yml
 ```
 
-直近の品質ゲートでは `pytest`、`ruff`、`compileall`、`release-check` を通しています。
-
-## 制限事項
-
-SpecImpact は Excel の見た目を完全理解するツールではありません。
-
-得意なもの:
-
-- 画面、API、DB、外部 IF、入力チェック、テスト仕様が表や文章で書かれている設計書
-- 論理名、物理名、日本語名、camelCase、snake_case が混在する SIer 系ドキュメント
-- evidence を確認しながら人間がレビューする変更影響管理
-
-苦手なもの:
-
-- 画像だけで貼られた ER 図
-- 図形や矢印だけで意味が表現された Excel
-- セルの見た目だけに意味があり、文字情報がほとんどない workbook
-- 人間レビューなしでの影響確定
-
-図形や画像がある workbook は検出して警告しますが、現時点では意味解析の主対象ではありません。
+v1.2.0では145 testsと21件のrelease benchmarkを通過しています。テストは外部LLMを呼ばず、
+FakeLLMClientでstructured output、evidence検証、alias判断、impact hypothesisを固定します。
 
 ## ドキュメント
 
 - [日本語ユーザーマニュアル](docs/user_manual_ja.md)
-- [CLI リファレンス](docs/cli.md)
+- [GUIマニュアル](docs/gui_manual_ja.md)
+- [CLIリファレンス](docs/cli.md)
 - [入力準備ガイド](docs/input_preparation.md)
-- [構造化ローダー](docs/structured_loaders.md)
-- [プライバシー](docs/privacy.md)
-- [評価](docs/evaluation.md)
-- [リリース手順](docs/release.md)
-- [コントリビューション](CONTRIBUTING.md)
-- [セキュリティ](SECURITY.md)
-- [GUI redesign sandbox](examples/gui_redesign_sandbox/README_JA.md)
+- [Evidence model](docs/evidence_model.md)
+- [Privacy](docs/privacy.md)
+- [Evaluation](docs/evaluation.md)
+- [Release validation](docs/release.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
 
-## GitHub 説明文の推奨
+## ライセンス
 
-GitHub の repository description には、以下を推奨します。
-
-```text
-SIerの汚いExcel設計書をLLMとGraphRAGで構造化し、evidence付きで変更影響レビューを管理するOSS
-```
-
-Topics:
-
-```text
-llm, graphrag, excel, impact-analysis, obsidian, software-design, japanese
-```
+[Apache License 2.0](LICENSE)
