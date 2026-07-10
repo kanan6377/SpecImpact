@@ -644,7 +644,7 @@ def test_session_tokens_are_bounded_and_expire(tmp_path: Path) -> None:
             client.get("/api/session")
         assert len(app.state.sessions) == 4
         token = client.get("/api/session").json()["csrf_token"]
-        app.state.sessions[token] = 0
+        app.state.sessions[token] = time.monotonic() - app.state.session_ttl_seconds - 1
         response = client.post(
             "/api/projects",
             headers={"Origin": "http://127.0.0.1", "X-CSRF-Token": token},
