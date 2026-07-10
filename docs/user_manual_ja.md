@@ -277,7 +277,7 @@ GUI は `127.0.0.1` のみに bind します。
 - 設計書 / Source Library
 - 変更レビュー
 - ナレッジグラフ
-- Alias
+- 統一レビュー（Graph proposal / 未解決参照 / Alias / relation / Impact）
 - ジョブと監査
 - 設定とプライバシー
 

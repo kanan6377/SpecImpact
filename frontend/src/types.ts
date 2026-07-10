@@ -1,4 +1,4 @@
-export type ViewName = "dashboard" | "sources" | "impact-board" | "graph" | "aliases" | "jobs" | "settings";
+export type ViewName = "dashboard" | "sources" | "impact-board" | "graph" | "reviews" | "jobs" | "settings";
 
 export interface Project {
   project_id: string;
@@ -146,4 +146,28 @@ export interface AliasData {
   aliases: Record<string, unknown>;
   suggestions: Array<Record<string, unknown>>;
   candidates: Array<Record<string, unknown>>;
+}
+
+export interface ReviewItem {
+  item_id: string;
+  kind: "graph_proposal" | "unresolved_mention" | "alias" | "relation" | "impact";
+  record_id: string;
+  title: string;
+  subtitle: string;
+  status: string;
+  priority: string;
+  reason: string;
+  evidence_ids: string[];
+  evidence: EvidenceSummary[];
+  metadata: Record<string, unknown>;
+}
+
+export interface ReviewQueue {
+  items: ReviewItem[];
+  summary: {
+    total: number;
+    actionable: number;
+    by_kind: Record<string, number>;
+    by_status: Record<string, number>;
+  };
 }

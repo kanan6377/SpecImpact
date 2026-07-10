@@ -302,3 +302,33 @@ Completion checklist:
 
 Notes: Decision mutations remain assigned to Phase 4. This phase improves analysis context and
 navigation without changing priority semantics or finalizing impacts automatically.
+
+## v1.2.0 UX Phase 4
+
+Status: complete
+
+Scope:
+- unified graph/alias/relation/impact review queue
+- unresolved mention visibility
+- graph proposal diff preview
+- evidence-backed decision controls
+- project-queue persisted mutations
+
+Completion checklist:
+- [x] All review families share one API and view
+- [x] Graph proposals show node/edge diff before decision
+- [x] Alias candidates show comparison context
+- [x] Relation and Impact status controls are functional
+- [x] Evidence quotes are visible in the decision context
+- [x] Mutations run through project jobs and core services
+- [x] Aggregation and persistence regression test passes
+- [x] Desktop and 390 px browser verification complete
+- [x] README and manuals updated
+- [x] `docs/reviews/v1.2.0-ux-phase-4.md` written
+- [x] Full pytest passes (140 tests)
+- [x] Full ruff check passes
+- [x] compileall passes
+- [x] release-check passes (21 cases)
+
+Notes: Unresolved mentions remain investigation items. Source freshness and stale-decision handling
+are assigned to Phase 5.

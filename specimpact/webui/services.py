@@ -52,6 +52,7 @@ from specimpact.integrations import (
     graph_diff,
     import_review_results,
 )
+from specimpact.llm_graph.schemas import AliasCandidate, GraphProposal
 from specimpact.loaders import load_document
 from specimpact.models import Artifact, Chunk, Document, Entity, Evidence, Relation, Section
 from specimpact.operations import (
@@ -510,6 +511,188 @@ def impact_decisions_data(project: Project, change_id: str | None = None) -> lis
             }
         )
     return decisions
+
+
+def review_queue_data(project: Project) -> dict[str, Any]:
+    """Project existing reviewable records into one evidence-backed queue."""
+    store = store_for(project)
+    evidence = {item.evidence_id: item for item in store.read("evidence", Evidence)}
+    items: list[dict[str, Any]] = []
+
+    for proposal in store.read("graph_proposals", GraphProposal):
+        evidence_ids = sorted(
+            {
+                evidence_id
+                for record in [*proposal.result.nodes, *proposal.result.edges]
+                for evidence_id in record.evidence_ids
+            }
+        )
+        items.append(
+            _review_item(
+                item_id=f"proposal:{proposal.proposal_id}",
+                kind="graph_proposal",
+                record_id=proposal.proposal_id,
+                title=f"Region {proposal.region_id}",
+                subtitle=f"{len(proposal.result.nodes)} nodes / {len(proposal.result.edges)} edges",
+                status=proposal.status,
+                priority="should_review" if proposal.status == "pending" else "may_review",
+                reason=(
+                    "; ".join(proposal.result.warnings)
+                    or "抽出nodeとedgeをgraphへ採用するか確認します。"
+                ),
+                evidence_ids=evidence_ids,
+                evidence=evidence,
+                metadata={
+                    "region_id": proposal.region_id,
+                    "extraction_method": proposal.extraction_method,
+                    "node_count": len(proposal.result.nodes),
+                    "edge_count": len(proposal.result.edges),
+                    "nodes": [
+                        {
+                            "id": node.temp_id,
+                            "type": node.node_type,
+                            "name": node.display_name,
+                            "rationale": node.rationale,
+                        }
+                        for node in proposal.result.nodes
+                    ],
+                    "edges": [
+                        {
+                            "source": edge.source_temp_id,
+                            "relation": edge.relation_type,
+                            "target": edge.target_temp_id,
+                            "inference_level": edge.inference_level,
+                            "rationale": edge.rationale,
+                        }
+                        for edge in proposal.result.edges
+                    ],
+                    "unresolved_mentions": proposal.result.unresolved_mentions,
+                },
+            )
+        )
+        for index, mention in enumerate(proposal.result.unresolved_mentions):
+            items.append(
+                _review_item(
+                    item_id=f"mention:{proposal.proposal_id}:{index}",
+                    kind="unresolved_mention",
+                    record_id=proposal.proposal_id,
+                    title=mention,
+                    subtitle=f"Region {proposal.region_id}",
+                    status="needs_investigation",
+                    priority="may_review",
+                    reason="別紙参照、同上、または文脈不足の参照を人間が確認してください。",
+                    evidence_ids=evidence_ids,
+                    evidence=evidence,
+                    metadata={"region_id": proposal.region_id},
+                )
+            )
+
+    for candidate in store.read("alias_candidates", AliasCandidate):
+        items.append(
+            _review_item(
+                item_id=f"alias:{candidate.candidate_id}",
+                kind="alias",
+                record_id=candidate.candidate_id,
+                title=candidate.entity_a_id or candidate.target_id,
+                subtitle=(
+                    f"{candidate.judgement}: "
+                    f"{candidate.entity_b_id or ', '.join(candidate.aliases)}"
+                ),
+                status=candidate.status,
+                priority=(
+                    "should_review"
+                    if candidate.status == "pending" and candidate.judgement in {"same", "related"}
+                    else "may_review"
+                ),
+                reason=candidate.llm_reason or candidate.reason or "Alias候補の根拠を確認します。",
+                evidence_ids=candidate.evidence_ids,
+                evidence=evidence,
+                metadata={
+                    "judgement": candidate.judgement,
+                    "aliases": candidate.aliases,
+                    "relation_context": candidate.relation_context,
+                    "surrounding_node_ids": candidate.surrounding_node_ids,
+                    "evidence_quotes": candidate.evidence_quotes,
+                },
+            )
+        )
+
+    for relation in store.read("relations", Relation):
+        items.append(
+            _review_item(
+                item_id=f"relation:{relation.relation_id}",
+                kind="relation",
+                record_id=relation.relation_id,
+                title=relation.relation_type,
+                subtitle=f"{relation.source_id} → {relation.target_id}",
+                status=relation.status,
+                priority="should_review" if relation.status == "unconfirmed" else "may_review",
+                reason=(
+                    f"{relation.extraction_method} / {relation.polarity} / {relation.match_type}"
+                ),
+                evidence_ids=relation.evidence_ids,
+                evidence=evidence,
+                metadata={
+                    "source_id": relation.source_id,
+                    "target_id": relation.target_id,
+                    "extraction_method": relation.extraction_method,
+                    "polarity": relation.polarity,
+                    "match_type": relation.match_type,
+                },
+            )
+        )
+
+    for decision in impact_decisions_data(project):
+        items.append(
+            _review_item(
+                item_id=f"impact:{decision['impact_id']}",
+                kind="impact",
+                record_id=decision["impact_id"],
+                title=decision["display_name"],
+                subtitle=decision.get("artifact_type", ""),
+                status=decision["status"],
+                priority=decision.get("review_priority") or "may_review",
+                reason=decision.get("impact_reason") or decision.get("reason") or "",
+                evidence_ids=decision.get("evidence_ids", []),
+                evidence=evidence,
+                metadata={
+                    "change_id": decision["change_id"],
+                    "impact_type": decision.get("impact_type", ""),
+                    "required_actions": decision.get("required_actions", []),
+                    "warnings": decision.get("warnings", []),
+                    "decision_reason": decision.get("reason", ""),
+                    "updated_at": decision.get("updated_at"),
+                },
+            )
+        )
+
+    status_rank = {
+        "pending": 0,
+        "unreviewed": 0,
+        "unconfirmed": 0,
+        "needs_investigation": 1,
+    }
+    priority_rank = {"must_review": 0, "should_review": 1, "may_review": 2}
+    items.sort(
+        key=lambda item: (
+            status_rank.get(item["status"], 2),
+            priority_rank.get(item["priority"], 3),
+            item["kind"],
+            item["title"],
+        )
+    )
+    return {
+        "items": items,
+        "summary": {
+            "total": len(items),
+            "actionable": sum(
+                item["status"] in {"pending", "unreviewed", "unconfirmed", "needs_investigation"}
+                for item in items
+            ),
+            "by_kind": _value_counts(item["kind"] for item in items),
+            "by_status": _value_counts(item["status"] for item in items),
+        },
+    }
 
 
 def external_preview(project: Project, action: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -1057,6 +1240,13 @@ def _looks_text(path: Path) -> bool:
     }
 
 
+def _value_counts(values) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return counts
+
+
 def _health_check(store: LocalStore) -> dict[str, Any] | None:
     path = store.root / "health_check.json"
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
@@ -1177,6 +1367,39 @@ def _evidence_summary(evidence: Evidence) -> dict[str, Any]:
         "evidence_id": evidence.evidence_id,
         "quote": evidence.quote,
         "source_location": evidence.source_location.model_dump(),
+    }
+
+
+def _review_item(
+    *,
+    item_id: str,
+    kind: str,
+    record_id: str,
+    title: str,
+    subtitle: str,
+    status: str,
+    priority: str,
+    reason: str,
+    evidence_ids: list[str],
+    evidence: dict[str, Evidence],
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "item_id": item_id,
+        "kind": kind,
+        "record_id": record_id,
+        "title": title,
+        "subtitle": subtitle,
+        "status": status,
+        "priority": priority,
+        "reason": reason,
+        "evidence_ids": evidence_ids,
+        "evidence": [
+            _evidence_summary(evidence[evidence_id])
+            for evidence_id in evidence_ids
+            if evidence_id in evidence
+        ],
+        "metadata": metadata,
     }
 
 

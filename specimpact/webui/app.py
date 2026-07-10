@@ -36,6 +36,7 @@ from specimpact.webui.services import (
     impact_decisions_data,
     project_overview,
     report_data,
+    review_queue_data,
     run_history,
     source_library_data,
     store_for,
@@ -43,12 +44,13 @@ from specimpact.webui.services import (
 )
 from specimpact.webui.uploads import save_uploads
 
-PAGES = {"dashboard", "sources", "impact-board", "graph", "aliases", "jobs", "settings"}
+PAGES = {"dashboard", "sources", "impact-board", "graph", "reviews", "jobs", "settings"}
 LEGACY_PAGES = {
     "demo": "dashboard",
     "ingest": "sources",
     "dirty-excel": "sources",
     "analyze": "impact-board",
+    "aliases": "reviews",
     "tools": "jobs",
 }
 STATIC_DIR = Path(__file__).parent / "static"
@@ -325,6 +327,10 @@ def create_app(
     @app.get("/api/projects/{project_id}/impact-decisions")
     def impact_decisions(project_id: str, change_id: str | None = None):
         return {"decisions": impact_decisions_data(_project(app, project_id), change_id)}
+
+    @app.get("/api/projects/{project_id}/reviews")
+    def reviews(project_id: str):
+        return review_queue_data(_project(app, project_id))
 
     @app.post("/api/projects/{project_id}/tool")
     def read_only_tool(project_id: str, body: ToolRequest):

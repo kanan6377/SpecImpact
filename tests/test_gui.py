@@ -11,6 +11,12 @@ from urllib.parse import quote
 import pytest
 from fastapi.testclient import TestClient
 
+from specimpact.llm_graph.schemas import (
+    AliasCandidate,
+    ExtractedNode,
+    GraphProposal,
+    RegionExtractionResult,
+)
 from specimpact.models import Artifact, Entity, Evidence, Relation
 from specimpact.operations import evaluate_dataset
 from specimpact.store import LocalStore
@@ -25,6 +31,7 @@ from specimpact.webui.services import (
     external_preview,
     graph_data,
     report_data,
+    review_queue_data,
     source_library_data,
 )
 from specimpact.webui.uploads import MAX_FILE_SIZE, MAX_FILES, sanitize_filename, save_uploads
@@ -190,6 +197,12 @@ def test_gui_pages_security_project_upload_and_init_job(tmp_path: Path) -> None:
         )
         assert redirect.status_code == 307
         assert redirect.headers["location"] == "/ui/impact-board?project_id=project-one"
+        alias_redirect = client.get(
+            "/ui/aliases?project_id=project-one",
+            follow_redirects=False,
+        )
+        assert alias_redirect.status_code == 307
+        assert alias_redirect.headers["location"] == "/ui/reviews?project_id=project-one"
         assert client.get("/", headers={"Host": "example.com"}).status_code == 403
         assert client.post("/api/projects", json={"path": str(tmp_path / "x")}).status_code == 403
         headers = _headers(client)
@@ -511,6 +524,88 @@ def test_llm_first_text_analysis_includes_selected_document_graph_context(
     assert f"Document ID: {selected['source_id']}" in change
     assert "Title: カード入会申込画面" in change
     assert "Graph artifacts:" in change
+
+
+def test_unified_review_queue_aggregates_and_persists_decisions(tmp_path: Path) -> None:
+    target = tmp_path / "demo"
+    copy_demo(demo_source(), target)
+    project = ProjectRegistry(tmp_path / "registry").add(target)
+    execute(project, "demo_run", {})
+    execute(
+        project,
+        "analyze_text_llm_first",
+        {"body": "希望利用限度額の上限を変更する", "no_llm": True},
+    )
+    store = LocalStore(Path(project.path) / ".specimpact")
+    entities = store.read("entities", Entity)
+    assert len(entities) >= 2
+    proposal = GraphProposal(
+        proposal_id="proposal.review",
+        region_id="region.review",
+        extraction_method="llm",
+        result=RegionExtractionResult(
+            region_id="region.review",
+            nodes=[
+                ExtractedNode(
+                    temp_id="node.one",
+                    node_type="ScreenField",
+                    display_name="希望利用限度額",
+                    evidence_ids=[],
+                    rationale="LLM proposal",
+                )
+            ],
+            edges=[],
+            unresolved_mentions=["別紙参照"],
+        ),
+    )
+    alias = AliasCandidate(
+        candidate_id="alias.review",
+        target_id=entities[0].entity_id,
+        aliases=[entities[1].display_name],
+        judgement="same",
+        entity_a_id=entities[0].entity_id,
+        entity_b_id=entities[1].entity_id,
+        llm_reason="same business field",
+    )
+    store.write("graph_proposals", [proposal])
+    store.write("alias_candidates", [alias])
+
+    queue = review_queue_data(project)
+    kinds = {item["kind"] for item in queue["items"]}
+    assert {"graph_proposal", "unresolved_mention", "alias", "relation", "impact"} <= kinds
+    assert queue["summary"]["actionable"] > 0
+    assert "confidence" not in json.dumps(queue)
+
+    relation = next(item for item in queue["items"] if item["kind"] == "relation")
+    impact = next(item for item in queue["items"] if item["kind"] == "impact")
+    execute(
+        project,
+        "relation_status",
+        {"relation_id": relation["record_id"], "status": "confirmed"},
+    )
+    execute(
+        project,
+        "impact_status",
+        {"impact_id": impact["record_id"], "status": "accepted", "reason": "reviewed"},
+    )
+    execute(
+        project,
+        "graph_proposal_decide",
+        {"proposal_id": proposal.proposal_id, "status": "accepted"},
+    )
+    execute(project, "alias_confirm", {"candidate_id": alias.candidate_id})
+
+    refreshed = {item["item_id"]: item for item in review_queue_data(project)["items"]}
+    assert refreshed[relation["item_id"]]["status"] == "confirmed"
+    assert refreshed[impact["item_id"]]["status"] == "accepted"
+    assert refreshed[f"proposal:{proposal.proposal_id}"]["status"] == "accepted"
+    assert refreshed[f"alias:{alias.candidate_id}"]["status"] == "confirmed"
+
+    app = create_app(registry_root=tmp_path / "registry")
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        response = client.get(f"/api/projects/{project.project_id}/reviews")
+    assert response.status_code == 200
+    assert response.json()["summary"]["total"] == len(refreshed)
 
 
 def test_session_tokens_are_bounded_and_expire(tmp_path: Path) -> None:

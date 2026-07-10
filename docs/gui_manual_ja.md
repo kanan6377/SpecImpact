@@ -31,7 +31,7 @@ specimpact gui --no-open-browser
 | 設計書 | 原本をmanaged uploadし、evidence graphへの取り込み状態を確認 |
 | 変更レビュー | 変更要求の入力、影響候補、設計書、evidenceを並べてレビュー |
 | ナレッジグラフ | node/relationの接続とpropertyを探索 |
-| Alias | 表記揺れ候補、LLM理由、周辺relation、evidenceを確認 |
+| レビュー | Graph proposal、未解決参照、Alias、relation、Impactを判断 |
 | ジョブと監査 | 案件queueの処理状態と安全な入力要約を確認 |
 | 設定 | LLM provider、保存先、外部送信状態、Privacy Doctorを確認 |
 
@@ -95,10 +95,20 @@ GraphはCytoscapeで描画します。検索欄にartifact/entity名を入力す
 nodeまたはrelationを選択すると右Inspectorへpropertyを表示します。Graphは因果関係の確定図ではなく、
 設計書から抽出してreview statusを持つ依存関係です。
 
-## 6. Alias、ジョブ、設定
+## 6. 統一Review Queue、ジョブ、設定
 
-Alias画面は同一概念候補を根拠付きで確認するqueueです。候補がない場合はempty stateを表示します。
-確認・却下の更新操作はPhase 4の統一Review Queueで拡充します。
+`レビュー` 画面は次の判断対象を一つのqueueへまとめます。
+
+- Graph proposal: 追加予定node/edgeとevidenceを見てaccept/reject
+- 未解決参照: `別紙参照`、`同上` などを要調査として表示
+- Alias: LLM judgement、周辺relation、evidenceを見てconfirm/reject
+- Relation: source/target、抽出方法、polarity、evidenceを見てconfirmed/unconfirmed/rejected
+- Impact: statusと判断理由を保存
+
+種類と状態でfilterできます。選択項目は `review` queryへ保存されます。判断更新はブラウザ内だけで
+先行反映せず、案件queueでcore serviceを実行し、永続化に成功してから全データを再読込します。
+Impact statusは `unreviewed / accepted / rejected / needs_investigation / implemented / tested / closed`
+を使用します。
 
 ジョブと監査画面は案件ごとのqueueを表示します。文書本文、API key、providerのraw responseは
 job履歴へ保存しません。失敗時はstatusと安全な入力要約から復旧箇所を確認します。
@@ -115,7 +125,7 @@ job履歴へ保存しません。失敗時はstatusと安全な入力要約か�
 /ui/sources
 /ui/impact-board
 /ui/graph
-/ui/aliases
+/ui/reviews
 /ui/jobs
 /ui/settings
 ```
@@ -126,6 +136,7 @@ job履歴へ保存しません。失敗時はstatusと安全な入力要約か�
 /ui/demo -> /ui/dashboard
 /ui/ingest, /ui/dirty-excel -> /ui/sources
 /ui/analyze -> /ui/impact-board
+/ui/aliases -> /ui/reviews
 /ui/tools -> /ui/jobs
 ```
 
@@ -155,6 +166,6 @@ CSRF/session保護されたAPIを提供し、React/TypeScript frontendがそれ�
 - API keyと文書本文をjob logへ残さない
 - Graphの更新は案件queueと永続化serviceを経由する
 
-統一Review Queueとsource version/stale表示はUX modernizationの後続phaseで追加します。
+source version/stale表示はUX modernizationの後続phaseで追加します。
 進捗と完了条件は [UX Redesign Plan](ux_redesign_plan.md) と
 [Phase Status](phase_status.md) を参照してください。

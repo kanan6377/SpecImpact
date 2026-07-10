@@ -232,7 +232,7 @@ evidence、artifact、relation、sheetの取り込み件数をSource Libraryで�
 - 設計書: 原本追加、LLM-first取り込み、Source Library
 - 変更レビュー: 起点設計書のGraph Contextと自然文の変更要求、影響候補、設計書ハイライト、Evidence Inspector、選択位置deep link
 - ナレッジグラフ: Cytoscapeによるnode/relation探索
-- Alias: 同一概念候補と根拠のレビュー
+- レビュー: Graph proposal、未解決参照、Alias、relation、Impact decisionの統一queue
 - ジョブと監査: 更新処理、状態、入力、実行時刻
 - 設定: LLM、保存先、Privacy Doctor
 

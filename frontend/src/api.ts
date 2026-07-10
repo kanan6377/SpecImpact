@@ -6,6 +6,7 @@ import type {
   Overview,
   Project,
   Report,
+  ReviewQueue,
   SourceSummary,
 } from "./types";
 
@@ -48,6 +49,7 @@ export const api = {
   report: (projectId: string) => request<Report>(`/api/projects/${projectId}/report`),
   graph: (projectId: string) => request<GraphData>(`/api/projects/${projectId}/graph`),
   aliases: (projectId: string) => request<AliasData>(`/api/projects/${projectId}/aliases`),
+  reviews: (projectId: string) => request<ReviewQueue>(`/api/projects/${projectId}/reviews`),
   jobs: (projectId: string) =>
     request<{ jobs: Job[] }>(`/api/projects/${projectId}/jobs`),
   designDocuments: (projectId: string, evidenceIds: string[] = []) => {

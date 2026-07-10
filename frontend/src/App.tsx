@@ -1,17 +1,16 @@
 import cytoscape from "cytoscape";
 import {
   AlertTriangle,
-  ArrowRight,
   Bolt,
   CheckCircle2,
   ChevronRight,
   CircleDot,
+  ClipboardCheck,
   Database,
   FileSearch,
   FileSpreadsheet,
   FileText,
   FolderOpen,
-  GitCompareArrows,
   LayoutDashboard,
   ListChecks,
   LoaderCircle,
@@ -28,7 +27,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "./api";
 import type {
-  AliasData,
   DesignDocument,
   DesignDocuments,
   GraphData,
@@ -37,6 +35,8 @@ import type {
   Overview,
   Project,
   Report,
+  ReviewItem,
+  ReviewQueue,
   SourceSummary,
   ViewName,
 } from "./types";
@@ -46,10 +46,13 @@ const VIEWS: Array<{ id: ViewName; label: string; icon: typeof LayoutDashboard }
   { id: "sources", label: "設計書", icon: FolderOpen },
   { id: "impact-board", label: "変更レビュー", icon: Bolt },
   { id: "graph", label: "ナレッジグラフ", icon: Network },
-  { id: "aliases", label: "Alias", icon: GitCompareArrows },
+  { id: "reviews", label: "レビュー", icon: ClipboardCheck },
   { id: "jobs", label: "ジョブと監査", icon: ListChecks },
   { id: "settings", label: "設定", icon: Settings },
 ];
+
+const WORKSPACE_VIEWS = VIEWS.filter((view) => ["dashboard", "sources", "impact-board", "graph", "reviews"].includes(view.id));
+const SYSTEM_VIEWS = VIEWS.filter((view) => ["jobs", "settings"].includes(view.id));
 
 const TERMINAL_STATES = new Set(["succeeded", "failed", "cancelled", "interrupted"]);
 
@@ -89,10 +92,10 @@ export function App() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [report, setReport] = useState<Report | null>(null);
   const [graph, setGraph] = useState<GraphData | null>(null);
-  const [aliases, setAliases] = useState<AliasData | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [design, setDesign] = useState<DesignDocuments | null>(null);
   const [sources, setSources] = useState<SourceSummary[]>([]);
+  const [reviews, setReviews] = useState<ReviewQueue | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -103,12 +106,12 @@ export function App() {
       api.overview(nextProjectId),
       api.report(nextProjectId),
       api.graph(nextProjectId),
-      api.aliases(nextProjectId),
       api.jobs(nextProjectId),
       api.designDocuments(nextProjectId),
       api.sources(nextProjectId),
+      api.reviews(nextProjectId),
     ]);
-    const [overviewResult, reportResult, graphResult, aliasResult, jobsResult, designResult, sourcesResult] = results;
+    const [overviewResult, reportResult, graphResult, jobsResult, designResult, sourcesResult, reviewsResult] = results;
     if (overviewResult.status === "rejected") {
       setError(overviewResult.reason instanceof Error ? overviewResult.reason.message : "案件を読み込めませんでした");
       setLoading(false);
@@ -117,10 +120,10 @@ export function App() {
     setOverview(overviewResult.value);
     setReport(reportResult.status === "fulfilled" ? reportResult.value : null);
     setGraph(graphResult.status === "fulfilled" ? graphResult.value : null);
-    setAliases(aliasResult.status === "fulfilled" ? aliasResult.value : null);
     setJobs(jobsResult.status === "fulfilled" ? jobsResult.value.jobs : []);
     setDesign(designResult.status === "fulfilled" ? designResult.value : null);
     setSources(sourcesResult.status === "fulfilled" ? sourcesResult.value.sources : []);
+    setReviews(reviewsResult.status === "fulfilled" ? reviewsResult.value : null);
     setLoading(false);
   }, []);
 
@@ -171,7 +174,7 @@ export function App() {
     void loadProject(nextProjectId);
   };
 
-  const refresh = () => projectId && loadProject(projectId);
+  const refresh = async () => { if (projectId) await loadProject(projectId); };
 
   const activateProject = async (project: Project) => {
     setProjects((current) => [project, ...current.filter((item) => item.project_id !== project.project_id)]);
@@ -204,10 +207,10 @@ export function App() {
               overview={overview}
               report={report}
               graph={graph}
-              aliases={aliases}
               jobs={jobs}
               design={design}
               sources={sources}
+              reviews={reviews}
               onDesignChange={setDesign}
               onRefresh={refresh}
               onNavigate={navigate}
@@ -231,13 +234,13 @@ function Sidebar({ view, onNavigate, overview }: { view: ViewName; onNavigate: (
       </div>
       <nav className="primary-nav">
         <p className="nav-label">Workspace</p>
-        {VIEWS.slice(0, 5).map(({ id, label, icon: Icon }) => (
+        {WORKSPACE_VIEWS.map(({ id, label, icon: Icon }) => (
           <button key={id} className={view === id ? "active" : ""} onClick={() => onNavigate(id)} aria-current={view === id ? "page" : undefined}>
             <Icon size={17} strokeWidth={1.8} /><span>{label}</span>
           </button>
         ))}
         <p className="nav-label">System</p>
-        {VIEWS.slice(5).map(({ id, label, icon: Icon }) => (
+        {SYSTEM_VIEWS.map(({ id, label, icon: Icon }) => (
           <button key={id} className={view === id ? "active" : ""} onClick={() => onNavigate(id)} aria-current={view === id ? "page" : undefined}>
             <Icon size={17} strokeWidth={1.8} /><span>{label}</span>
           </button>
@@ -292,19 +295,19 @@ function ActiveView(props: {
   overview: Overview | null;
   report: Report | null;
   graph: GraphData | null;
-  aliases: AliasData | null;
   jobs: Job[];
   design: DesignDocuments | null;
   sources: SourceSummary[];
+  reviews: ReviewQueue | null;
   onDesignChange: (design: DesignDocuments) => void;
-  onRefresh: () => void;
+  onRefresh: () => Promise<void>;
   onNavigate: (view: ViewName) => void;
 }) {
   if (props.view === "dashboard") return <Dashboard overview={props.overview} report={props.report} jobs={props.jobs} onNavigate={props.onNavigate} />;
   if (props.view === "sources") return <SourceLibrary projectId={props.projectId} overview={props.overview} sources={props.sources} onRefresh={props.onRefresh} />;
   if (props.view === "impact-board") return <ImpactWorkspace {...props} />;
   if (props.view === "graph") return <GraphView graph={props.graph} />;
-  if (props.view === "aliases") return <AliasesView aliases={props.aliases} />;
+  if (props.view === "reviews") return <ReviewQueueView projectId={props.projectId} queue={props.reviews} onRefresh={props.onRefresh} />;
   if (props.view === "jobs") return <JobsView jobs={props.jobs} />;
   return <SettingsView overview={props.overview} />;
 }
@@ -340,7 +343,7 @@ function Dashboard({ overview, report, jobs, onNavigate }: { overview: Overview 
           ) : (
             <div className="empty-inline"><FolderOpen size={20} /><span>分析runがありません。最初に設計書を追加してください。</span><button className="secondary-button" onClick={() => onNavigate("sources")}>設計書を開く</button></div>
           )}
-          <button className="next-action-row" onClick={() => onNavigate("aliases")}>
+          <button className="next-action-row" onClick={() => onNavigate("reviews")}>
             <span className="priority-mark alias" /><span><strong>Alias候補</strong><small>表記揺れと根拠を確認</small></span><ChevronRight size={17} />
           </button>
         </section>
@@ -374,7 +377,7 @@ function SourceLibrary({ projectId, overview, sources, onRefresh }: {
   projectId: string;
   overview: Overview | null;
   sources: SourceSummary[];
-  onRefresh: () => void;
+  onRefresh: () => Promise<void>;
 }) {
   const [mode, setMode] = useState<SourceMode>("dirty_excel");
   const [files, setFiles] = useState<File[]>([]);
@@ -412,7 +415,7 @@ function SourceLibrary({ projectId, overview, sources, onRefresh }: {
       setFiles([]);
       if (inputRef.current) inputRef.current.value = "";
       setMessage(`${uploaded.paths.length}件の設計書を取り込みました。`);
-      onRefresh();
+      await onRefresh();
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : "設計書を取り込めませんでした");
     } finally {
@@ -467,7 +470,7 @@ function ImpactWorkspace({ projectId, report, design, onDesignChange, onRefresh 
   report: Report | null;
   design: DesignDocuments | null;
   onDesignChange: (design: DesignDocuments) => void;
-  onRefresh: () => void;
+  onRefresh: () => Promise<void>;
 }) {
   const impacts = useMemo(() => groupedImpacts(report).filter((impact) => impact.priority !== "hidden"), [report]);
   const initialReview = useRef({ impact: reviewParam("impact"), source: reviewParam("source"), evidence: reviewParam("evidence") }).current;
@@ -552,7 +555,7 @@ function ImpactWorkspace({ projectId, report, design, onDesignChange, onRefresh 
       setMessage("分析中です。設計書とグラフから候補を検証しています。");
       await waitForJob(projectId, created.job.job_id);
       setMessage("分析が完了しました。");
-      onRefresh();
+      await onRefresh();
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : "分析に失敗しました。");
     } finally {
@@ -712,9 +715,112 @@ function GraphView({ graph }: { graph: GraphData | null }) {
   );
 }
 
-function AliasesView({ aliases }: { aliases: AliasData | null }) {
-  const candidates = aliases?.candidates ?? [];
-  return <div className="page"><ViewHeader eyebrow="Review queue" title="Aliasレビュー" description="同一概念の候補を根拠と周辺relationで確認します。" /><section className="data-list">{candidates.length ? candidates.map((candidate, index) => <article className="data-row" key={String(candidate.candidate_id ?? index)}><div><div className="tag-row"><StatusTag value={String(candidate.judgement ?? "unsure")} /><StatusTag value={String(candidate.status ?? "pending")} /></div><h2>{String(candidate.entity_a_id ?? candidate.target_id ?? "Entity")}</h2><p><ArrowRight size={14} /> {String(candidate.entity_b_id ?? (candidate.aliases as string[] | undefined)?.join(", ") ?? "Alias")}</p></div><small>{String(candidate.llm_reason ?? candidate.reason ?? "根拠を確認してください")}</small></article>) : <EmptyState icon={GitCompareArrows} title="Alias候補はありません" body="候補生成後にここへ表示されます。" />}</section></div>;
+const REVIEW_KIND_LABELS: Record<string, string> = {
+  graph_proposal: "Graph proposal",
+  unresolved_mention: "未解決参照",
+  alias: "Alias",
+  relation: "Relation",
+  impact: "Impact",
+};
+
+const IMPACT_STATUSES = ["unreviewed", "accepted", "rejected", "needs_investigation", "implemented", "tested", "closed"];
+
+function ReviewQueueView({ projectId, queue, onRefresh }: { projectId: string; queue: ReviewQueue | null; onRefresh: () => Promise<void> }) {
+  const [kind, setKind] = useState("all");
+  const [status, setStatus] = useState("actionable");
+  const [selectedId, setSelectedId] = useState(() => reviewParam("review"));
+  const [decisionStatus, setDecisionStatus] = useState("unreviewed");
+  const [decisionReason, setDecisionReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const items = queue?.items ?? [];
+  const actionable = new Set(["pending", "unreviewed", "unconfirmed", "needs_investigation"]);
+  const filtered = items.filter((item) => (kind === "all" || item.kind === kind) && (status === "all" || (status === "actionable" ? actionable.has(item.status) : item.status === status)));
+  const selected = filtered.find((item) => item.item_id === selectedId) ?? filtered[0];
+
+  useEffect(() => {
+    if (!selected) return;
+    if (selected.item_id !== selectedId) setSelectedId(selected.item_id);
+    const params = new URLSearchParams(window.location.search);
+    params.set("project_id", projectId);
+    params.set("review", selected.item_id);
+    params.set("kind", kind);
+    params.set("status", status);
+    window.history.replaceState({}, "", `/ui/reviews?${params.toString()}`);
+  }, [kind, projectId, selected, selectedId, status]);
+
+  useEffect(() => {
+    if (selected?.kind !== "impact") return;
+    setDecisionStatus(selected.status);
+    setDecisionReason(String(selected.metadata.decision_reason ?? ""));
+  }, [selected]);
+
+  const runDecision = async (action: string, params: Record<string, unknown>) => {
+    setBusy(true);
+    setMessage("判断を保存しています…");
+    try {
+      const created = await api.enqueue(projectId, action, params, false, "settings");
+      await waitForJob(projectId, created.job.job_id);
+      await onRefresh();
+      setMessage("判断を保存しました。");
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "判断を保存できませんでした");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <div className="page page-reviews">
+    <ViewHeader eyebrow="Unified review queue" title="レビュー" description="Graph proposal、Alias、relation、Impactを根拠と同じ画面で判断します。" />
+    <section className="review-summary" aria-label="レビュー件数"><div><span>Actionable</span><strong>{queue?.summary.actionable ?? 0}</strong></div><div><span>Total</span><strong>{queue?.summary.total ?? 0}</strong></div>{Object.entries(queue?.summary.by_kind ?? {}).map(([key, count]) => <div key={key}><span>{REVIEW_KIND_LABELS[key] ?? key}</span><strong>{count}</strong></div>)}</section>
+    <div className="review-filters"><div className="source-mode" aria-label="レビュー種類"><button className={kind === "all" ? "active" : ""} onClick={() => setKind("all")}>すべて</button>{Object.entries(REVIEW_KIND_LABELS).map(([key, label]) => <button key={key} className={kind === key ? "active" : ""} onClick={() => setKind(key)}>{label}</button>)}</div><label>状態<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="actionable">要確認</option><option value="all">すべて</option><option value="accepted">accepted</option><option value="rejected">rejected</option><option value="confirmed">confirmed</option><option value="closed">closed</option></select></label></div>
+    {message && <p className="form-message" role="status">{message}</p>}
+    <section className="unified-review section-panel">
+      <div className="review-list" aria-label="レビュー項目">{filtered.length ? filtered.map((item) => <button type="button" className={`review-row ${selected?.item_id === item.item_id ? "selected" : ""}`} key={item.item_id} onClick={() => setSelectedId(item.item_id)}><span className={`priority-dot ${item.priority}`} /><span><small>{REVIEW_KIND_LABELS[item.kind]}</small><strong>{item.title}</strong><em>{item.subtitle}</em></span><StatusTag value={item.status} /></button>) : <EmptyState icon={ClipboardCheck} title="該当するレビューはありません" body="filterを変更するか、設計書を取り込んでください。" compact />}</div>
+      <div className="review-detail">{selected ? <>
+        <header><div><p className="eyebrow">{REVIEW_KIND_LABELS[selected.kind]}</p><h2>{selected.title}</h2><p>{selected.subtitle}</p></div><div className="tag-row"><StatusTag value={selected.priority} /><StatusTag value={selected.status} /></div></header>
+        <section><h3>Reason</h3><p>{selected.reason}</p></section>
+        {selected.kind === "graph_proposal" && <ProposalDiff metadata={selected.metadata} />}
+        {selected.kind === "alias" && <ReviewMetadata title="Comparison" metadata={selected.metadata} keys={["judgement", "aliases", "relation_context", "surrounding_node_ids"]} />}
+        {selected.kind === "relation" && <ReviewMetadata title="Relation" metadata={selected.metadata} keys={["source_id", "target_id", "extraction_method", "polarity", "match_type"]} />}
+        {selected.kind === "impact" && <ReviewMetadata title="Impact hypothesis" metadata={selected.metadata} keys={["change_id", "impact_type", "required_actions", "warnings", "updated_at"]} />}
+        <section><h3>Evidence</h3>{selected.evidence.length ? selected.evidence.map((evidence) => <article className="review-evidence" key={evidence.evidence_id}><code>{evidence.evidence_id}</code><small>{evidence.source_location.file} · L{evidence.source_location.line_start}</small><p>{evidence.quote}</p></article>) : <p className="muted">参照可能なevidenceはありません。</p>}</section>
+        <section className="review-decision"><h3>Decision</h3><ReviewDecision item={selected} busy={busy} decisionStatus={decisionStatus} decisionReason={decisionReason} onStatusChange={setDecisionStatus} onReasonChange={setDecisionReason} onRun={runDecision} /></section>
+      </> : <EmptyState icon={ClipboardCheck} title="レビュー項目を選択" body="左のqueueから項目を選んでください。" />}</div>
+    </section>
+  </div>;
+}
+
+function ProposalDiff({ metadata }: { metadata: Record<string, unknown> }) {
+  const nodes = Array.isArray(metadata.nodes) ? metadata.nodes as Array<Record<string, unknown>> : [];
+  const edges = Array.isArray(metadata.edges) ? metadata.edges as Array<Record<string, unknown>> : [];
+  return <section><h3>Graph diff preview</h3><div className="proposal-columns"><div><strong>追加node · {nodes.length}</strong>{nodes.map((node, index) => <p key={`${String(node.id)}-${index}`}><code>{String(node.type)}</code>{String(node.name)}</p>)}</div><div><strong>追加edge · {edges.length}</strong>{edges.map((edge, index) => <p key={`${String(edge.source)}-${index}`}><code>{String(edge.relation)}</code>{String(edge.source)} → {String(edge.target)}</p>)}</div></div></section>;
+}
+
+function ReviewMetadata({ title, metadata, keys }: { title: string; metadata: Record<string, unknown>; keys: string[] }) {
+  return <section><h3>{title}</h3><dl className="review-metadata">{keys.map((key) => <div key={key}><dt>{key}</dt><dd>{formatMetadata(metadata[key])}</dd></div>)}</dl></section>;
+}
+
+function ReviewDecision({ item, busy, decisionStatus, decisionReason, onStatusChange, onReasonChange, onRun }: {
+  item: ReviewItem;
+  busy: boolean;
+  decisionStatus: string;
+  decisionReason: string;
+  onStatusChange: (status: string) => void;
+  onReasonChange: (reason: string) => void;
+  onRun: (action: string, params: Record<string, unknown>) => Promise<void>;
+}) {
+  if (item.kind === "unresolved_mention") return <p className="muted">参照先を確認後、関連proposalまたはrelationを判断してください。</p>;
+  if (item.kind === "graph_proposal") return <div className="decision-buttons"><button className="secondary-button danger" disabled={busy} onClick={() => void onRun("graph_proposal_decide", { proposal_id: item.record_id, status: "rejected" })}>Reject</button><button className="primary-button" disabled={busy} onClick={() => void onRun("graph_proposal_decide", { proposal_id: item.record_id, status: "accepted" })}>Accept</button></div>;
+  if (item.kind === "alias") return <div className="decision-buttons"><button className="secondary-button danger" disabled={busy} onClick={() => void onRun("alias_reject_candidate", { candidate_id: item.record_id })}>Reject</button><button className="primary-button" disabled={busy} onClick={() => void onRun("alias_confirm", { candidate_id: item.record_id })}>Confirm same</button></div>;
+  if (item.kind === "relation") return <div className="decision-buttons"><button className="secondary-button danger" disabled={busy} onClick={() => void onRun("relation_status", { relation_id: item.record_id, status: "rejected" })}>Reject</button><button className="secondary-button" disabled={busy} onClick={() => void onRun("relation_status", { relation_id: item.record_id, status: "unconfirmed" })}>Reset</button><button className="primary-button" disabled={busy} onClick={() => void onRun("relation_status", { relation_id: item.record_id, status: "confirmed" })}>Confirm</button></div>;
+  return <div className="impact-decision-form"><label>状態<select value={decisionStatus} onChange={(event) => onStatusChange(event.target.value)}>{IMPACT_STATUSES.map((value) => <option key={value} value={value}>{value}</option>)}</select></label><label>判断理由<textarea value={decisionReason} onChange={(event) => onReasonChange(event.target.value)} placeholder="判断の根拠を記録" /></label><button className="primary-button" disabled={busy} onClick={() => void onRun("impact_status", { impact_id: item.record_id, status: decisionStatus, reason: decisionReason })}>保存</button></div>;
+}
+
+function formatMetadata(value: unknown): string {
+  if (Array.isArray(value)) return value.length ? value.map((item) => typeof item === "string" ? item : JSON.stringify(item)).join(", ") : "—";
+  if (value === null || value === undefined || value === "") return "—";
+  return typeof value === "object" ? JSON.stringify(value) : String(value);
 }
 
 function JobsView({ jobs }: { jobs: Job[] }) {
