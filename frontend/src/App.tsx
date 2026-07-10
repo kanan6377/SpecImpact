@@ -8,7 +8,9 @@ import {
   CircleDot,
   Database,
   FileSearch,
+  FileSpreadsheet,
   FileText,
+  FolderOpen,
   GitCompareArrows,
   LayoutDashboard,
   ListChecks,
@@ -19,6 +21,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Upload,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -34,11 +37,13 @@ import type {
   Overview,
   Project,
   Report,
+  SourceSummary,
   ViewName,
 } from "./types";
 
 const VIEWS: Array<{ id: ViewName; label: string; icon: typeof LayoutDashboard }> = [
   { id: "dashboard", label: "概要", icon: LayoutDashboard },
+  { id: "sources", label: "設計書", icon: FolderOpen },
   { id: "impact-board", label: "変更レビュー", icon: Bolt },
   { id: "graph", label: "ナレッジグラフ", icon: Network },
   { id: "aliases", label: "Alias", icon: GitCompareArrows },
@@ -74,6 +79,7 @@ export function App() {
   const [aliases, setAliases] = useState<AliasData | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [design, setDesign] = useState<DesignDocuments | null>(null);
+  const [sources, setSources] = useState<SourceSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -87,8 +93,9 @@ export function App() {
       api.aliases(nextProjectId),
       api.jobs(nextProjectId),
       api.designDocuments(nextProjectId),
+      api.sources(nextProjectId),
     ]);
-    const [overviewResult, reportResult, graphResult, aliasResult, jobsResult, designResult] = results;
+    const [overviewResult, reportResult, graphResult, aliasResult, jobsResult, designResult, sourcesResult] = results;
     if (overviewResult.status === "rejected") {
       setError(overviewResult.reason instanceof Error ? overviewResult.reason.message : "案件を読み込めませんでした");
       setLoading(false);
@@ -100,6 +107,7 @@ export function App() {
     setAliases(aliasResult.status === "fulfilled" ? aliasResult.value : null);
     setJobs(jobsResult.status === "fulfilled" ? jobsResult.value.jobs : []);
     setDesign(designResult.status === "fulfilled" ? designResult.value : null);
+    setSources(sourcesResult.status === "fulfilled" ? sourcesResult.value.sources : []);
     setLoading(false);
   }, []);
 
@@ -124,19 +132,20 @@ export function App() {
     }
   }, [loadProject]);
 
+  useEffect(() => { void bootstrap(); }, [bootstrap]);
+
   useEffect(() => {
-    void bootstrap();
     const onPopState = () => {
       setView(currentView());
       const nextProjectId = projectIdFromUrl();
-      if (nextProjectId && nextProjectId !== projectId) {
+      if (nextProjectId) {
         setProjectId(nextProjectId);
         void loadProject(nextProjectId);
       }
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [bootstrap, loadProject, projectId]);
+  }, [loadProject]);
 
   const navigate = (nextView: ViewName) => {
     setView(nextView);
@@ -150,6 +159,14 @@ export function App() {
   };
 
   const refresh = () => projectId && loadProject(projectId);
+
+  const activateProject = async (project: Project) => {
+    setProjects((current) => [project, ...current.filter((item) => item.project_id !== project.project_id)]);
+    setProjectId(project.project_id);
+    setView("dashboard");
+    updateUrl("dashboard", project.project_id, true);
+    await loadProject(project.project_id);
+  };
 
   return (
     <div className="app-shell">
@@ -166,7 +183,7 @@ export function App() {
         <main className={`app-content view-${view}`}>
           {error && <ErrorBanner message={error} onRetry={() => void bootstrap()} />}
           {!error && loading && <LoadingState label="案件データを読み込んでいます" />}
-          {!error && !loading && !projectId && <NoProject />}
+          {!error && !loading && !projectId && <NoProject onProjectCreated={activateProject} />}
           {!error && !loading && projectId && (
             <ActiveView
               view={view}
@@ -177,6 +194,7 @@ export function App() {
               aliases={aliases}
               jobs={jobs}
               design={design}
+              sources={sources}
               onDesignChange={setDesign}
               onRefresh={refresh}
               onNavigate={navigate}
@@ -200,13 +218,13 @@ function Sidebar({ view, onNavigate, overview }: { view: ViewName; onNavigate: (
       </div>
       <nav className="primary-nav">
         <p className="nav-label">Workspace</p>
-        {VIEWS.slice(0, 4).map(({ id, label, icon: Icon }) => (
+        {VIEWS.slice(0, 5).map(({ id, label, icon: Icon }) => (
           <button key={id} className={view === id ? "active" : ""} onClick={() => onNavigate(id)} aria-current={view === id ? "page" : undefined}>
             <Icon size={17} strokeWidth={1.8} /><span>{label}</span>
           </button>
         ))}
         <p className="nav-label">System</p>
-        {VIEWS.slice(4).map(({ id, label, icon: Icon }) => (
+        {VIEWS.slice(5).map(({ id, label, icon: Icon }) => (
           <button key={id} className={view === id ? "active" : ""} onClick={() => onNavigate(id)} aria-current={view === id ? "page" : undefined}>
             <Icon size={17} strokeWidth={1.8} /><span>{label}</span>
           </button>
@@ -264,11 +282,13 @@ function ActiveView(props: {
   aliases: AliasData | null;
   jobs: Job[];
   design: DesignDocuments | null;
+  sources: SourceSummary[];
   onDesignChange: (design: DesignDocuments) => void;
   onRefresh: () => void;
   onNavigate: (view: ViewName) => void;
 }) {
   if (props.view === "dashboard") return <Dashboard overview={props.overview} report={props.report} jobs={props.jobs} onNavigate={props.onNavigate} />;
+  if (props.view === "sources") return <SourceLibrary projectId={props.projectId} overview={props.overview} sources={props.sources} onRefresh={props.onRefresh} />;
   if (props.view === "impact-board") return <ImpactWorkspace {...props} />;
   if (props.view === "graph") return <GraphView graph={props.graph} />;
   if (props.view === "aliases") return <AliasesView aliases={props.aliases} />;
@@ -305,7 +325,7 @@ function Dashboard({ overview, report, jobs, onNavigate }: { overview: Overview 
               <span className="priority-mark must" /><span><strong>{report.change.title}</strong><small>{pending}件のレビュー候補</small></span><ChevronRight size={17} />
             </button>
           ) : (
-            <div className="empty-inline"><FileSearch size={20} /><span>分析runがありません。CLIまたは変更レビューから分析を開始してください。</span></div>
+            <div className="empty-inline"><FolderOpen size={20} /><span>分析runがありません。最初に設計書を追加してください。</span><button className="secondary-button" onClick={() => onNavigate("sources")}>設計書を開く</button></div>
           )}
           <button className="next-action-row" onClick={() => onNavigate("aliases")}>
             <span className="priority-mark alias" /><span><strong>Alias候補</strong><small>表記揺れと根拠を確認</small></span><ChevronRight size={17} />
@@ -325,6 +345,99 @@ function Dashboard({ overview, report, jobs, onNavigate }: { overview: Overview 
 
 function HealthRow({ ok, label, value }: { ok: boolean; label: string; value: string }) {
   return <div className="health-row">{ok ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}<span>{label}</span><strong>{value}</strong></div>;
+}
+
+type SourceMode = "docs" | "dirty_excel" | "openapi" | "ddl" | "csv";
+
+const SOURCE_MODES: Record<SourceMode, { label: string; accept: string; workflow: string; action: string }> = {
+  docs: { label: "文書", accept: ".md,.txt", workflow: "docs", action: "ingest" },
+  dirty_excel: { label: "Dirty Excel", accept: ".xlsx", workflow: "table", action: "ingest_dirty_excel" },
+  openapi: { label: "OpenAPI", accept: ".yaml,.yml,.json", workflow: "openapi", action: "ingest_openapi" },
+  ddl: { label: "DDL", accept: ".sql", workflow: "ddl", action: "ingest_ddl" },
+  csv: { label: "CSV", accept: ".csv", workflow: "table", action: "ingest_csv" },
+};
+
+function SourceLibrary({ projectId, overview, sources, onRefresh }: {
+  projectId: string;
+  overview: Overview | null;
+  sources: SourceSummary[];
+  onRefresh: () => void;
+}) {
+  const [mode, setMode] = useState<SourceMode>("dirty_excel");
+  const [files, setFiles] = useState<File[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const addSources = async () => {
+    if (!files.length) {
+      setMessage("追加する設計書を選択してください。");
+      return;
+    }
+    setBusy(true);
+    setMessage("設計書を案件内へ保存しています…");
+    try {
+      if (!overview?.initialized) {
+        const initialized = await api.enqueue(projectId, "init", {}, false, "settings");
+        await waitForJob(projectId, initialized.job.job_id);
+      }
+      const definition = SOURCE_MODES[mode];
+      const uploaded = await api.upload(projectId, definition.workflow, files);
+      const targets = mode === "docs" || mode === "dirty_excel"
+        ? [parentPath(uploaded.paths[0])]
+        : uploaded.paths;
+      for (const path of targets) {
+        const params: Record<string, unknown> = { path };
+        if (mode === "dirty_excel") params.llm = true;
+        if (mode === "docs") params.no_llm = false;
+        const preview = await api.externalPreview(projectId, definition.action, params);
+        const approved = !preview.required || window.confirm(formatTransmissionPreview(preview.transmissions));
+        if (!approved) throw new Error("外部送信を承認しなかったため、取り込みを中止しました。");
+        const created = await api.enqueue(projectId, definition.action, params, approved, "upload");
+        await waitForJob(projectId, created.job.job_id);
+      }
+      setFiles([]);
+      if (inputRef.current) inputRef.current.value = "";
+      setMessage(`${uploaded.paths.length}件の設計書を取り込みました。`);
+      onRefresh();
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "設計書を取り込めませんでした");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="page page-sources">
+      <ViewHeader eyebrow="Design sources" title="設計書" description="案件へ保存した原本と、evidence graphへの取り込み状態を確認します。" />
+      <section className="source-import section-panel" aria-label="設計書を追加">
+        <div className="source-mode" aria-label="設計書の種類">
+          {(Object.entries(SOURCE_MODES) as Array<[SourceMode, typeof SOURCE_MODES[SourceMode]]>).map(([key, item]) => (
+            <button type="button" key={key} className={mode === key ? "active" : ""} onClick={() => { setMode(key); setFiles([]); }}>{item.label}</button>
+          ))}
+        </div>
+        <label className="file-picker">
+          <Upload size={18} />
+          <span><strong>{files.length ? `${files.length}件を選択中` : "ファイルを選択"}</strong><small>{SOURCE_MODES[mode].accept} · 原本は案件内に保存されます</small></span>
+          <input ref={inputRef} type="file" accept={SOURCE_MODES[mode].accept} multiple onChange={(event) => setFiles(Array.from(event.target.files ?? []))} />
+        </label>
+        <button className="primary-button" type="button" onClick={() => void addSources()} disabled={busy || !files.length}>
+          {busy ? <LoaderCircle className="spin" size={17} /> : <Upload size={17} />}取り込む
+        </button>
+      </section>
+      {message && <p className="form-message" role="status">{message}</p>}
+      <section className="source-library section-panel">
+        <div className="section-heading"><span><FolderOpen size={17} />Source Library</span><small>{sources.length} sources</small></div>
+        {sources.length ? <div className="source-list">{sources.map((source) => <article className="source-item" key={source.source_id}>
+          <div className="source-icon">{source.source_type.includes("excel") ? <FileSpreadsheet size={19} /> : <FileText size={19} />}</div>
+          <div className="source-copy"><strong>{source.title}</strong><small title={source.path}>{source.path}</small></div>
+          <StatusTag value={source.status} />
+          <dl className="source-facts"><div><dt>Evidence</dt><dd>{source.evidence_count}</dd></div><div><dt>Artifacts</dt><dd>{source.artifact_count}</dd></div><div><dt>Relations</dt><dd>{source.relation_count}</dd></div>{source.sheet_count > 0 && <div><dt>Sheets</dt><dd>{source.sheet_count}</dd></div>}</dl>
+          {source.warnings.length > 0 && <span className="source-warning" title={source.warnings.join("\n")}><AlertTriangle size={15} />{source.warnings.length}</span>}
+        </article>)}</div> : <EmptyState icon={FolderOpen} title="設計書はまだありません" body="上の追加欄から文書、Dirty Excel、OpenAPI、DDL、CSVを取り込めます。" />}
+      </section>
+    </div>
+  );
 }
 
 type RankedImpact = Impact & { priority: string };
@@ -557,8 +670,58 @@ function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => voi
   return <div className="error-banner" role="alert"><AlertTriangle size={18} /><span>{message}</span><button onClick={onRetry}>再試行</button></div>;
 }
 
-function NoProject() {
-  return <div className="no-project"><FileSearch size={34} /><h1>案件が登録されていません</h1><p><code>specimpact gui --project C:\path\to\project</code>で案件を登録して起動してください。</p></div>;
+function NoProject({ onProjectCreated }: { onProjectCreated: (project: Project) => Promise<void> }) {
+  const [name, setName] = useState("");
+  const [path, setPath] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const create = async () => {
+    if (!path.trim()) {
+      setMessage("案件フォルダーを入力してください。");
+      return;
+    }
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await api.createProject(path.trim(), name.trim(), true);
+      const initialized = await api.enqueue(response.project.project_id, "init", {}, false, "settings");
+      await waitForJob(response.project.project_id, initialized.job.job_id);
+      await onProjectCreated(response.project);
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "案件を作成できませんでした");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const createDemo = async () => {
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await api.createDemo();
+      const run = await api.enqueue(response.project.project_id, "demo_run", {}, false, "demo");
+      await waitForJob(response.project.project_id, run.job.job_id);
+      await onProjectCreated(response.project);
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "サンプルを作成できませんでした");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <div className="onboarding">
+    <div className="onboarding-heading"><span className="brand-mark" aria-hidden="true">SI</span><p className="eyebrow">Evidence review workspace</p><h1>案件を準備する</h1><p>既存フォルダーを登録するか、新しい案件フォルダーを作成します。設計書と解析データはその案件内に保存されます。</p></div>
+    <section className="onboarding-form section-panel">
+      <label><span>案件名 <small>任意</small></span><input value={name} onChange={(event) => setName(event.target.value)} placeholder="例: カード入会システム改修" /></label>
+      <label><span>案件フォルダー</span><input value={path} onChange={(event) => setPath(event.target.value)} placeholder="C:\\work\\card-application-impact" /></label>
+      <button className="primary-button" type="button" onClick={() => void create()} disabled={busy}>{busy ? <LoaderCircle className="spin" size={17} /> : <FolderOpen size={17} />}案件を開始</button>
+      <div className="onboarding-divider"><span>or</span></div>
+      <button className="secondary-button" type="button" onClick={() => void createDemo()} disabled={busy}><FileText size={17} />ガイド付きサンプルを作成</button>
+      {message && <p className="form-message error" role="alert">{message}</p>}
+    </section>
+    <p className="onboarding-privacy"><ShieldCheck size={15} />GUIは127.0.0.1限定です。外部LLM送信はjobごとにpreviewと承認を要求します。</p>
+  </div>;
 }
 
 function formatDate(value: string): string {
@@ -569,6 +732,10 @@ function formatDate(value: string): string {
 function formatTransmissionPreview(transmissions: Array<Record<string, unknown>>): string {
   const details = transmissions.map((item) => `${String(item.provider ?? "provider")} / ${String(item.model ?? "model")} / ${String(item.purpose ?? "analysis")} / ${String(item.item_count_label ?? item.item_count ?? "件数未確定")}`).join("\n");
   return `外部LLMへ次のデータを送信します。\n\n${details}\n\nこのジョブを実行しますか？`;
+}
+
+function parentPath(path: string): string {
+  return path.replace(/[\\/][^\\/]+$/, "");
 }
 
 async function waitForJob(projectId: string, jobId: string): Promise<Job> {

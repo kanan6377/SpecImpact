@@ -222,9 +222,14 @@ specimpact gui
 
 GUI は `127.0.0.1` のみに bind します。
 
+案件が未登録でもGUI内で案件フォルダーの作成・登録、またはガイド付きサンプルの作成から
+開始できます。`設計書` 画面ではMarkdown/text、Dirty Excel、OpenAPI、DDL、CSVをmanaged uploadし、
+evidence、artifact、relation、sheetの取り込み件数をSource Libraryで確認できます。
+
 主な画面:
 
 - 概要: graph件数、次のレビュー、案件状態
+- 設計書: 原本追加、LLM-first取り込み、Source Library
 - 変更レビュー: 起点設計書と自然文の変更要求、影響候補、設計書ハイライト、Evidence Inspector
 - ナレッジグラフ: Cytoscapeによるnode/relation探索
 - Alias: 同一概念候補と根拠のレビュー

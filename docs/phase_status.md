@@ -244,3 +244,32 @@ Completion checklist:
 Notes: Phase 1 establishes the production frontend and application shell. Onboarding, Source Library,
 expanded review decisions, source freshness, and patent-sensitive private validation remain in their
 assigned later phases.
+
+## v1.2.0 UX Phase 2
+
+Status: complete
+
+Scope:
+- GUI-native project onboarding
+- guided sample creation
+- managed design-source upload
+- Source Library summary API and responsive view
+- existing queue/privacy/consent integration
+
+Completion checklist:
+- [x] Project creation initializes a local SpecImpact store
+- [x] Guided sample runs from the onboarding screen
+- [x] Documents, Dirty Excel, OpenAPI, DDL, and CSV are supported
+- [x] Source Library uses persisted project data
+- [x] External preview and project queue remain authoritative
+- [x] Source API and managed-ingest tests pass
+- [x] Desktop and 390 px browser verification complete
+- [x] README and manuals updated
+- [x] `docs/reviews/v1.2.0-ux-phase-2.md` written
+- [x] Full pytest passes (138 tests)
+- [x] Full ruff check passes
+- [x] compileall passes
+- [x] release-check passes (21 cases)
+
+Notes: Source Library deliberately reports current ingestion state only. Version history, graph diff,
+and stale propagation remain Phase 5 work.

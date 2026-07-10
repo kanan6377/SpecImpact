@@ -273,14 +273,16 @@ GUI は `127.0.0.1` のみに bind します。
 
 主な画面:
 
-- Dashboard
-- Ingest / Analyze / Report
-- Graph Explorer
-- Dirty Excel Review Console
-- Region Viewer
-- Alias Review
-- Impact Review Board
-- Settings / Privacy
+- 概要
+- 設計書 / Source Library
+- 変更レビュー
+- ナレッジグラフ
+- Alias
+- ジョブと監査
+- 設定とプライバシー
+
+案件が未登録の場合は、GUI内で案件フォルダーを作成するか、ガイド付きサンプルを生成できます。
+設計書画面はMarkdown/text、Dirty Excel、OpenAPI、DDL、CSVのmanaged uploadに対応します。
 
 詳細は [gui_manual_ja.md](gui_manual_ja.md) を参照してください。
 

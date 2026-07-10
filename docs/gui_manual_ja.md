@@ -28,13 +28,38 @@ specimpact gui --no-open-browser
 | 画面 | 用途 |
 | --- | --- |
 | 概要 | documents、artifacts、entities、relations、evidence、次のレビューを確認 |
+| 設計書 | 原本をmanaged uploadし、evidence graphへの取り込み状態を確認 |
 | 変更レビュー | 変更要求の入力、影響候補、設計書、evidenceを並べてレビュー |
 | ナレッジグラフ | node/relationの接続とpropertyを探索 |
 | Alias | 表記揺れ候補、LLM理由、周辺relation、evidenceを確認 |
 | ジョブと監査 | 案件queueの処理状態と安全な入力要約を確認 |
 | 設定 | LLM provider、保存先、外部送信状態、Privacy Doctorを確認 |
 
-## 3. 変更レビュー
+## 3. 案件作成と設計書
+
+案件が一件もない場合、GUIに初期導入画面が表示されます。案件名とローカルフォルダーを入力して
+`案件を開始` を押すと、フォルダー作成、registry登録、`.specimpact` 初期化を行います。実データを
+使わずに確認する場合は `ガイド付きサンプルを作成` を選びます。
+
+`設計書` 画面では種類を選び、ファイルを追加します。
+
+| 種類 | 拡張子 | 取り込み |
+| --- | --- | --- |
+| 文書 | `.md`, `.txt` | LLM-first document ingestion |
+| Dirty Excel | `.xlsx` | cell/region正規化とLLM proposal抽出 |
+| OpenAPI | `.yaml`, `.yml`, `.json` | structured OpenAPI loader |
+| DDL | `.sql` | structured DDL loader |
+| CSV | `.csv` | table loader |
+
+原本は `.specimpact/uploads/<timestamp>-<uuid>/` へ保存し、元ファイルを上書きしません。1ファイルは
+25 MB、1回の送信は200ファイルまでです。外部LLMを使う設定では取り込み前に送信内容をpreviewし、
+承認後もserverとcoreの両方で承認を検証します。
+
+Source Libraryは現在のdocumentごとにstatus、evidence、artifact、relation、Dirty Excelのsheet数、
+warningを表示します。`indexed` は文書として登録済みだがrelation evidenceがない状態、`ready` は
+evidenceを持つ状態です。versionやstale判定は後続phaseで追加します。
+
+## 4. 変更レビュー
 
 1. 上部barで案件を選ぶ
 2. `変更レビュー` を開く
@@ -55,13 +80,13 @@ specimpact gui --no-open-browser
 `must_review` は影響確定ではなく、直接evidenceとgraph pathがあるため必ず確認すべき候補です。
 Inspectorは狭幅画面ではoverlayになり、右上の閉じるbuttonで設計書へ戻れます。
 
-## 4. ナレッジグラフ
+## 5. ナレッジグラフ
 
 GraphはCytoscapeで描画します。検索欄にartifact/entity名を入力すると非該当nodeを弱く表示します。
 nodeまたはrelationを選択すると右Inspectorへpropertyを表示します。Graphは因果関係の確定図ではなく、
 設計書から抽出してreview statusを持つ依存関係です。
 
-## 5. Alias、ジョブ、設定
+## 6. Alias、ジョブ、設定
 
 Alias画面は同一概念候補を根拠付きで確認するqueueです。候補がない場合はempty stateを表示します。
 確認・却下の更新操作はPhase 4の統一Review Queueで拡充します。
@@ -72,12 +97,13 @@ job履歴へ保存しません。失敗時はstatusと安全な入力要約か�
 設定画面ではprovider/model、local fallback、backend、案件path、最新run、Privacy Doctorを確認します。
 外部LLM送信はpreviewとjob単位の承認が必要で、core側でも再検証します。
 
-## 6. URL互換性
+## 7. URL互換性
 
 現行URL:
 
 ```text
 /ui/dashboard
+/ui/sources
 /ui/impact-board
 /ui/graph
 /ui/aliases
@@ -88,12 +114,13 @@ job履歴へ保存しません。失敗時はstatusと安全な入力要約か�
 旧URLは案件IDを保持してredirectします。
 
 ```text
-/ui/demo, /ui/ingest, /ui/dirty-excel -> /ui/dashboard
+/ui/demo -> /ui/dashboard
+/ui/ingest, /ui/dirty-excel -> /ui/sources
 /ui/analyze -> /ui/impact-board
 /ui/tools -> /ui/jobs
 ```
 
-## 7. Frontend開発
+## 8. Frontend開発
 
 利用者はNode.jsを必要としません。`specimpact/webui/static/dist/` のbuild済み資産をPython packageに
 同梱します。GUIを変更する開発者だけが次を実行します。
@@ -110,7 +137,7 @@ pytest -q tests/test_gui.py
 runtime CDN、remote font、mock data fallbackは使用しません。FastAPIが既存のlocal JSONL project modelと
 CSRF/session保護されたAPIを提供し、React/TypeScript frontendがそれを表示します。
 
-## 8. 安全性と制約
+## 9. 安全性と制約
 
 - 最終的な影響判断は人間が行う
 - LLMだけの主張を `must_review` にしない
@@ -119,6 +146,6 @@ CSRF/session保護されたAPIを提供し、React/TypeScript frontendがそれ�
 - API keyと文書本文をjob logへ残さない
 - Graphの更新は案件queueと永続化serviceを経由する
 
-Source Library、onboarding、統一Review Queue、source version/stale表示はUX modernizationの後続phaseで
-追加します。進捗と完了条件は [UX Redesign Plan](ux_redesign_plan.md) と
+統一Review Queueとsource version/stale表示はUX modernizationの後続phaseで追加します。
+進捗と完了条件は [UX Redesign Plan](ux_redesign_plan.md) と
 [Phase Status](phase_status.md) を参照してください。

@@ -25,7 +25,7 @@ from specimpact.dirty_excel.ingestion import (
     inspect_dirty_excel,
     list_graph_proposals,
 )
-from specimpact.dirty_excel.models import DirtyCell, DirtyRegion
+from specimpact.dirty_excel.models import DirtyCell, DirtyRegion, DirtySheet, DirtyWorkbook
 from specimpact.embeddings import rebuild_embeddings
 from specimpact.graphrag import (
     configure_llm,
@@ -312,6 +312,89 @@ def design_documents_data(
         "selected_evidence_ids": sorted(selected),
         "documents": previews,
     }
+
+
+def source_library_data(project: Project) -> dict[str, Any]:
+    """Summarize ingested design sources without introducing version semantics."""
+    store = store_for(project)
+    documents = store.read("documents", Document)
+    evidence = store.read("evidence", Evidence)
+    artifacts = store.read("artifacts", Artifact)
+    relations = store.read("relations", Relation)
+    workbooks = store.read("dirty_workbooks", DirtyWorkbook)
+    sheets = store.read("dirty_sheets", DirtySheet)
+    regions = store.read("dirty_regions", DirtyRegion)
+
+    evidence_counts: dict[str, int] = {}
+    for item in evidence:
+        evidence_counts[item.document_id] = evidence_counts.get(item.document_id, 0) + 1
+    artifact_counts: dict[str, int] = {}
+    for item in artifacts:
+        for document_id in item.source_document_ids:
+            artifact_counts[document_id] = artifact_counts.get(document_id, 0) + 1
+    relation_counts: dict[str, int] = {}
+    for item in relations:
+        for document_id in item.source_document_ids:
+            relation_counts[document_id] = relation_counts.get(document_id, 0) + 1
+
+    workbook_by_path: dict[str, DirtyWorkbook] = {}
+    for workbook in workbooks:
+        for path in (workbook.file_path, workbook.original_path):
+            workbook_by_path[_path_key(path)] = workbook
+    sheet_counts: dict[str, int] = {}
+    for sheet in sheets:
+        sheet_counts[sheet.workbook_id] = sheet_counts.get(sheet.workbook_id, 0) + 1
+    region_counts: dict[str, int] = {}
+    for region in regions:
+        region_counts[region.workbook_id] = region_counts.get(region.workbook_id, 0) + 1
+
+    items: list[dict[str, Any]] = []
+    represented_workbooks: set[str] = set()
+    for document in documents:
+        workbook = workbook_by_path.get(_path_key(document.path))
+        if workbook:
+            represented_workbooks.add(workbook.workbook_id)
+        item_evidence = evidence_counts.get(document.document_id, 0)
+        items.append(
+            {
+                "source_id": document.document_id,
+                "title": document.title,
+                "path": document.path,
+                "source_type": document.document_type,
+                "loaded_at": document.loaded_at,
+                "evidence_count": item_evidence,
+                "artifact_count": artifact_counts.get(document.document_id, 0),
+                "relation_count": relation_counts.get(document.document_id, 0),
+                "sheet_count": sheet_counts.get(workbook.workbook_id, 0) if workbook else 0,
+                "region_count": region_counts.get(workbook.workbook_id, 0) if workbook else 0,
+                "warnings": workbook.warnings if workbook else [],
+                "status": "ready" if item_evidence else "indexed",
+            }
+        )
+    for workbook in workbooks:
+        if workbook.workbook_id in represented_workbooks:
+            continue
+        items.append(
+            {
+                "source_id": workbook.workbook_id,
+                "title": Path(workbook.file_path).name,
+                "path": workbook.file_path,
+                "source_type": "dirty_excel",
+                "loaded_at": None,
+                "evidence_count": sum(
+                    1
+                    for item in evidence
+                    if _path_key(item.source_location.file) == _path_key(workbook.file_path)
+                ),
+                "artifact_count": 0,
+                "relation_count": 0,
+                "sheet_count": sheet_counts.get(workbook.workbook_id, 0),
+                "region_count": region_counts.get(workbook.workbook_id, 0),
+                "warnings": workbook.warnings,
+                "status": "ready",
+            }
+        )
+    return {"sources": sorted(items, key=lambda item: (item["title"], item["path"]))}
 
 
 def report_data(project: Project) -> dict[str, Any]:
@@ -913,6 +996,10 @@ def _resolve_project_file(project: Project, file_name: str) -> Path | None:
         if resolved.is_file():
             return resolved
     return None
+
+
+def _path_key(value: str) -> str:
+    return os.path.normcase(os.path.normpath(value))
 
 
 def _looks_text(path: Path) -> bool:

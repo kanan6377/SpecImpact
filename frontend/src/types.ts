@@ -1,4 +1,4 @@
-export type ViewName = "dashboard" | "impact-board" | "graph" | "aliases" | "jobs" | "settings";
+export type ViewName = "dashboard" | "sources" | "impact-board" | "graph" | "aliases" | "jobs" | "settings";
 
 export interface Project {
   project_id: string;
@@ -96,6 +96,21 @@ export interface DesignDocument {
 export interface DesignDocuments {
   selected_evidence_ids: string[];
   documents: DesignDocument[];
+}
+
+export interface SourceSummary {
+  source_id: string;
+  title: string;
+  path: string;
+  source_type: string;
+  loaded_at: string | null;
+  evidence_count: number;
+  artifact_count: number;
+  relation_count: number;
+  sheet_count: number;
+  region_count: number;
+  warnings: string[];
+  status: string;
 }
 
 export interface GraphData {

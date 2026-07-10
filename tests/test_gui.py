@@ -25,6 +25,7 @@ from specimpact.webui.services import (
     external_preview,
     graph_data,
     report_data,
+    source_library_data,
 )
 from specimpact.webui.uploads import MAX_FILE_SIZE, MAX_FILES, sanitize_filename, save_uploads
 
@@ -441,6 +442,43 @@ def test_design_documents_endpoint_filters_to_selected_evidence(tmp_path: Path) 
     body = response.json()
     assert body["selected_evidence_ids"] == [evidence_id]
     assert any(document["highlight_count"] for document in body["documents"])
+
+
+def test_source_library_summarizes_managed_ingest_and_endpoint(tmp_path: Path) -> None:
+    project = ProjectRegistry(tmp_path / "registry").create(tmp_path / "project")
+    execute(project, "init", {})
+    uploaded = save_uploads(
+        project.path,
+        "docs",
+        [
+            (
+                "screen.md",
+                "# 申込画面\n\n## Fields\n- 希望利用限度額\n\n## Calls\n- 申込API".encode(),
+            ),
+            (
+                "api.md",
+                "# 申込API\n\n## Request fields\n- requestedCreditLimit".encode(),
+            ),
+        ],
+    )
+    execute(project, "ingest", {"path": str(uploaded[0].parent), "no_llm": True})
+
+    summary = source_library_data(project)
+    assert len(summary["sources"]) == 2
+    assert {item["title"] for item in summary["sources"]} == {"申込画面", "申込API"}
+    assert all(item["status"] == "ready" for item in summary["sources"])
+    assert all(item["evidence_count"] > 0 for item in summary["sources"])
+
+    app = create_app(registry_root=tmp_path / "registry")
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        response = client.get(f"/api/projects/{project.project_id}/sources")
+        redirect = client.get(
+            f"/ui/ingest?project_id={project.project_id}",
+            follow_redirects=False,
+        )
+    assert response.status_code == 200
+    assert len(response.json()["sources"]) == 2
+    assert redirect.headers["location"] == f"/ui/sources?project_id={project.project_id}"
 
 
 def test_session_tokens_are_bounded_and_expire(tmp_path: Path) -> None:

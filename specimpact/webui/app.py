@@ -37,16 +37,17 @@ from specimpact.webui.services import (
     project_overview,
     report_data,
     run_history,
+    source_library_data,
     store_for,
     tool_result,
 )
 from specimpact.webui.uploads import save_uploads
 
-PAGES = {"dashboard", "impact-board", "graph", "aliases", "jobs", "settings"}
+PAGES = {"dashboard", "sources", "impact-board", "graph", "aliases", "jobs", "settings"}
 LEGACY_PAGES = {
     "demo": "dashboard",
-    "ingest": "dashboard",
-    "dirty-excel": "dashboard",
+    "ingest": "sources",
+    "dirty-excel": "sources",
     "analyze": "impact-board",
     "tools": "jobs",
 }
@@ -297,6 +298,10 @@ def create_app(
     @app.get("/api/projects/{project_id}/design-documents")
     def design_documents(project_id: str, evidence_id: list[str] | None = Query(None)):
         return design_documents_data(_project(app, project_id), evidence_id)
+
+    @app.get("/api/projects/{project_id}/sources")
+    def sources(project_id: str):
+        return source_library_data(_project(app, project_id))
 
     @app.get("/api/projects/{project_id}/report")
     def report(project_id: str):
