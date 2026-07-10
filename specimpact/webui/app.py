@@ -13,7 +13,7 @@ from typing import Literal
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -42,18 +42,13 @@ from specimpact.webui.services import (
 )
 from specimpact.webui.uploads import save_uploads
 
-PAGES = {
-    "dashboard",
-    "demo",
-    "ingest",
-    "dirty-excel",
-    "analyze",
-    "impact-board",
-    "graph",
-    "aliases",
-    "settings",
-    "tools",
-    "jobs",
+PAGES = {"dashboard", "impact-board", "graph", "aliases", "jobs", "settings"}
+LEGACY_PAGES = {
+    "demo": "dashboard",
+    "ingest": "dashboard",
+    "dirty-excel": "dashboard",
+    "analyze": "impact-board",
+    "tools": "jobs",
 }
 STATIC_DIR = Path(__file__).parent / "static"
 TEMPLATE_DIR = Path(__file__).parent / "templates"
@@ -135,6 +130,9 @@ def create_app(
 
     @app.get("/ui/{page}", response_class=HTMLResponse)
     def page(request: Request, page: str):
+        if page in LEGACY_PAGES:
+            query = f"?{request.url.query}" if request.url.query else ""
+            return RedirectResponse(f"/ui/{LEGACY_PAGES[page]}{query}", status_code=307)
         if page not in PAGES:
             raise HTTPException(status_code=404, detail="Unknown page")
         return templates.TemplateResponse(

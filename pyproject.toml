@@ -47,9 +47,10 @@ specimpact = [
   "resources/demo/**/*",
   "resources/schemas/v1/*.json",
   "webui/templates/*.html",
-  "webui/static/*.css",
-  "webui/static/*.js",
-  "webui/static/vendor/*",
+  "webui/static/dist/*.css",
+  "webui/static/dist/*.js",
+  "webui/static/dist/chunks/*.js",
+  "webui/static/dist/assets/*",
 ]
 
 [tool.pytest.ini_options]

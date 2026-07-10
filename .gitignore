@@ -6,4 +6,7 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+!specimpact/webui/static/dist/
+!specimpact/webui/static/dist/**
 *.whl
+frontend/node_modules/

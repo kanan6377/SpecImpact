@@ -622,6 +622,10 @@ def test_wheel_install_release_check_has_packaged_resources(tmp_path: Path) -> N
                 assert packaged == schema.read_bytes()
         assert "specimpact/resources/publication.json" in names
         assert "specimpact/resources/schemas/v1/report.schema.json" in names
+        assert "specimpact/webui/static/dist/app.js" in names
+        assert "specimpact/webui/static/dist/app.css" in names
+        assert any(name.startswith("specimpact/webui/static/dist/chunks/react-") for name in names)
+        assert any(name.startswith("specimpact/webui/static/dist/chunks/graph-") for name in names)
         subprocess.run(
             [
                 sys.executable,

@@ -170,17 +170,25 @@ def test_gui_pages_security_project_upload_and_init_job(tmp_path: Path) -> None:
     app = create_app(registry_root=tmp_path / "registry")
     with TestClient(app, base_url="http://127.0.0.1") as client:
         for page in PAGES:
-            assert client.get(f"/ui/{page}").status_code == 200
-        settings = client.get("/ui/settings").text
-        assert "<option>codex</option>" in settings
-        graph = client.get("/ui/graph").text
-        assert 'id="graph-search"' in graph
-        assert 'id="graph-fit"' in graph
-        assert 'id="graph-view-status"' in graph
-        assert 'aria-describedby="graph-view-status"' in graph
-        assert 'id="remove-project-dialog"' in graph
-        assert 'id="page-status"' in graph
-        assert 'aria-label="設計要素と関係を表示する knowledge graph。' in graph
+            page_response = client.get(f"/ui/{page}")
+            assert page_response.status_code == 200
+            assert 'id="root"' in page_response.text
+            assert '/static/dist/app.js' in page_response.text
+        shell = client.get("/ui/dashboard").text
+        assert "Evidence Review Workspace" in shell
+        assert "fonts.googleapis.com" not in shell
+        assert "cdn.jsdelivr.net" not in shell
+        assert "/static/data.js" not in shell
+        bundle = client.get("/static/dist/app.js")
+        assert bundle.status_code == 200
+        assert "SI_DATA" not in bundle.text
+        assert client.get("/static/dist/app.css").status_code == 200
+        redirect = client.get(
+            "/ui/analyze?project_id=project-one",
+            follow_redirects=False,
+        )
+        assert redirect.status_code == 307
+        assert redirect.headers["location"] == "/ui/impact-board?project_id=project-one"
         assert client.get("/", headers={"Host": "example.com"}).status_code == 403
         assert client.post("/api/projects", json={"path": str(tmp_path / "x")}).status_code == 403
         headers = _headers(client)

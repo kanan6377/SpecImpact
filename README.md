@@ -20,7 +20,7 @@ SpecImpact の出力は「影響確定」ではなく「レビュー候補」で
 - Alias recall 強化: camelCase/snake_case 分解、名前トークン、疑似 embedding 類似、周辺 relation、近傍 evidence を候補生成に利用
 - LLM impact hypothesis: `impact_type`、`required_actions`、`warnings`、`uncertainty` を作業仮説として保存
 - Verifier: LLM だけの主張を `must_review` にしない安全側の分類
-- GUI: localhost 限定の Dirty Excel Review Console、Alias Review、Impact Review Board、Graph Explorer
+- GUI: localhost 限定の Evidence Review Workspace。影響候補、設計書ハイライト、evidence、Graphを同じ案件文脈で確認
 - Obsidian export: Artifact / Evidence / Change / Impact note と Canvas を生成
 - OSS 向け評価: release-check、dirty Excel golden、Obsidian snapshot test を整備
 
@@ -224,14 +224,17 @@ GUI は `127.0.0.1` のみに bind します。
 
 主な画面:
 
-- Dashboard
-- Ingest / Analyze / Report
-- Graph Explorer
-- Dirty Excel Review Console
-- Region Viewer
-- Alias Review
-- Impact Review Board
-- Settings / Privacy
+- 概要: graph件数、次のレビュー、案件状態
+- 変更レビュー: 起点設計書と自然文の変更要求、影響候補、設計書ハイライト、Evidence Inspector
+- ナレッジグラフ: Cytoscapeによるnode/relation探索
+- Alias: 同一概念候補と根拠のレビュー
+- ジョブと監査: 更新処理、状態、入力、実行時刻
+- 設定: LLM、保存先、Privacy Doctor
+
+旧GUIの `/ui/analyze`、`/ui/dirty-excel` などは、案件IDを保ったまま対応する現行画面へ
+redirectされます。実行時は外部CDNやNode.jsを必要とせず、wheelにコンパイル済みのfrontendを
+同梱します。frontendを変更する開発者だけが `frontend/` で `npm install` と `npm run build` を
+実行します。
 
 ![Graph Explorer](docs/images/gui/graph-explorer.png)
 

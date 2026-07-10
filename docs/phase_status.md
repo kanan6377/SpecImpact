@@ -214,3 +214,33 @@ Completion checklist:
 Notes: This phase intentionally contains documentation and architecture decisions only. Production
 frontend migration begins after this phase passes all gates. `pytest -q` completed with 137 passing
 tests; ruff and compileall also passed.
+
+## v1.2.0 UX Phase 1
+
+Status: complete
+
+Scope:
+- production mock-data removal
+- React/TypeScript/Vite build foundation
+- six URL-addressable workspace views
+- legacy route compatibility
+- packaged local static assets
+- desktop and narrow-width accessibility baseline
+
+Completion checklist:
+- [x] Production GUI uses typed project APIs without `SI_DATA`
+- [x] Runtime CDN and remote font dependencies removed
+- [x] Legacy routes redirect with `project_id` preserved
+- [x] Frontend TypeScript check and production build pass
+- [x] Real-project browser verification complete
+- [x] 390 px responsive verification complete
+- [x] README and GUI manual updated
+- [x] `docs/reviews/v1.2.0-ux-phase-1.md` written
+- [x] Full pytest passes (137 tests)
+- [x] Full ruff check passes
+- [x] compileall passes
+- [x] release-check passes (21 cases)
+
+Notes: Phase 1 establishes the production frontend and application shell. Onboarding, Source Library,
+expanded review decisions, source freshness, and patent-sensitive private validation remain in their
+assigned later phases.
