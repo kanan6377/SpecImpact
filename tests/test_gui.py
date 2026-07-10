@@ -485,11 +485,14 @@ def test_source_library_summarizes_managed_ingest_and_endpoint(tmp_path: Path) -
     app = create_app(registry_root=tmp_path / "registry")
     with TestClient(app, base_url="http://127.0.0.1") as client:
         response = client.get(f"/api/projects/{project.project_id}/sources")
+        freshness = client.get(f"/api/projects/{project.project_id}/freshness")
         redirect = client.get(
             f"/ui/ingest?project_id={project.project_id}",
             follow_redirects=False,
         )
     assert response.status_code == 200
+    assert freshness.status_code == 200
+    assert freshness.json()["summary"]["versions"] == 2
     assert len(response.json()["sources"]) == 2
     assert redirect.headers["location"] == f"/ui/sources?project_id={project.project_id}"
 

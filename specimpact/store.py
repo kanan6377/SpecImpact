@@ -91,6 +91,9 @@ class LocalStore:
         prune_document_ids: set[str] | None = None,
     ) -> None:
         self.init()
+        from specimpact.source_freshness import finalize_graph_merge, prepare_graph_merge
+
+        freshness = prepare_graph_merge(self, documents, prune_document_ids or set())
         self._validate_document_identities(documents)
         replaced = {item.document_id for item in documents} | (prune_document_ids or set())
         current_documents = [
@@ -111,7 +114,9 @@ class LocalStore:
         statuses = {item.relation_id: item.status for item in existing_relations}
         kept_relations = _without_sources(existing_relations, replaced)
         for relation in relations:
-            if relation.relation_id in statuses:
+            if set(relation.source_document_ids) & freshness.stale_document_ids:
+                relation.status = "unconfirmed"
+            elif relation.relation_id in statuses:
                 relation.status = statuses[relation.relation_id]
         for relation in relations:
             validate_relation(relation.model_dump())
@@ -125,6 +130,7 @@ class LocalStore:
         self.write("relations", _merge_relations(kept_relations + relations))
         self.write("evidence", _unique(current_evidence + evidence, "evidence_id"))
         self._prune_embeddings()
+        finalize_graph_merge(self, freshness)
 
     def _validate_document_identities(self, documents: list[Document]) -> None:
         known: dict[str, Document] = {

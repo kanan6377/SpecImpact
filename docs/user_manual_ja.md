@@ -285,6 +285,8 @@ GUI は `127.0.0.1` のみに bind します。
 設計書画面はMarkdown/text、Dirty Excel、OpenAPI、DDL、CSVのmanaged uploadに対応します。
 変更レビューは、選択した起点設計書のdocument IDと関連graph要素を分析contextへ含めます。
 候補、設計書、evidenceの選択はURLへ保存され、evidenceを押すと引用元の行またはcellへ移動します。
+設計書の再取り込みでhashが変わるとsource versionとgraph diffが追加され、旧evidenceに依存する
+relationとImpactはstaleとして統一レビューへ戻ります。
 
 詳細は [gui_manual_ja.md](gui_manual_ja.md) を参照してください。
 

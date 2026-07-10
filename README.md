@@ -255,6 +255,11 @@ GUI の詳細は [docs/gui_manual_ja.md](docs/gui_manual_ja.md) を参照して�
 - Change requests / Change atoms
 - Impact hypotheses
 - Impact decisions
+- Source versions / graph diffs / stale records
+
+再取り込み時はdocument hashの変化をsource versionとして記録し、relationの追加・削除・変更を
+transaction ID付きgraph diffへ保存します。変更前evidenceに依存するnode、relation、Impactは
+`stale` となり、再レビュー後に解消されます。既存v1 collectionとreport schemaは変更しません。
 
 LLM の出力は `proposed_by_llm` または `unconfirmed` として扱い、レビューなしで確定情報にはしません。
 

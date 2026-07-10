@@ -332,3 +332,34 @@ Completion checklist:
 
 Notes: Unresolved mentions remain investigation items. Source freshness and stale-decision handling
 are assigned to Phase 5.
+
+## v1.2.0 UX Phase 5
+
+Status: complete
+
+Scope:
+- additive source-version history
+- transaction-linked relation graph diff
+- evidence/node/relation/impact stale propagation
+- stale resolution on human re-review
+- Source Library, Graph, and Review Queue freshness presentation
+
+Completion checklist:
+- [x] Initial and modified source versions are recorded
+- [x] Relation additions, removals, and changes share a merge transaction ID
+- [x] Changed source dependencies become stale
+- [x] Confirmed affected relations return to unconfirmed
+- [x] Relation/Impact re-review resolves matching stale records
+- [x] Source Library and Graph expose freshness state
+- [x] Graph diffs are reviewable from the unified queue
+- [x] New models have serialization tests
+- [x] Browser compatibility verification complete
+- [x] README and manuals updated
+- [x] `docs/reviews/v1.2.0-ux-phase-5.md` written
+- [x] Full pytest passes (142 tests)
+- [x] Full ruff check passes
+- [x] compileall passes
+- [x] release-check passes (21 cases)
+
+Notes: v1 collections and report schemas remain unchanged. The freshness collections are local
+JSONL audit records.

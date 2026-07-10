@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from specimpact.core import latest_run_dir
 from specimpact.reports import export_report_excel
+from specimpact.source_freshness import freshness_data
 from specimpact.webui.jobs import JobManager
 from specimpact.webui.registry import Project, ProjectRegistry
 from specimpact.webui.services import (
@@ -331,6 +332,10 @@ def create_app(
     @app.get("/api/projects/{project_id}/reviews")
     def reviews(project_id: str):
         return review_queue_data(_project(app, project_id))
+
+    @app.get("/api/projects/{project_id}/freshness")
+    def freshness(project_id: str):
+        return freshness_data(store_for(_project(app, project_id)))
 
     @app.post("/api/projects/{project_id}/tool")
     def read_only_tool(project_id: str, body: ToolRequest):

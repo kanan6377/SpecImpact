@@ -142,6 +142,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .source-warning { display: inline-flex; align-items: center; gap: 2px; color: var(--should); font-size: 10px; }
 .status-ready { color: #047857; background: #e5f7ef; }
 .status-indexed { color: #1d4ed8; background: #eaf2ff; }
+.status-stale { color: #b91c1c; background: #feecec; }
 
 .review-page { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 100%; }
 .review-page.inspector-open { grid-template-columns: minmax(0, 1fr) var(--inspector-width); }

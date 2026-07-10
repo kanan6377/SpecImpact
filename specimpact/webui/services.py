@@ -63,6 +63,13 @@ from specimpact.operations import (
     project_status,
     release_validate,
 )
+from specimpact.source_freshness import (
+    GraphDiffRecord,
+    SourceVersion,
+    StaleRecord,
+    decide_graph_diff,
+    resolve_stale,
+)
 from specimpact.store import LocalStore
 from specimpact.structured_loaders import ingest_ddl, ingest_openapi
 from specimpact.tabular_loaders import ingest_csv, ingest_excel
@@ -96,6 +103,7 @@ MUTATING_ACTIONS = {
     "review_import",
     "baseline_create",
     "graph_diff",
+    "graph_diff_decide",
     "obsidian_export",
     "eval",
     "release_check",
@@ -144,6 +152,15 @@ def graph_data(
     artifacts = store.read("artifacts", Artifact)
     entities = store.read("entities", Entity)
     relations = store.read("relations", Relation)
+    unresolved_stale = [
+        item
+        for item in store.read("stale_records", StaleRecord)
+        if item.resolved_at is None
+    ]
+    stale_nodes = {item.target_id for item in unresolved_stale if item.target_type == "node"}
+    stale_relations = {
+        item.target_id for item in unresolved_stale if item.target_type == "relation"
+    }
     if item_type:
         artifacts = [item for item in artifacts if item.artifact_type == item_type]
         entities = [item for item in entities if item.entity_type == item_type]
@@ -169,6 +186,7 @@ def graph_data(
                 "kind": "artifact",
                 "type": item.artifact_type,
                 "methods": item.extraction_methods,
+                "stale": item.artifact_id in stale_nodes,
             }
         }
         for item in artifacts
@@ -181,6 +199,7 @@ def graph_data(
                 "kind": "entity",
                 "type": item.entity_type,
                 "methods": item.extraction_methods,
+                "stale": item.entity_id in stale_nodes,
             }
         }
         for item in entities
@@ -202,6 +221,7 @@ def graph_data(
                 "status": item.status,
                 "method": item.extraction_method,
                 "evidence_ids": item.evidence_ids,
+                "stale": item.relation_id in stale_relations,
             }
         }
         for item in relations
@@ -316,7 +336,7 @@ def design_documents_data(
 
 
 def source_library_data(project: Project) -> dict[str, Any]:
-    """Summarize ingested design sources without introducing version semantics."""
+    """Summarize ingested design sources and additive freshness state."""
     store = store_for(project)
     documents = store.read("documents", Document)
     evidence = store.read("evidence", Evidence)
@@ -325,6 +345,18 @@ def source_library_data(project: Project) -> dict[str, Any]:
     workbooks = store.read("dirty_workbooks", DirtyWorkbook)
     sheets = store.read("dirty_sheets", DirtySheet)
     regions = store.read("dirty_regions", DirtyRegion)
+    versions = store.read("source_versions", SourceVersion)
+    unresolved_stale = [
+        item
+        for item in store.read("stale_records", StaleRecord)
+        if item.resolved_at is None
+    ]
+    versions_by_document: dict[str, list[SourceVersion]] = {}
+    for version in versions:
+        versions_by_document.setdefault(version.document_id, []).append(version)
+    stale_by_document: dict[str, int] = {}
+    for record in unresolved_stale:
+        stale_by_document[record.document_id] = stale_by_document.get(record.document_id, 0) + 1
 
     evidence_counts: dict[str, int] = {}
     for item in evidence:
@@ -356,6 +388,11 @@ def source_library_data(project: Project) -> dict[str, Any]:
         if workbook:
             represented_workbooks.add(workbook.workbook_id)
         item_evidence = evidence_counts.get(document.document_id, 0)
+        document_versions = sorted(
+            versions_by_document.get(document.document_id, []),
+            key=lambda item: item.version_number,
+        )
+        latest_version = document_versions[-1] if document_versions else None
         items.append(
             {
                 "source_id": document.document_id,
@@ -370,6 +407,10 @@ def source_library_data(project: Project) -> dict[str, Any]:
                 "region_count": region_counts.get(workbook.workbook_id, 0) if workbook else 0,
                 "warnings": workbook.warnings if workbook else [],
                 "status": "ready" if item_evidence else "indexed",
+                "version_count": len(document_versions),
+                "latest_change_type": latest_version.change_type if latest_version else None,
+                "latest_change_at": latest_version.detected_at if latest_version else None,
+                "stale_count": stale_by_document.get(document.document_id, 0),
             }
         )
     for workbook in workbooks:
@@ -393,6 +434,10 @@ def source_library_data(project: Project) -> dict[str, Any]:
                 "region_count": region_counts.get(workbook.workbook_id, 0),
                 "warnings": workbook.warnings,
                 "status": "ready",
+                "version_count": 0,
+                "latest_change_type": None,
+                "latest_change_at": None,
+                "stale_count": 0,
             }
         )
     return {"sources": sorted(items, key=lambda item: (item["title"], item["path"]))}
@@ -517,7 +562,43 @@ def review_queue_data(project: Project) -> dict[str, Any]:
     """Project existing reviewable records into one evidence-backed queue."""
     store = store_for(project)
     evidence = {item.evidence_id: item for item in store.read("evidence", Evidence)}
+    unresolved_stale = [
+        item
+        for item in store.read("stale_records", StaleRecord)
+        if item.resolved_at is None
+    ]
+    stale_relations = {
+        item.target_id: item for item in unresolved_stale if item.target_type == "relation"
+    }
+    stale_impacts = {
+        item.target_id: item for item in unresolved_stale if item.target_type == "impact"
+    }
     items: list[dict[str, Any]] = []
+
+    for diff in store.read("graph_diffs", GraphDiffRecord):
+        items.append(
+            _review_item(
+                item_id=f"graph_diff:{diff.diff_id}",
+                kind="graph_diff",
+                record_id=diff.diff_id,
+                title=f"Graph diff {diff.diff_id}",
+                subtitle=f"{len(diff.document_ids)} source changes",
+                status=diff.status,
+                priority="should_review" if diff.status == "pending" else "may_review",
+                reason=diff.reason or "再取り込みで変化したrelationを確認します。",
+                evidence_ids=[],
+                evidence=evidence,
+                metadata={
+                    "transaction_id": diff.transaction_id,
+                    "document_ids": diff.document_ids,
+                    "added_relation_ids": diff.added_relation_ids,
+                    "removed_relation_ids": diff.removed_relation_ids,
+                    "changed_relation_ids": diff.changed_relation_ids,
+                    "created_at": diff.created_at,
+                    "reviewed_at": diff.reviewed_at,
+                },
+            )
+        )
 
     for proposal in store.read("graph_proposals", GraphProposal):
         evidence_ids = sorted(
@@ -618,6 +699,7 @@ def review_queue_data(project: Project) -> dict[str, Any]:
         )
 
     for relation in store.read("relations", Relation):
+        stale = stale_relations.get(relation.relation_id)
         items.append(
             _review_item(
                 item_id=f"relation:{relation.relation_id}",
@@ -625,8 +707,10 @@ def review_queue_data(project: Project) -> dict[str, Any]:
                 record_id=relation.relation_id,
                 title=relation.relation_type,
                 subtitle=f"{relation.source_id} → {relation.target_id}",
-                status=relation.status,
-                priority="should_review" if relation.status == "unconfirmed" else "may_review",
+                status="stale" if stale else relation.status,
+                priority=(
+                    "should_review" if stale or relation.status == "unconfirmed" else "may_review"
+                ),
                 reason=(
                     f"{relation.extraction_method} / {relation.polarity} / {relation.match_type}"
                 ),
@@ -638,11 +722,14 @@ def review_queue_data(project: Project) -> dict[str, Any]:
                     "extraction_method": relation.extraction_method,
                     "polarity": relation.polarity,
                     "match_type": relation.match_type,
+                    "actual_status": relation.status,
+                    "stale_reason": stale.reason if stale else "",
                 },
             )
         )
 
     for decision in impact_decisions_data(project):
+        stale = stale_impacts.get(decision["impact_id"])
         items.append(
             _review_item(
                 item_id=f"impact:{decision['impact_id']}",
@@ -650,7 +737,7 @@ def review_queue_data(project: Project) -> dict[str, Any]:
                 record_id=decision["impact_id"],
                 title=decision["display_name"],
                 subtitle=decision.get("artifact_type", ""),
-                status=decision["status"],
+                status="stale" if stale else decision["status"],
                 priority=decision.get("review_priority") or "may_review",
                 reason=decision.get("impact_reason") or decision.get("reason") or "",
                 evidence_ids=decision.get("evidence_ids", []),
@@ -662,6 +749,8 @@ def review_queue_data(project: Project) -> dict[str, Any]:
                     "warnings": decision.get("warnings", []),
                     "decision_reason": decision.get("reason", ""),
                     "updated_at": decision.get("updated_at"),
+                    "actual_status": decision["status"],
+                    "stale_reason": stale.reason if stale else "",
                 },
             )
         )
@@ -670,6 +759,7 @@ def review_queue_data(project: Project) -> dict[str, Any]:
         "pending": 0,
         "unreviewed": 0,
         "unconfirmed": 0,
+        "stale": 0,
         "needs_investigation": 1,
     }
     priority_rank = {"must_review": 0, "should_review": 1, "may_review": 2}
@@ -686,7 +776,8 @@ def review_queue_data(project: Project) -> dict[str, Any]:
         "summary": {
             "total": len(items),
             "actionable": sum(
-                item["status"] in {"pending", "unreviewed", "unconfirmed", "needs_investigation"}
+                item["status"]
+                in {"pending", "unreviewed", "unconfirmed", "needs_investigation", "stale"}
                 for item in items
             ),
             "by_kind": _value_counts(item["kind"] for item in items),
@@ -911,6 +1002,7 @@ def execute(project: Project, action: str, params: dict[str, Any]) -> dict[str, 
         result = {"target_id": params["target_id"], "removed": params["alias"]}
     elif action == "relation_status":
         set_relation_status(store, params["relation_id"], params["status"])
+        resolve_stale(store, "relation", params["relation_id"])
         result = {"relation_id": params["relation_id"], "status": params["status"]}
     elif action == "graph_proposal_decide":
         result = decide_graph_proposal(store, params["proposal_id"], params["status"]).model_dump()
@@ -921,6 +1013,7 @@ def execute(project: Project, action: str, params: dict[str, Any]) -> dict[str, 
             params["status"],
             params.get("reason", ""),
         ).model_dump()
+        resolve_stale(store, "impact", params["impact_id"])
     elif action == "llm_configure":
         configure_llm(store, params["provider"], params["model"], params.get("base_url"))
         result = llm_status(store)
@@ -946,6 +1039,13 @@ def execute(project: Project, action: str, params: dict[str, Any]) -> dict[str, 
         result = {"baseline": str(create_baseline(store, params["name"]))}
     elif action == "graph_diff":
         result = graph_diff(store, params["name"])
+    elif action == "graph_diff_decide":
+        result = decide_graph_diff(
+            store,
+            params["diff_id"],
+            params["status"],
+            params.get("reason", ""),
+        ).model_dump()
     elif action == "obsidian_export":
         result = {"output": str(export_obsidian(store, _path(project, params, "path")))}
     elif action == "eval":

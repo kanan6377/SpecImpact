@@ -447,9 +447,9 @@ function SourceLibrary({ projectId, overview, sources, onRefresh }: {
         {sources.length ? <div className="source-list">{sources.map((source) => <article className="source-item" key={source.source_id}>
           <div className="source-icon">{source.source_type.includes("excel") ? <FileSpreadsheet size={19} /> : <FileText size={19} />}</div>
           <div className="source-copy"><strong>{source.title}</strong><small title={source.path}>{source.path}</small></div>
-          <StatusTag value={source.status} />
-          <dl className="source-facts"><div><dt>Evidence</dt><dd>{source.evidence_count}</dd></div><div><dt>Artifacts</dt><dd>{source.artifact_count}</dd></div><div><dt>Relations</dt><dd>{source.relation_count}</dd></div>{source.sheet_count > 0 && <div><dt>Sheets</dt><dd>{source.sheet_count}</dd></div>}</dl>
-          {source.warnings.length > 0 && <span className="source-warning" title={source.warnings.join("\n")}><AlertTriangle size={15} />{source.warnings.length}</span>}
+          <StatusTag value={source.stale_count > 0 ? "stale" : source.status} />
+          <dl className="source-facts"><div><dt>Version</dt><dd>{source.version_count}</dd></div><div><dt>Evidence</dt><dd>{source.evidence_count}</dd></div><div><dt>Artifacts</dt><dd>{source.artifact_count}</dd></div><div><dt>Relations</dt><dd>{source.relation_count}</dd></div>{source.sheet_count > 0 && <div><dt>Sheets</dt><dd>{source.sheet_count}</dd></div>}</dl>
+          {(source.warnings.length > 0 || source.stale_count > 0) && <span className="source-warning" title={[...source.warnings, source.stale_count ? `${source.stale_count} stale records` : ""].filter(Boolean).join("\n")}><AlertTriangle size={15} />{source.warnings.length + source.stale_count}</span>}
         </article>)}</div> : <EmptyState icon={FolderOpen} title="設計書はまだありません" body="上の追加欄から文書、Dirty Excel、OpenAPI、DDL、CSVを取り込めます。" />}
       </section>
     </div>
@@ -681,6 +681,8 @@ function GraphView({ graph }: { graph: GraphData | null }) {
         { selector: "edge", style: { width: 1.5, "line-color": "#cbd5e1", "target-arrow-color": "#cbd5e1", "target-arrow-shape": "triangle", "curve-style": "bezier", label: "data(label)", "font-size": 8, color: "#64748b" } },
         { selector: 'edge[status = "confirmed"]', style: { "line-color": "#16a34a", "target-arrow-color": "#16a34a" } },
         { selector: 'edge[status = "unconfirmed"]', style: { "line-color": "#d97706", "target-arrow-color": "#d97706", "line-style": "dashed" } },
+        { selector: 'node[stale = true]', style: { "border-color": "#dc2626", "border-width": 4 } },
+        { selector: 'edge[stale = true]', style: { "line-color": "#dc2626", "target-arrow-color": "#dc2626", "line-style": "dashed", width: 3 } },
         { selector: ".dim", style: { opacity: 0.12 } },
         { selector: ":selected", style: { "border-color": "#f59e0b", "border-width": 4 } },
       ],
@@ -716,6 +718,7 @@ function GraphView({ graph }: { graph: GraphData | null }) {
 }
 
 const REVIEW_KIND_LABELS: Record<string, string> = {
+  graph_diff: "Graph diff",
   graph_proposal: "Graph proposal",
   unresolved_mention: "未解決参照",
   alias: "Alias",
@@ -734,7 +737,7 @@ function ReviewQueueView({ projectId, queue, onRefresh }: { projectId: string; q
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const items = queue?.items ?? [];
-  const actionable = new Set(["pending", "unreviewed", "unconfirmed", "needs_investigation"]);
+  const actionable = new Set(["pending", "unreviewed", "unconfirmed", "needs_investigation", "stale"]);
   const filtered = items.filter((item) => (kind === "all" || item.kind === kind) && (status === "all" || (status === "actionable" ? actionable.has(item.status) : item.status === status)));
   const selected = filtered.find((item) => item.item_id === selectedId) ?? filtered[0];
 
@@ -773,13 +776,14 @@ function ReviewQueueView({ projectId, queue, onRefresh }: { projectId: string; q
   return <div className="page page-reviews">
     <ViewHeader eyebrow="Unified review queue" title="レビュー" description="Graph proposal、Alias、relation、Impactを根拠と同じ画面で判断します。" />
     <section className="review-summary" aria-label="レビュー件数"><div><span>Actionable</span><strong>{queue?.summary.actionable ?? 0}</strong></div><div><span>Total</span><strong>{queue?.summary.total ?? 0}</strong></div>{Object.entries(queue?.summary.by_kind ?? {}).map(([key, count]) => <div key={key}><span>{REVIEW_KIND_LABELS[key] ?? key}</span><strong>{count}</strong></div>)}</section>
-    <div className="review-filters"><div className="source-mode" aria-label="レビュー種類"><button className={kind === "all" ? "active" : ""} onClick={() => setKind("all")}>すべて</button>{Object.entries(REVIEW_KIND_LABELS).map(([key, label]) => <button key={key} className={kind === key ? "active" : ""} onClick={() => setKind(key)}>{label}</button>)}</div><label>状態<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="actionable">要確認</option><option value="all">すべて</option><option value="accepted">accepted</option><option value="rejected">rejected</option><option value="confirmed">confirmed</option><option value="closed">closed</option></select></label></div>
+    <div className="review-filters"><div className="source-mode" aria-label="レビュー種類"><button className={kind === "all" ? "active" : ""} onClick={() => setKind("all")}>すべて</button>{Object.entries(REVIEW_KIND_LABELS).map(([key, label]) => <button key={key} className={kind === key ? "active" : ""} onClick={() => setKind(key)}>{label}</button>)}</div><label>状態<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="actionable">要確認</option><option value="all">すべて</option><option value="stale">stale</option><option value="accepted">accepted</option><option value="rejected">rejected</option><option value="confirmed">confirmed</option><option value="reviewed">reviewed</option><option value="closed">closed</option></select></label></div>
     {message && <p className="form-message" role="status">{message}</p>}
     <section className="unified-review section-panel">
       <div className="review-list" aria-label="レビュー項目">{filtered.length ? filtered.map((item) => <button type="button" className={`review-row ${selected?.item_id === item.item_id ? "selected" : ""}`} key={item.item_id} onClick={() => setSelectedId(item.item_id)}><span className={`priority-dot ${item.priority}`} /><span><small>{REVIEW_KIND_LABELS[item.kind]}</small><strong>{item.title}</strong><em>{item.subtitle}</em></span><StatusTag value={item.status} /></button>) : <EmptyState icon={ClipboardCheck} title="該当するレビューはありません" body="filterを変更するか、設計書を取り込んでください。" compact />}</div>
       <div className="review-detail">{selected ? <>
         <header><div><p className="eyebrow">{REVIEW_KIND_LABELS[selected.kind]}</p><h2>{selected.title}</h2><p>{selected.subtitle}</p></div><div className="tag-row"><StatusTag value={selected.priority} /><StatusTag value={selected.status} /></div></header>
         <section><h3>Reason</h3><p>{selected.reason}</p></section>
+        {selected.kind === "graph_diff" && <ReviewMetadata title="Relation diff" metadata={selected.metadata} keys={["transaction_id", "document_ids", "added_relation_ids", "removed_relation_ids", "changed_relation_ids", "created_at"]} />}
         {selected.kind === "graph_proposal" && <ProposalDiff metadata={selected.metadata} />}
         {selected.kind === "alias" && <ReviewMetadata title="Comparison" metadata={selected.metadata} keys={["judgement", "aliases", "relation_context", "surrounding_node_ids"]} />}
         {selected.kind === "relation" && <ReviewMetadata title="Relation" metadata={selected.metadata} keys={["source_id", "target_id", "extraction_method", "polarity", "match_type"]} />}
@@ -811,6 +815,7 @@ function ReviewDecision({ item, busy, decisionStatus, decisionReason, onStatusCh
   onRun: (action: string, params: Record<string, unknown>) => Promise<void>;
 }) {
   if (item.kind === "unresolved_mention") return <p className="muted">参照先を確認後、関連proposalまたはrelationを判断してください。</p>;
+  if (item.kind === "graph_diff") return <div className="decision-buttons"><button className="secondary-button danger" disabled={busy} onClick={() => void onRun("graph_diff_decide", { diff_id: item.record_id, status: "ignored", reason: "" })}>Ignore</button><button className="primary-button" disabled={busy} onClick={() => void onRun("graph_diff_decide", { diff_id: item.record_id, status: "reviewed", reason: "reviewed in GUI" })}>Reviewed</button></div>;
   if (item.kind === "graph_proposal") return <div className="decision-buttons"><button className="secondary-button danger" disabled={busy} onClick={() => void onRun("graph_proposal_decide", { proposal_id: item.record_id, status: "rejected" })}>Reject</button><button className="primary-button" disabled={busy} onClick={() => void onRun("graph_proposal_decide", { proposal_id: item.record_id, status: "accepted" })}>Accept</button></div>;
   if (item.kind === "alias") return <div className="decision-buttons"><button className="secondary-button danger" disabled={busy} onClick={() => void onRun("alias_reject_candidate", { candidate_id: item.record_id })}>Reject</button><button className="primary-button" disabled={busy} onClick={() => void onRun("alias_confirm", { candidate_id: item.record_id })}>Confirm same</button></div>;
   if (item.kind === "relation") return <div className="decision-buttons"><button className="secondary-button danger" disabled={busy} onClick={() => void onRun("relation_status", { relation_id: item.record_id, status: "rejected" })}>Reject</button><button className="secondary-button" disabled={busy} onClick={() => void onRun("relation_status", { relation_id: item.record_id, status: "unconfirmed" })}>Reset</button><button className="primary-button" disabled={busy} onClick={() => void onRun("relation_status", { relation_id: item.record_id, status: "confirmed" })}>Confirm</button></div>;

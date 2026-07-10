@@ -115,6 +115,10 @@ export interface SourceSummary {
   region_count: number;
   warnings: string[];
   status: string;
+  version_count: number;
+  latest_change_type: string | null;
+  latest_change_at: string | null;
+  stale_count: number;
 }
 
 export interface GraphData {
@@ -150,7 +154,7 @@ export interface AliasData {
 
 export interface ReviewItem {
   item_id: string;
-  kind: "graph_proposal" | "unresolved_mention" | "alias" | "relation" | "impact";
+  kind: "graph_diff" | "graph_proposal" | "unresolved_mention" | "alias" | "relation" | "impact";
   record_id: string;
   title: string;
   subtitle: string;

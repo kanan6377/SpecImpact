@@ -57,7 +57,8 @@ specimpact gui --no-open-browser
 
 Source Libraryは現在のdocumentごとにstatus、evidence、artifact、relation、Dirty Excelのsheet数、
 warningを表示します。`indexed` は文書として登録済みだがrelation evidenceがない状態、`ready` は
-evidenceを持つ状態です。versionやstale判定は後続phaseで追加します。
+evidenceを持つ状態です。`Version` は同じdocument IDで観測したhash世代数です。再取り込みでhashが
+変わると、その文書に依存する未解決stale件数を赤いstatusとwarning数で表示します。
 
 ## 4. 変更レビュー
 
@@ -104,11 +105,24 @@ nodeまたはrelationを選択すると右Inspectorへpropertyを表示します
 - Alias: LLM judgement、周辺relation、evidenceを見てconfirm/reject
 - Relation: source/target、抽出方法、polarity、evidenceを見てconfirmed/unconfirmed/rejected
 - Impact: statusと判断理由を保存
+- Graph diff: 再取り込みtransactionで追加・削除・変更されたrelationをreviewed/ignoredにする
 
 種類と状態でfilterできます。選択項目は `review` queryへ保存されます。判断更新はブラウザ内だけで
 先行反映せず、案件queueでcore serviceを実行し、永続化に成功してから全データを再読込します。
 Impact statusは `unreviewed / accepted / rejected / needs_investigation / implemented / tested / closed`
 を使用します。
+
+source hashが変わると、変更前evidenceに依存するnode、relation、Impactを `stale` として要確認へ
+戻します。既存confirmed relationも `unconfirmed` に戻り、relationまたはImpactを再判断すると
+対応するstale recordが解消されます。Graph Explorerはstale node/edgeを赤い枠または破線で表示します。
+
+履歴は追加collectionへ保存します。
+
+```text
+.specimpact/source_versions.jsonl
+.specimpact/graph_diffs.jsonl
+.specimpact/stale_records.jsonl
+```
 
 ジョブと監査画面は案件ごとのqueueを表示します。文書本文、API key、providerのraw responseは
 job履歴へ保存しません。失敗時はstatusと安全な入力要約から復旧箇所を確認します。
