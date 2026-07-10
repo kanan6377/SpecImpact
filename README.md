@@ -2,6 +2,10 @@
 
 SpecImpact は、SIer でよくある汚い Excel 設計書を LLM で読み取り、GraphRAG と evidence 付きレビューで変更影響を管理する OSS です。
 
+> **UX modernization:** 現行GUIを、設計書・影響候補・evidence・人間判断を一つの文脈で扱う
+> Evidence Review Workspaceへ段階的に刷新しています。設計原則、現状監査、完了条件は
+> [UX Redesign Plan](docs/ux_redesign_plan.md) を参照してください。
+
 設計書を投入すると、画面、API、DB、外部 IF、入力チェック、テスト仕様などを evidence graph に変換します。その後、変更依頼を自然文または Markdown で入力すると、Change Atom として構造化し、グラフ上の依存関係から影響候補を `must_review` / `should_review` / `may_review` / `hidden` に分類します。
 
 SpecImpact の出力は「影響確定」ではなく「レビュー候補」です。LLM の主張だけで `must_review` にはせず、直接 evidence と graph path があるものだけを強く提示します。

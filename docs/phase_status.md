@@ -185,3 +185,32 @@ source policy contact checks, exact privacy backend parsing, and CLI input error
 The release metrics validate review-candidate recall and evidence coverage for the bundled
 Golden/Evaluation/Holdout cases. They do not claim final impact correctness on arbitrary enterprise
 documents.
+
+## v1.2.0 UX Phase 0
+
+Status: complete
+
+Scope:
+- current production GUI audit
+- evidence review workspace information architecture
+- design-system and accessibility requirements
+- measurable UX completion criteria
+- frontend architecture decision
+- public/private IP development boundary
+
+Completion checklist:
+- [x] UX audit written
+- [x] Target information architecture written
+- [x] Design and accessibility requirements written
+- [x] Completion metrics written
+- [x] README updated
+- [x] `docs/reviews/v1.2.0-ux-phase-0.md` written
+- [x] pytest passes (137 tests)
+- [x] ruff check passes
+- [x] compileall passes
+- [x] Manual documentation verification complete
+- [x] No future-phase implementation files created
+
+Notes: This phase intentionally contains documentation and architecture decisions only. Production
+frontend migration begins after this phase passes all gates. `pytest -q` completed with 137 passing
+tests; ruff and compileall also passed.
