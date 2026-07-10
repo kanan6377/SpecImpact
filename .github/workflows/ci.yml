@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install Python dependencies
+        run: python -m pip install -e ".[dev,gui,mcp]" build
+      - name: Python tests
+        run: pytest -q
+      - name: Lint and compile
+        run: |
+          ruff check .
+          python -m compileall -q specimpact
+      - name: Release benchmark
+        run: specimpact release-check ./examples/evaluation/release_cases.yml
+      - name: Frontend check and build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run check
+          npm run build
+      - name: Build wheel
+        run: python -m build
