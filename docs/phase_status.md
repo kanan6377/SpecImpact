@@ -363,3 +363,30 @@ Completion checklist:
 
 Notes: v1 collections and report schemas remain unchanged. The freshness collections are local
 JSONL audit records.
+
+## v1.2.0 UX Phase 6
+
+Status: complete
+
+Scope:
+- confidential invention record outside Git
+- primary-source prior-art orientation
+- measurable technical-effect experiment protocol
+- filing and public-disclosure gate
+- public/private implementation boundary audit
+
+Completion checklist:
+- [x] Confidential workspace exists outside the repository
+- [x] Disclosure draft and contributor/inventorship placeholders exist
+- [x] Initial prior-art matrix uses primary patent publications
+- [x] Experiment metrics, thresholds, controls, and stop conditions are defined
+- [x] Filing decision is explicitly HOLD
+- [x] No confidential implementation or placeholder entered public source
+- [x] `docs/reviews/v1.2.0-ux-phase-6.md` written
+- [x] Full pytest passes (142 tests)
+- [x] Full ruff check passes
+- [x] compileall passes
+- [x] release-check passes (21 cases)
+
+Notes: No patentability conclusion is claimed. Professional patent advice and measured technical
+effect are required before the gate can change.
