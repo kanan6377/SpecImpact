@@ -33,6 +33,7 @@ from specimpact.webui.services import dirty_excel_data, execute, impact_decision
 
 ROOT = Path(__file__).parents[1]
 SIER = ROOT / "examples" / "japanese_sier_excel"
+DIRTY_SIER = ROOT / "examples" / "dirty_sier_excel" / "docs"
 
 
 class RecordingFakeLLMClient(FakeLLMClient):
@@ -73,6 +74,31 @@ def test_dirty_workbook_normalization_preserves_cells_and_regions(tmp_path: Path
     regions = detect_regions(classify_sheets(sheets, cells), cells)
     region_types = {region.region_type for region in regions}
     assert {"revision_history", "screen_item_table", "validation_block"} <= region_types
+
+
+@pytest.mark.parametrize(
+    ("filename", "sheet_type", "region_type"),
+    [
+        ("01_画面設計_結合セルあり.xlsx", "screen_item_definition", "screen_item_table"),
+        ("02_API項目対応表_表記揺れあり.xlsx", "api_mapping", "api_mapping_table"),
+        ("03_DB定義_別紙参照あり.xlsx", "db_mapping", "db_mapping_table"),
+        ("04_チェック仕様_同上あり.xlsx", "validation_rule", "validation_block"),
+        ("05_テスト仕様_境界値あり.xlsx", "test_case", "test_case_table"),
+    ],
+)
+def test_dirty_sier_headers_override_embedded_revision_history(
+    filename: str,
+    sheet_type: str,
+    region_type: str,
+) -> None:
+    workbook_path = DIRTY_SIER / filename
+    _workbook, sheets, cells = read_dirty_workbook(workbook_path)
+
+    classified = classify_sheets(sheets, cells)
+    regions = detect_regions(classified, cells)
+
+    assert classified[0].sheet_type == sheet_type
+    assert region_type in {region.region_type for region in regions}
 
 
 def test_region_llm_extraction_keeps_only_valid_evidence(tmp_path: Path) -> None:

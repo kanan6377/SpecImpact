@@ -9,6 +9,7 @@ SpecImpact v2 の dirty Excel 動作確認用サンプルです。日本のSIer�
 - API項目対応表の表記揺れ
 - DB定義の別紙参照
 - チェック仕様の同上表記
+- 外部IF項目定義の物理名対応
 - 境界値テスト
 - `利用限度額` / `requestedCreditLimit` / `REQUESTED_CREDIT_LIMIT` / `LIMIT_AMT` のalias
 
@@ -29,12 +30,24 @@ SpecImpact v2 の dirty Excel 動作確認用サンプルです。日本のSIer�
 - 外部IF
 - 境界値テスト
 
-## 実行手順
+## Agent Hostで実行
 
 リポジトリルートで実行します。
 
 ```powershell
-python -m pip install -e .
+python -m pip install -e ".[mcp,gui]"
+specimpact init
+specimpact agent doctor --host cursor --project .
+```
+
+Cursor Pluginの`/specimpact-onboard`で`examples/dirty_sier_excel/docs`を選びます。取り込みJobと
+Region Proposalが完了したら、上の変更文をチャットへ入力します。SpecImpact providerの設定は不要です。
+
+## CLI fallback
+
+Agent hostを使わない確認:
+
+```powershell
 specimpact onboard .\examples\dirty_sier_excel\docs `
   --provider codex `
   --model default `
@@ -48,11 +61,11 @@ specimpact export-obsidian .\vault
 取り込みに成功すると、概ね次のような件数が表示されます。
 
 ```text
-Ingested 5 workbooks, 12 regions, 7 graph proposals.
+Ingested 6 workbooks, 14 regions, 8 graph proposals.
 ```
 
-Codex CLIを使う場合は送信前に確認が入ります。ローカルfallbackだけで試す場合は `onboard` に
-`--no-llm` を付けます。
+Codex CLIを使う場合は送信前に確認が入ります。ローカルfallbackだけで試す場合は`onboard`と
+`change analyze`に`--no-llm`を付けます。
 
 ## Excelの中身を確認する
 

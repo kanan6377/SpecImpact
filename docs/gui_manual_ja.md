@@ -1,8 +1,9 @@
-# SpecImpact GUI Manual
+# SpecImpact Admin Console Manual
 
-SpecImpact GUIは、設計変更の影響候補、設計書、relation path、evidenceを一つの案件文脈で
-確認するlocalhost専用のEvidence Review Workspaceです。LLMの出力は確定判断ではなく、
-人間が根拠を確認するためのproposalまたはhypothesisとして扱います。
+SpecImpact Admin Consoleは、設計変更の影響候補、設計書、relation path、evidenceを一つの
+案件文脈で確認するlocalhost専用の管理画面です。標準の日常操作はCursor / Antigravityの
+チャットで行い、Consoleは監査、設定、設計書viewer、一括レビュー、Jobs、Privacyに使います。
+LLMの出力は確定判断ではなく、人間が根拠を確認するproposalまたはhypothesisです。
 
 ## 1. 起動
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 import threading
 import webbrowser
 from pathlib import Path
@@ -10,6 +11,9 @@ from typing import Any
 import typer
 
 from specimpact import __version__
+from specimpact.application import ApplicationService, project_from_path
+from specimpact.application.agent_doctor import agent_doctor
+from specimpact.application.agent_hook import handle_agent_hook
 from specimpact.core import (
     analyze_change,
     explain_why,
@@ -81,6 +85,7 @@ excel_app = typer.Typer(help="Inspect and lint Excel design workbooks.")
 change_app = typer.Typer(help="Parse and inspect structured change atoms.")
 changes_app = typer.Typer(help="List parsed changes.")
 impacts_app = typer.Typer(help="Manage impact review decisions.")
+agent_app = typer.Typer(help="Install and diagnose Agent host integrations.")
 
 
 def _version_callback(value: bool) -> None:
@@ -114,6 +119,41 @@ app.add_typer(excel_app, name="excel")
 app.add_typer(change_app, name="change")
 app.add_typer(changes_app, name="changes")
 app.add_typer(impacts_app, name="impacts")
+app.add_typer(agent_app, name="agent")
+
+
+@agent_app.command("doctor")
+def agent_doctor_command(
+    project: Path = typer.Option(Path.cwd(), "--project", help="Workspace/project root."),
+    host: str = typer.Option("cursor", "--host", help="cursor or antigravity."),
+) -> None:
+    """Check the local runtime required by an Agent host plugin."""
+    if host not in {"cursor", "antigravity"}:
+        raise typer.BadParameter("host must be cursor or antigravity")
+    result = agent_doctor(project, host=host)  # type: ignore[arg-type]
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result["ready"]:
+        raise typer.Exit(code=1)
+
+
+@agent_app.command("hook", hidden=True)
+def agent_hook_command(
+    project: Path = typer.Option(Path.cwd(), "--project"),
+    host: str = typer.Option(..., "--host"),
+    event: str = typer.Option(..., "--event"),
+) -> None:
+    """Handle a privacy-safe Agent lifecycle event."""
+    raw = sys.stdin.read(1_000_001)
+    if len(raw) > 1_000_000:
+        raise typer.BadParameter("Hook payload exceeds 1 MB")
+    try:
+        payload = json.loads(raw or "{}")
+    except json.JSONDecodeError as error:
+        raise typer.BadParameter("Hook payload must be JSON") from error
+    if not isinstance(payload, dict):
+        raise typer.BadParameter("Hook payload must be a JSON object")
+    result = handle_agent_hook(project, host=host, event=event, payload=payload)
+    typer.echo(json.dumps(result, ensure_ascii=False))
 
 
 @app.command()
@@ -144,6 +184,24 @@ def gui(
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()
     typer.echo(f"Starting SpecImpact GUI at {url}")
     uvicorn.run(application, host="127.0.0.1", port=port)
+
+
+@app.command("mcp")
+def mcp_server_command(
+    project: Path = typer.Option(..., "--project", help="Workspace/project root."),
+    stdio: bool = typer.Option(True, "--stdio/--no-stdio", help="Use the stdio transport."),
+) -> None:
+    """Run the optional SpecImpact MCP server for an Agent host."""
+    if not stdio:
+        raise typer.BadParameter("Only the stdio transport is supported")
+    try:
+        from specimpact.mcp_server import run_mcp_server
+    except ImportError as error:
+        raise typer.BadParameter('MCP requires pip install "specimpact[mcp]"') from error
+    try:
+        run_mcp_server(project)
+    except (ValueError, RuntimeError) as error:
+        raise typer.BadParameter(str(error)) from error
 
 
 @app.command()
@@ -705,6 +763,9 @@ def impacts_set_status(
 
 def _call(function, *args, **kwargs):
     try:
+        if args and isinstance(args[0], LocalStore):
+            service = ApplicationService(project_from_path(Path.cwd()))
+            return service.call(function, *args[1:], **kwargs)
         return function(*args, **kwargs)
     except (OSError, ValueError) as error:
         raise typer.BadParameter(str(error)) from error

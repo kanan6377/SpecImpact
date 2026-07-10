@@ -2,23 +2,23 @@
 
 <div align="center">
 
-**汚いExcel設計書を、根拠付きの変更影響レビューへ。**
+**設計書をAgentに渡し、変更を自然文で伝える。影響判断はEvidenceで検証する。**
 
 設計書をLLMとGraphRAGで構造化し、自然文の変更要求から
 影響候補・依存経路・該当セル・必要作業を提示するローカルファーストOSSです。
 
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-1.2.0-4F46E5)](https://github.com/kanan6377/SpecImpact)
+[![Version](https://img.shields.io/badge/version-1.3.0-4F46E5)](https://github.com/kanan6377/SpecImpact)
 [![License](https://img.shields.io/badge/license-Apache--2.0-0F766E)](LICENSE)
 
-[5分で試す](#5分で試す) · [GUI](#gui) · [仕組み](#仕組み) · [マニュアル](docs/user_manual_ja.md)
+[5分で試す](#5分で試す) · [Cursor](docs/cursor.md) · [Antigravity](docs/antigravity.md) · [マニュアル](docs/user_manual_ja.md)
 
 </div>
 
-![SpecImpact Evidence Review Workspace](docs/images/gui/dashboard.png)
+![SpecImpact Admin Console](docs/images/gui/dashboard.png)
 
 > [!IMPORTANT]
-> v1.2.0はAlphaです。出力は影響の確定結果ではなく、人間が確認するレビュー候補です。
+> v1.3.0はAlphaです。出力は影響の確定結果ではなく、人間が確認するレビュー候補です。
 
 ## 解決する課題
 
@@ -32,16 +32,17 @@ SpecImpactは設計書をevidence付きgraphへ変換し、変更管理を次の
 | --- | --- | --- |
 | Dirty Excel / Markdown / OpenAPI / DDL / CSV | セル・表・項目・relationを抽出 | Artifact / Entity / Evidence Graph |
 | 表記揺れ | LLMと周辺relationでalias候補を比較 | `same / related / different / unsure` |
-| 自然文の変更要求 | Change Atom化して関連subgraphを探索 | 影響候補、graph path、required actions |
+| Agentへの自然文変更要求 | Host LLMでChange Atom化して関連subgraphを探索 | 影響候補、graph path、required actions |
 | 再取り込み | source hashとrelation差分を比較 | staleなrelation / impactを再レビュー |
 
 ## 基本ワークフロー
 
 ```mermaid
 flowchart LR
+    HOST["Cursor / Antigravity"] --> MCP["SpecImpact MCP"]
     subgraph Onboarding["初期導入"]
         A["設計書<br/>Excel / Markdown / API / DB"] --> B["正規化<br/>Workbook・Sheet・Cell・Region"]
-        B --> C["LLM構造抽出<br/>Node・Relation・Alias候補"]
+        B --> C["Host LLM構造抽出<br/>Node・Relation・Alias候補"]
         C --> D["Evidence Graph<br/>local JSONL"]
         D --> E["人間レビュー<br/>Proposal / Alias"]
     end
@@ -55,6 +56,8 @@ flowchart LR
         J --> K["Impact Review Board"]
         K --> L["accepted → implemented<br/>→ tested → closed"]
     end
+    MCP --> B
+    MCP --> G
 ```
 
 LLMの出力は確定情報ではなくproposal / hypothesisです。直接evidenceとgraph pathを検証できる候補だけを
@@ -63,7 +66,8 @@ LLMの出力は確定情報ではなくproposal / hypothesisです。直接evide
 ## 主な機能
 
 - **Dirty Excel理解**: 結合セル、複数表、改訂履歴、コメント、リンク、非表示行列、同上、別紙参照を保持
-- **LLM-first GraphRAG**: Codex CLI、OpenAI API、Ollamaに対応
+- **Agent Host標準**: Cursor / AntigravityのLLMをMCP samplingまたはprepare/submitで利用
+- **Provider fallback**: Codex CLI、OpenAI API、Ollama、最後にheuristicへfallback
 - **Alias解決**: `利用限度額`、`requestedCreditLimit`、`REQUESTED_CREDIT_LIMIT`を根拠付きで比較
 - **変更影響分析**: `impact_type`、`required_actions`、`warnings`、`uncertainty`を作業仮説として生成
 - **Evidence Verifier**: LLMだけの主張を`must_review`へ昇格させない
@@ -71,31 +75,54 @@ LLMの出力は確定情報ではなくproposal / hypothesisです。直接evide
 - **統一Review Queue**: Graph Proposal、Alias、Relation、Impact、Graph Diffを同じ画面で判断
 - **Freshness管理**: 再取り込み時のsource version、graph diff、stale dependencyを永続化
 - **Obsidian連携**: Wiki link、frontmatter、Dataview、Canvas付きのknowledge graphを出力
-- **ローカルファースト**: JSONL backend、localhost GUI、外部送信preview、送信監査metadata
+- **Headless engine**: CLI、Admin Console、MCPが同じApplication ServiceとJSONLを共有
+- **ローカルファースト**: localhost承認、10分・1回限りGrant、送信監査metadata
 
 ## 5分で試す
 
-### 1. インストール
+### 1. Runtimeを入れる
 
 ```powershell
 git clone https://github.com/kanan6377/SpecImpact.git
 cd SpecImpact
-python -m pip install -e ".[gui]"
+python -m pip install -e ".[gui,mcp]"
 specimpact --version
 ```
 
-Python 3.11以降が必要です。
+Python 3.11以降が必要です。配布版では`uv tool install "specimpact[mcp,gui]"`または`pipx`を使えます。
 
-### 2. GUIでガイド付きサンプルを開く
+### 2. Cursor Pluginを入れる
+
+CursorのMarketplace repositoryとして`plugins/cursor`を追加し、`specimpact` Pluginをinstallします。
+対象workspaceで確認します。
 
 ```powershell
-specimpact gui
+cd C:\work\my-system-impact
+specimpact init
+specimpact agent doctor --host cursor --project .
 ```
 
-`http://127.0.0.1:8765`が開きます。案件が未登録の場合は**「ガイド付きサンプルを作成」**を選ぶと、
-外部LLMなしでレビュー画面を確認できます。
+Cursorで`/specimpact-onboard`を実行して設計書を選びます。その後はチャットへ、たとえば次のように入力します。
 
-### 3. CLIでローカル実行する
+```text
+入会申込画面の「利用限度額」の上限を999万円から9999万円に変更したい。
+影響箇所と必要作業をEvidence付きで調べて。
+```
+
+Host LLMがChange AtomとImpact Hypothesisを作り、SpecImpactがEvidence ID、graph path、property、
+before値を検証します。provider API keyをSpecImpactへ設定する必要はありません。
+
+### 3. Admin Consoleを必要時だけ開く
+
+```powershell
+specimpact gui --project C:\work\my-system-impact
+```
+
+`http://127.0.0.1:8765`で、設計書viewer、Graph、統一Review Queue、Jobs/Audit、Privacy、
+Obsidian exportを確認できます。日常の自然言語操作はAgent host、Consoleは監査・設定・一括レビュー用です。
+
+### CLIだけで試す
+
 
 ```powershell
 specimpact onboard .\examples\dirty_sier_excel\docs `
@@ -110,7 +137,7 @@ specimpact impacts list
 specimpact report --format markdown
 ```
 
-LLMを使う標準導線:
+Agent hostを使わない場合だけ、既存providerを設定します。
 
 ```powershell
 specimpact onboard .\examples\dirty_sier_excel\docs `
@@ -120,9 +147,26 @@ specimpact onboard .\examples\dirty_sier_excel\docs `
 
 外部providerを利用する処理では、送信先・目的・件数を表示して承認を求めます。
 
-## GUI
+### MCP serverを直接登録する場合
 
-Evidence Review Workspaceは、設計書と影響候補を別画面へ分断せず、同じレビュー文脈で扱います。
+CursorやAntigravityには、workspaceごとにstdio serverを登録します。
+
+```powershell
+specimpact mcp --stdio --project C:\work\my-system-impact
+```
+
+MCPは用途別Tool、Evidence Resource、4つのworkflow Promptを公開します。mutationには
+idempotency keyが必須で、workspace外のpathとsymlink escapeを拒否します。未初期化案件では
+`specimpact://projects/{id}`がonboarding手順だけを返します。詳細は[MCP/Agent Hostガイド](docs/mcp.md)を参照してください。
+
+Cursorを標準フロントとして使う導入手順は[Cursor Integration](docs/cursor.md)にあります。
+PluginはPythonを内包せず、`uv tool`または`pipx`で導入した`specimpact[mcp]`をstdioで起動します。
+高度な並列調査には[Antigravity Integration](docs/antigravity.md)を使えます。両hostとも同じ
+Change Sessionとverifierへ結果を統合します。
+
+## Admin Console
+
+既存GUIは削除せず、監査・設定・一括レビュー用Admin Consoleとして維持します。
 
 ![Knowledge Graph Explorer](docs/images/gui/graph-explorer.png)
 
@@ -142,19 +186,28 @@ GUIは`127.0.0.1`だけにbindし、runtime CDNやremote fontを使用しませ�
 
 ```mermaid
 flowchart TB
-    UI["React GUI / CLI"] --> API["FastAPI service / command services"]
-    API --> INGEST["Loaders<br/>Dirty Excel・Markdown・OpenAPI・DDL・CSV"]
-    INGEST --> GRAPH["Evidence / Domain Graph"]
-    API --> LLM["LLM provider<br/>Codex CLI・OpenAI・Ollama"]
-    LLM --> PROPOSAL["Graph Proposal / Alias / Impact Hypothesis"]
-    GRAPH --> RETRIEVAL["Hybrid retrieval"]
+    HOST["Cursor / Antigravity<br/>Host LLM"] --> MCP["Typed MCP<br/>Tools・Resources・Prompts"]
+    MCP --> PREVIEW["TransmissionPreview<br/>elicitation / localhost Grant"]
+    PREVIEW --> APP["Application Service"]
+    UI["Admin Console / CLI"] --> APP
+    APP --> INGEST["Loaders<br/>Dirty Excel・Markdown・OpenAPI・DDL・CSV"]
+    INGEST --> EGRAPH["Evidence Graph<br/>file・sheet・cell・quote"]
+    EGRAPH --> DGRAPH["Domain Graph<br/>Artifact・Entity・Relation"]
+    APP --> LLM["Host / provider adapter"]
+    LLM --> PROPOSAL["Graph Proposal<br/>Change Atom・Impact Hypothesis"]
+    DGRAPH --> RETRIEVAL["Hybrid retrieval"]
     RETRIEVAL --> PROPOSAL
     PROPOSAL --> VERIFY["Evidence verifier"]
-    VERIFY --> REVIEW["Review Queue / Impact Board"]
+    VERIFY --> IGRAPH["Impact Graph / Change Session"]
+    IGRAPH --> REVIEW["Host projection / Review Queue"]
     REVIEW --> STORE[".specimpact/<br/>local JSONL"]
-    GRAPH --> STORE
+    EGRAPH --> STORE
+    DGRAPH --> STORE
     STORE --> OBSIDIAN["Obsidian Vault<br/>Notes・Dataview・Canvas"]
 ```
+
+CLIとFastAPIは、UI非依存の`specimpact.application.ApplicationService`を共有します。
+Pydanticで定義した公開contractからREST/MCP共通のJSON Schemaを生成でき、保存形式と既存CLI出力は変更しません。
 
 ### データの扱い
 
@@ -179,7 +232,8 @@ flowchart TB
 
 | Provider | 用途 | 外部送信 |
 | --- | --- | --- |
-| Codex CLI | 標準のLLM-first導線 | 承認必須 |
+| Cursor / Antigravity host LLM | MCP samplingまたはprepare/submitの標準導線 | Grant必須 |
+| Codex CLI | Agent hostを使わないCLI fallback | 承認必須 |
 | OpenAI API | structured extraction / impact hypothesis | 承認必須 |
 | Ollama localhost | ローカルモデル | 不要 |
 | `--no-llm` | heuristic / graph-only fallback | なし |
@@ -188,6 +242,11 @@ flowchart TB
 specimpact llm configure --provider codex --model default
 specimpact llm status
 ```
+
+Agent hostではSpecImpact側のprovider設定は不要です。sampling対応hostではhost modelを呼び、
+非対応hostでは`prepare_change` / `submit_change_atoms`と
+`prepare_impact_context` / `submit_impact_hypotheses`をAgent Skillが往復します。
+どちらも保存前にSpecImpact verifierを通ります。詳細は[Host LLMフロー](docs/host_llm.md)を参照してください。
 
 ## Obsidian
 
@@ -214,7 +273,7 @@ SpecImpactのlocal JSONLがsource of truthで、Obsidianは探索とレビュー
 
 1. **Evidence-first**: confidenceではなく、引用とrelation pathを示す
 2. **Review-assist**: 設計書を自動編集せず、最終判断を自動化しない
-3. **Local-first**: 外部providerを設定しない限り文書を外へ送らない
+3. **Local-first**: 外部host/providerへはpreviewと一回限りGrantなしで文書を送らない
 4. **Inspectable**: proposal、判断、source version、graph diff、traceを永続化する
 5. **Alias-aware**: 文字列一致だけで同一概念と決めない
 
@@ -242,12 +301,18 @@ python -m compileall -q specimpact
 specimpact release-check .\examples\evaluation\release_cases.yml
 ```
 
-v1.2.0では145 testsと21件のrelease benchmarkを通過しています。テストは外部LLMを呼ばず、
-FakeLLMClientでstructured output、evidence検証、alias判断、impact hypothesisを固定します。
+v1.3.0では206 testsと21件のrelease benchmarkを継続しています。テストは外部LLMを呼ばず、
+Fake Host / FakeLLMClientでsampling、structured output、Grant、evidence検証、alias判断、impact hypothesisを固定します。
 
 ## ドキュメント
 
 - [日本語ユーザーマニュアル](docs/user_manual_ja.md)
+- [MCP / Agent Host](docs/mcp.md)
+- [Host LLMフロー](docs/host_llm.md)
+- [Cursor Integration](docs/cursor.md)
+- [Antigravity Integration](docs/antigravity.md)
+- [Architecture diagrams](docs/architecture.md)
+- [デモ収録シナリオ](docs/demo_scenario_ja.md)
 - [GUIマニュアル](docs/gui_manual_ja.md)
 - [CLIリファレンス](docs/cli.md)
 - [入力準備ガイド](docs/input_preparation.md)

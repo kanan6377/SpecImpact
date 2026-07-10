@@ -1,0 +1,13 @@
+{
+  "name": "specimpact-marketplace",
+  "owner": {
+    "name": "kanan6377"
+  },
+  "plugins": [
+    {
+      "name": "specimpact",
+      "source": "./specimpact",
+      "description": "Evidence-first design change impact management through MCP."
+    }
+  ]
+}

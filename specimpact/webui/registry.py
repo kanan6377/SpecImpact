@@ -1,26 +1,13 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import tempfile
 import threading
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel
-
-
-def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-class Project(BaseModel):
-    project_id: str
-    display_name: str
-    path: str
-    last_used_at: str
+from specimpact.application.contracts import Project, project_id_for, utc_now
 
 
 class ProjectRegistry:
@@ -88,9 +75,7 @@ class ProjectRegistry:
 
     @staticmethod
     def project_id_for(path: Path | str) -> str:
-        resolved = str(Path(path).expanduser().resolve())
-        normalized = os.path.normcase(resolved)
-        return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+        return project_id_for(path)
 
     def _read(self) -> list[dict[str, Any]]:
         if not self.path.exists():

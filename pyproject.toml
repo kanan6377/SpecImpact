@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "specimpact"
-version = "1.2.0"
-description = "Evidence-first design change impact review CLI"
+version = "1.3.0"
+description = "Evidence-first design change impact engine and MCP server"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 dependencies = ["pydantic>=2", "typer>=0.12", "PyYAML>=6", "openpyxl>=3.1", "jsonschema>=4.20"]
-keywords = ["impact-analysis", "requirements", "excel", "sier", "local-first"]
+keywords = ["impact-analysis", "requirements", "excel", "mcp", "graphrag", "local-first"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
@@ -34,6 +34,7 @@ graphrag-local = ["sentence-transformers>=3"]
 openai = ["openai>=1"]
 ollama = ["ollama>=0.4"]
 gui = ["fastapi>=0.110", "uvicorn>=0.29", "jinja2>=3.1", "python-multipart>=0.0.9"]
+mcp = ["mcp>=1.27,<2"]
 
 [project.scripts]
 specimpact = "specimpact.cli:app"

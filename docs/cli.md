@@ -160,6 +160,25 @@ specimpact gui --no-open-browser
 
 GUIは `127.0.0.1` のみにbindします。
 
+## MCP server
+
+```powershell
+python -m pip install -e ".[mcp]"
+specimpact mcp --stdio --project C:\work\my-system-impact
+```
+
+MCPはstdio専用です。`--project`がworkspace境界になり、その外側のpathは受け付けません。
+長時間処理は永続Job IDを返すため、`get_job`または`list_jobs`で追跡します。
+
+Agent host導入確認:
+
+```powershell
+specimpact agent doctor --host cursor --project C:\work\my-system-impact
+```
+
+`agent hook`はPlugin lifecycle用の非表示commandです。手動実行は不要です。本文を保存せず、
+workspace内で変更された設計sourceのpathとhashだけを通知ledgerへ記録します。
+
 ## 開発・リリース確認
 
 ```powershell

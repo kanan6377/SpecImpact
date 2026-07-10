@@ -1,0 +1,19 @@
+{
+  "name": "specimpact",
+  "displayName": "SpecImpact",
+  "description": "Evidence-first Dirty Excel and design change impact management.",
+  "version": "1.3.0",
+  "author": {
+    "name": "kanan6377"
+  },
+  "homepage": "https://github.com/kanan6377/SpecImpact",
+  "repository": "https://github.com/kanan6377/SpecImpact",
+  "license": "Apache-2.0",
+  "keywords": ["impact-analysis", "excel", "evidence", "mcp"],
+  "category": "developer-tools",
+  "mcpServers": "./mcp.json",
+  "skills": "./skills",
+  "rules": "./rules",
+  "commands": "./commands",
+  "hooks": "./hooks/hooks.json"
+}

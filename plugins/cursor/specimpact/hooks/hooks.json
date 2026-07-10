@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "postToolUse": [
+      {
+        "command": "specimpact agent hook --host cursor --event post-tool-use --project .",
+        "matcher": "Write|Delete|MCP:.*"
+      }
+    ]
+  }
+}

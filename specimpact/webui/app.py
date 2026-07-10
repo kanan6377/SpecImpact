@@ -18,6 +18,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
+from specimpact.application import ApplicationService, public_contract_schemas
+from specimpact.application.approval import ApprovalManager
 from specimpact.core import latest_run_dir
 from specimpact.reports import export_report_excel
 from specimpact.source_freshness import freshness_data
@@ -31,7 +33,6 @@ from specimpact.webui.services import (
     design_documents_data,
     dirty_excel_data,
     evidence_data,
-    execute,
     external_preview,
     graph_data,
     impact_decisions_data,
@@ -79,6 +80,7 @@ class JobRequest(BaseModel):
     params: dict = Field(default_factory=dict)
     input_kind: Literal["path", "upload", "demo", "settings"] = "path"
     external_approved: bool = False
+    idempotency_key: str | None = None
 
 
 class UploadFileRequest(BaseModel):
@@ -155,6 +157,19 @@ def create_app(
             context={"page": page, "pages": PAGES},
         )
 
+    @app.get("/approval/{preview_id}", response_class=HTMLResponse)
+    def approval_page(request: Request, preview_id: str, project_id: str):
+        project = _project(app, project_id)
+        try:
+            preview = ApprovalManager(project).get_preview(preview_id)
+        except KeyError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        return templates.TemplateResponse(
+            request=request,
+            name="approval.html",
+            context={"project": project, "preview": preview},
+        )
+
     @app.get("/api/session")
     def session(request: Request):
         token = request.cookies.get("specimpact_session")
@@ -177,6 +192,26 @@ def create_app(
     @app.get("/api/projects")
     def projects():
         return {"projects": [item.model_dump() for item in app.state.registry.list()]}
+
+    @app.get("/api/contracts/v1")
+    def contracts_v1():
+        return {"version": "v1", "schemas": public_contract_schemas()}
+
+    @app.post(
+        "/api/projects/{project_id}/transmission-previews/{preview_id}/approve"
+    )
+    def approve_transmission(project_id: str, preview_id: str):
+        project = _project(app, project_id)
+        try:
+            grant = ApprovalManager(project).issue_grant(preview_id, decision="approve")
+        except KeyError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        return {
+            "grant": grant.model_dump(),
+            "instruction": "Pass this token once to authorize_prepared_context.",
+        }
 
     @app.post("/api/projects")
     def add_project(body: ProjectRequest):
@@ -247,12 +282,18 @@ def create_app(
                 status_code=400,
                 detail={"message": "外部送信の承認が必要です。", **preview},
             )
+        idempotency_key = body.idempotency_key or secrets.token_urlsafe(24)
         created = app.state.jobs.enqueue(
             project.project_id,
             project.path,
             body.action,
-            lambda: execute(project, body.action, params),
+            lambda: ApplicationService(project).mutate(
+                body.action,
+                params,
+                idempotency_key=idempotency_key,
+            ),
             input_kind=body.input_kind,
+            idempotency_key=idempotency_key,
         )
         return {"job": created.model_dump()}
 

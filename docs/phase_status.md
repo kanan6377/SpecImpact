@@ -470,3 +470,202 @@ Completion checklist:
 
 Notes: This is a cell-addressed evidence viewer, not an Office-compatible workbook renderer. Images,
 shapes, formulas as rendered values, and workbook editing remain outside the current scope.
+
+## v1.3.0 Agent Host Phase 1
+
+Status: complete
+
+Scope:
+- UI-independent Application Service extraction
+- shared Pydantic public contracts and JSON Schema generation
+- CLI/Web service compatibility boundary
+- project model ownership moved out of Web UI
+
+Completion checklist:
+- [x] Existing Web imports and output remain compatible
+- [x] Application facade covers current command/query services
+- [x] Public contract serialization tests pass
+- [x] README architecture updated
+- [x] `docs/reviews/v1.3.0-agent-host-phase-1.md` written
+- [x] Full pytest passes (149 tests)
+- [x] Full ruff check passes
+- [x] compileall passes
+- [x] No MCP or host-plugin implementation leaked into Phase 1
+
+Notes: This phase changes internal ownership only. MCP transport, durable jobs, host LLM workflows,
+and host packages are gated to later Agent Host phases.
+
+## v1.3.0 Agent Host Phase 2
+
+Status: complete
+
+Scope:
+- MCP 1.x stdio server with typed tools, resources, and prompts
+- workspace and symlink boundary enforcement
+- canonical durable jobs with legacy GUI-ledger migration
+- cross-process mutation lock and idempotency ledger
+- metadata-only transmission preview and scoped one-time approval grant
+- REST/MCP shared contract schema endpoint
+
+Completion checklist:
+- [x] Generic execute tool is not exposed
+- [x] Source and graph resources are bounded and cursor-paginated
+- [x] Unknown IDs and uninitialized projects are rejected safely
+- [x] Mutation idempotency and process locking are tested
+- [x] Legacy job history is copied without deletion
+- [x] Grant expiry, project/purpose/source binding, and token reuse are tested
+- [x] README, CLI reference, and MCP guide updated
+- [x] `docs/reviews/v1.3.0-agent-host-phase-2.md` written
+- [x] Full pytest passes (160 passed, 1 skipped)
+- [x] Full ruff check passes
+- [x] compileall passes
+
+Notes: Durable Job tools are the compatibility baseline. The deprecated MCP Tasks extension is not
+advertised. Host sampling and prepare/submit analysis remain Phase 3. The skipped test is the
+Windows symlink-escape case when the current account cannot create symbolic links.
+
+## v1.3.0 Agent Host Phase 3
+
+Status: complete
+
+Scope:
+- HostSamplingAdapter for MCP sampling
+- host Dirty Excel Region extraction and verified Graph Proposal submission
+- approval-gated Change Atom and impact prepare/submit workflows
+- host output schemas and verifier-enforced persistence
+- host audit hashes and schema-violation metadata
+- host sampling, Skill, configured-provider, heuristic route selection
+- shared report/session persistence for CLI and host analysis
+
+Completion checklist:
+- [x] External payload is withheld until a scoped Grant is consumed
+- [x] Host sampling validates structured JSON and redacts payloads
+- [x] Invalid schema, Evidence, node, relation, and before values are rejected
+- [x] LLM-only `must_review` cannot bypass the verifier
+- [x] Retry returns the persisted idempotent result
+- [x] Sampling interruption and non-text responses fail without body leakage
+- [x] Host route works without a configured SpecImpact provider
+- [x] README, MCP guide, and Host LLM guide updated
+- [x] `docs/reviews/v1.3.0-agent-host-phase-3.md` written
+- [x] Full pytest passes (178 passed, 1 skipped)
+- [x] Full ruff check passes
+- [x] compileall passes
+
+Notes: Host-generated data remains proposal/hypothesis data. JSONL Change Sessions and verified
+reports are authoritative; host chat, Canvas, and Artifacts are projections.
+
+## v1.3.0 Agent Host Phase 4
+
+Status: complete
+
+Scope:
+- Cursor Marketplace and Plugin manifests
+- MCP configuration, four Skills, Rules, Commands, and privacy-safe Hook
+- Impact Review, Evidence Graph, and Unified Review Queue Canvas references
+- Agent runtime doctor and hash-only source-change notification
+- Cursor installation and privacy manual
+
+Completion checklist:
+- [x] Official Cursor plugin and marketplace schemas validate
+- [x] Plugin starts the workspace-scoped stdio MCP server
+- [x] Four Skills map to onboarding, ingest, change, and review
+- [x] Three Canvas references retain JSONL as source-of-truth
+- [x] Plugin contains no Python runtime
+- [x] Hook stores path/hash metadata only and starts no LLM work
+- [x] `specimpact agent doctor --host cursor` is available
+- [x] README and Cursor manual updated
+- [x] `docs/reviews/v1.3.0-agent-host-phase-4.md` written
+- [x] Full pytest passes (188 passed, 1 skipped)
+- [x] Full ruff check passes
+- [x] compileall passes
+
+Notes: Canvas is generated through a Skill reference because Cursor does not expose a stable public
+API for registering a custom persistent Canvas type. Markdown is the fallback projection.
+
+## v1.3.0 Agent Host Phase 5
+
+Status: complete
+
+Scope:
+- Antigravity workspace/global Plugin package
+- MCP config, four Skills, Rules, and PostToolUse Hook
+- three review Artifact templates
+- localhost approval page and one-time token fallback
+- parallel-subagent consolidation rules
+- Antigravity installation and privacy manual
+
+Completion checklist:
+- [x] Workspace and global install scripts are included
+- [x] Plugin contains no Python runtime
+- [x] Four Skills use the same typed MCP contracts
+- [x] Hook detects Agent write tools and starts no LLM work
+- [x] Three Artifact templates retain JSONL as source-of-truth
+- [x] Non-elicitation hosts can use localhost approval and `authorize_prepared_context`
+- [x] Parallel investigation converges on one verifier and Change Session
+- [x] README and Antigravity manual updated
+- [x] `docs/reviews/v1.3.0-agent-host-phase-5.md` written
+- [x] Full pytest passes (196 passed, 1 skipped)
+- [x] Full ruff check passes
+- [x] compileall passes
+
+Notes: The Hook covers Antigravity Agent write tools, not arbitrary filesystem changes. Existing
+source freshness detects other changes during re-ingestion.
+
+## v1.3.0 Agent Host Phase 6
+
+Status: complete
+
+Scope:
+- Agent-host-first README and GitHub presentation
+- architecture, Host LLM, Cursor, Antigravity, Privacy, and demo manuals
+- Admin Console terminology and CLI/manual alignment
+- v1.3 version metadata and Changelog
+- GitHub Actions, Issue forms, and PR template
+
+Completion checklist:
+- [x] README makes Cursor the standard front and Admin Console the management surface
+- [x] Architecture and sequence diagrams show trust/state boundaries
+- [x] Cursor/Antigravity installation and approval fallback are documented
+- [x] Privacy manual covers metadata-only Resources and one-time Grants
+- [x] Dirty Excel benchmark has an Agent Host walkthrough
+- [x] README links and release versions are tested
+- [x] GitHub CI covers Python, frontend, benchmark, and wheel
+- [x] `docs/reviews/v1.3.0-agent-host-phase-6.md` written
+- [x] Full pytest passes (199 passed, 1 skipped)
+- [x] Full ruff check passes
+- [x] compileall passes
+
+Notes: Mermaid is used for GitHub-native diagrams. Existing GUI screenshots now represent the
+Admin Console rather than the primary daily interaction surface.
+
+## v1.3.0 Agent Host Phase 7
+
+Status: complete
+
+Scope:
+- Dirty SIer workbook classification hardening
+- external interface benchmark workbook
+- end-to-end Host LLM change and review flow
+- real MCP stdio and distribution verification
+- final release quality gates
+
+Completion checklist:
+- [x] Embedded revision history no longer masks DB mapping sheets
+- [x] Validation tables containing screen terms remain validation regions
+- [x] External IF workbook contributes an Evidence-backed graph artifact
+- [x] Natural-language credit-limit change retrieves Screen, Validation, API, DB, External IF,
+  and Test impacts
+- [x] Host submission is verifier-checked and persisted in one Change Session
+- [x] Impact decision is visible through Application Service and Obsidian export
+- [x] Real MCP stdio handshake lists typed Tools, Resources, and four Prompts
+- [x] Cursor and Antigravity package manifests validate
+- [x] Frontend check/build and wheel build pass
+- [x] `docs/reviews/v1.3.0-agent-host-phase-7.md` written
+- [x] Full pytest passes (206 passed, 1 skipped)
+- [x] Full ruff check passes
+- [x] compileall passes
+- [x] release-check passes (21 cases)
+
+Notes: The skipped Windows symlink test is limited to accounts without symbolic-link privileges.
+SharePoint/Microsoft Graph, NotebookLM Enterprise, M365 Copilot remote MCP, and a VS Code custom
+editor remain explicitly outside v1.3.0.

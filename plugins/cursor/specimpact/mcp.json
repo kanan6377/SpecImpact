@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "specimpact": {
+      "command": "specimpact",
+      "args": ["mcp", "--stdio", "--project", "${workspaceFolder}"],
+      "env": {
+        "SPECIMPACT_HOST": "cursor",
+        "SPECIMPACT_HOST_EXTERNAL": "true",
+        "SPECIMPACT_HOST_CAPABILITIES": "elicitation"
+      }
+    }
+  }
+}

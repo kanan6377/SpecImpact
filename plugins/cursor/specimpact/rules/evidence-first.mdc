@@ -1,0 +1,23 @@
+---
+description: Keep SpecImpact work evidence-first, local-first, and review-assistive.
+alwaysApply: true
+---
+
+# SpecImpact evidence-first rule
+
+For SpecImpact workflows:
+
+1. Treat `.specimpact/*.jsonl` and the persisted SpecImpact report as authoritative. Canvas
+   markdown, chat summaries, and model output are projections, never the system of record.
+2. Cite returned Evidence IDs and relation paths for every impact claim. Preserve the complete
+   SpecImpact impact fields: artifact_id, display_name, artifact_type, review_priority,
+   evidence_strength, match_type, relation_distance, rule_assessment, relation_statuses, reason,
+   relation_paths, evidence_ids, and needs_review.
+3. Do not output confidence scores or present an impact recommendation as a final decision.
+4. Keep source bodies local. Before an MCP call returns document or evidence content to Cursor,
+   require the SpecImpact transmission preview and explicit approval. Do not bypass, cache, or
+   reproduce withheld content.
+5. Treat graph extraction, aliases, change atoms, and impact hypotheses as proposals until the
+   corresponding SpecImpact review action is persisted.
+6. Use a unique idempotency key for each mutation. Do not retry a mutation with a different key
+   unless the user requests a new operation.

@@ -219,7 +219,57 @@ def decide_graph_proposal(store: LocalStore, proposal_id: str, status: str) -> G
         raise ValueError(f"Unknown graph proposal: {proposal_id}")
     proposal.status = status  # type: ignore[assignment]
     store.write("graph_proposals", proposals)
+    _rebuild_proposal_graph(store, proposal.region_id, proposals)
     return proposal
+
+
+def _rebuild_proposal_graph(
+    store: LocalStore,
+    region_id: str,
+    proposals: list[GraphProposal],
+) -> None:
+    all_regions = store.read("dirty_regions", DirtyRegion)
+    selected_region = next((item for item in all_regions if item.region_id == region_id), None)
+    if not selected_region:
+        return
+    workbook = next(
+        (
+            item
+            for item in store.read("dirty_workbooks", DirtyWorkbook)
+            if item.workbook_id == selected_region.workbook_id
+        ),
+        None,
+    )
+    if not workbook:
+        return
+    source_path = Path(workbook.file_path)
+    if not source_path.is_file():
+        source_path = Path(workbook.original_path)
+    if not source_path.is_file():
+        raise ValueError(f"Dirty Excel source is unavailable: {workbook.file_path}")
+    regions = [item for item in all_regions if item.workbook_id == workbook.workbook_id]
+    region_ids = {item.region_id for item in regions}
+    active = [
+        item
+        for item in proposals
+        if item.region_id in region_ids and item.status != "rejected"
+    ]
+    document_graph, chunks_by_region, document = document_graph_for_regions(
+        source_path,
+        regions,
+        source_key=Path(workbook.file_path).name,
+    )
+    document_graph.extend(
+        proposals_to_graph(
+            active,
+            {item.region_id: item for item in regions},
+            chunks_by_region,
+            document,
+            AliasCatalog.load(store.root / "aliases.yml"),
+            source_path,
+        )
+    )
+    store.merge_graph(**document_graph.__dict__)
 
 
 def _workbook_paths(path: Path) -> list[Path]:

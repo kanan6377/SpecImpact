@@ -1,0 +1,49 @@
+name: Bug report
+description: Report a reproducible SpecImpact problem using synthetic or public input.
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not attach confidential design documents, credentials, or one-time Grant tokens.
+  - type: input
+    id: version
+    attributes:
+      label: SpecImpact version
+      placeholder: "1.3.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options: [Cursor Plugin, Antigravity Plugin, MCP, CLI, Admin Console, Obsidian]
+    validations:
+      required: true
+  - type: dropdown
+    id: input
+    attributes:
+      label: Input type
+      options: [Dirty Excel, Excel, Markdown, OpenAPI, DDL, CSV, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Use synthetic data and include the command/tool sequence.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed confidential source bodies, API keys, credentials, and Grant tokens.
+          required: true

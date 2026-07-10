@@ -108,13 +108,29 @@ def _layout_cell(cell: DirtyCell) -> bool:
 
 def _region_type(sheet: DirtySheet, cells: list[DirtyCell]) -> RegionType:
     cell_text = " ".join(cell.value or "" for cell in cells)
+    folded = cell_text.casefold()
     if any(token in cell_text for token in ("改訂", "履歴", "版数", "revision")):
         return "revision_history"
-    validation_tokens = ("入力チェック", "チェックID", "チェック名")
-    if _looks_like_screen_table(cell_text):
-        return "screen_item_table"
+    nonempty = [cell.value for cell in cells if cell.value not in (None, "")]
+    if len(nonempty) <= 2 and len(cells) <= 6:
+        return "note_block"
+    validation_tokens = ("チェックID", "チェック名", "エラーメッセージ")
     if any(token in cell_text for token in validation_tokens):
         return "validation_block"
+    if "テーブル名" in cell_text and "カラム名" in cell_text:
+        return "db_mapping_table"
+    if any(token in folded for token in ("外部if", "if名", "interface name")) and any(
+        token in cell_text for token in ("項目名", "物理名", "送信", "受信")
+    ):
+        return "external_if_table"
+    if any(token in folded for token in ("api id", "api名", "endpoint")) and any(
+        token in folded for token in ("request", "response", "リクエスト", "レスポンス")
+    ):
+        return "api_mapping_table"
+    if "テストケースID" in cell_text and "期待結果" in cell_text:
+        return "test_case_table"
+    if _looks_like_screen_table(cell_text):
+        return "screen_item_table"
     if sheet.sheet_type == "screen_item_definition" and not any(
         token in cell_text for token in validation_tokens
     ):
@@ -133,7 +149,7 @@ def _region_type(sheet: DirtySheet, cells: list[DirtyCell]) -> RegionType:
         return "test_case_table"
     if sheet.sheet_type == "glossary":
         return "glossary_table"
-    if len(cells) <= 6:
+    if len(nonempty) <= 2 or len(cells) <= 6:
         return "note_block"
     return "unknown"
 

@@ -1,60 +1,37 @@
 # Roadmap
 
-## v0.1.0-alpha: Excel Impact Review MVP
+## Delivered Foundation
 
-- Japanese SIer-style sample Excel project
-- Excel folder ingestion
-- Excel Health Check
-- Change request analysis
-- Evidence-backed reports
-- Markdown / Excel / JSON output
+- v1 local JSONL, stable CLI/report schema, Evidence-first release benchmark
+- Dirty Excel normalization, Region detection, cell/range Evidence, original preservation
+- LLM graph proposals, Alias review, Change Atoms, hybrid retrieval, Impact verifier
+- Admin Console, source viewer, unified review, freshness, Jobs/Audit, Obsidian projection
 
-## v0.2.0: Better Excel Profiling
+## v1.3 Agent Host
 
-- Improved sheet classification
-- Header row detection
-- Revision history extraction
-- Alias candidate review
-- Better warnings for dirty Excel files
+- UI-independent Application Service shared by CLI, Web, and MCP
+- typed stdio MCP Tools, Resources, Prompts, durable Jobs, idempotency, process locking
+- Host LLM sampling and prepare/submit workflows with one-time privacy Grants
+- Cursor Marketplace Plugin with Skills, Rules, Commands, Hook, and Canvas references
+- Antigravity Plugin with Skills, Rules, Hook, Artifact templates, and installers
+- host/CLI/provider/heuristic fallback order without weakening the Evidence verifier
 
-## v0.3.0: SIer Excel Profiles
+## Next: Enterprise Sources
 
-- Screen design profile
-- API definition profile
-- Table definition profile
-- Validation rule profile
-- External IF profile
-- Test case profile
+- SharePoint and Microsoft Graph source connector with tenant policy controls
+- OneDrive version metadata and remote source freshness
+- optional M365 Copilot remote MCP deployment profile
+- signed Plugin releases and automated Marketplace publishing
 
-## v0.4.0: Excel Diff Impact
+These connectors must preserve the same preview, Grant, redaction, workspace/tenant boundary, and
+metadata-only audit contracts. They will not be mixed into the v1.3 local/synced-folder release.
 
-- before/after Excel comparison
-- semantic design diff
-- graph diff
-- impact review from Excel changes
+## Later: Review Surfaces
 
-## v0.5.0: Review Board GUI
+- VS Code extension/custom viewer only if it adds evidence navigation unavailable through MCP
+- NotebookLM Enterprise export/hand-off when a supported write-back contract exists
+- optional MCP Apps review component after stable support across target hosts
+- richer Office-compatible workbook rendering without automatic source editing
 
-- Impact Review Board
-- Evidence viewer
-- Alias review UI
-- relation confirmation/rejection
-- Excel report export from GUI
-
-## v1.0.0: Stable Local-first Excel Impact Review
-
-- Stable schema
-- Stable CLI
-- Stable report format
-- documented limitations
-- real-world sample coverage
-
-## v2.0.0: Dirty Excel Impact Management
-
-- Dirty Excel workbook normalization with original preservation
-- Sheet classification and logical region detection
-- LLM/heuristic region proposals with evidence validation
-- Alias inference and review from observed graph data
-- Change Atom parsing and LLM-first impact retrieval
-- Impact decision board with accepted/rejected/implemented/tested/closed states
-- Dirty SIer Excel benchmark under `examples/dirty_sier_excel`
+Host chat, Canvas, Artifact, Obsidian, and future views remain projections. JSONL Change Sessions,
+Impact Decisions, Proposals, Aliases, relation status, and Evidence remain authoritative.

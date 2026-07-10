@@ -9,6 +9,11 @@ by the installed-wheel release gate.
 
 Do not include confidential design documents, credentials, or API keys in a report.
 
+Treat localhost ApprovalGrant tokens as secrets even though they expire after ten minutes and are
+single-use. Reports about MCP workspace escape, symlink handling, CSRF/Origin validation, content
+withholding, redaction, Agent Hooks, or Plugin configuration should include metadata-only
+reproduction steps and synthetic documents.
+
 ## Supported Version
 
 Security fixes target the latest v1.x release.

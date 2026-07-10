@@ -2,3 +2,4 @@ recursive-include schemas/v1 *.json
 recursive-include specimpact/resources/demo *
 recursive-include specimpact/webui/templates *.html
 recursive-include specimpact/webui/static *
+recursive-include plugins *

@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "write_to_file|replace_file_content|multi_replace_file_content",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "specimpact agent hook --host antigravity --event post-tool-use --project .",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

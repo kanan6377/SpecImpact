@@ -1,0 +1,25 @@
+name: Feature request
+description: Propose an evidence-first workflow or integration.
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and user workflow
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and review behavior
+      description: Explain source addressing, verifier behavior, and the human decision point.
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy and compatibility impact
+      description: Cover external transmission, JSONL/report compatibility, and host support.
+    validations:
+      required: true

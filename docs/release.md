@@ -1,4 +1,4 @@
-# v1.2 Release Validation
+# v1.3 Release Validation
 
 The release manifest contains 21 change cases and 20 distinct normalized oracle contents separated
 into Golden, Evaluation, and Holdout categories. Holdout includes the separate Payment Processing
@@ -18,6 +18,10 @@ The release gate validates review-candidate recall, not final impact correctness
 wheels only after `release-check`, `pytest -q`, `ruff check .`, and
 `python -m compileall -q specimpact` pass from a clean environment.
 
-The v1.2 GUI release also requires `npm run check`, `npm run build`, localhost browser verification,
+The Admin Console release also requires `npm run check`, `npm run build`, localhost browser verification,
 keyboard access to review and graph selection, no horizontal page overflow at 390 px, no current
 console errors, and confirmation that the Cytoscape chunk is loaded only on the Graph view.
+
+The Agent Host release additionally requires MCP Tool/Resource schema tests, workspace escape and
+Grant replay tests, Cursor/Antigravity package snapshots, official Cursor manifest validation, and
+the Dirty Excel host workflow E2E. Neither Plugin may contain Python or an independent state store.

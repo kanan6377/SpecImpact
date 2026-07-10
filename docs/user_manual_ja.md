@@ -4,7 +4,9 @@
 
 ## 1. SpecImpact とは
 
-SpecImpact は、設計書を LLM と GraphRAG で構造化し、変更依頼に対する影響候補を evidence 付きで出す CLI / GUI ツールです。
+SpecImpact は、設計書を Host LLM と GraphRAG で構造化し、変更依頼に対する影響候補を
+evidence 付きで管理する Headless engine です。標準フロントは Cursor、同時対応hostは
+Antigravityです。CLIとlocalhost Admin Consoleも削除せず利用できます。
 
 主な対象は、SIer 現場でよくある Excel 設計書です。結合セル、複数表混在、同上、別紙参照、論理名と物理名の表記揺れを扱います。
 
@@ -20,43 +22,57 @@ SpecImpact は、設計書を LLM と GraphRAG で構造化し、変更依頼に
 ```powershell
 git clone https://github.com/kanan6377/SpecImpact.git
 cd SpecImpact
-python -m pip install -e .
+python -m pip install -e ".[mcp,gui]"
 specimpact --help
 ```
 
-GUI も使う場合:
+配布版を独立toolとして入れる場合:
 
 ```powershell
-python -m pip install -e ".[gui]"
+uv tool install "specimpact[mcp,gui]"
+# または pipx install "specimpact[mcp,gui]"
 ```
 
 ## 3. 最短で試す
 
-Dirty Excel サンプルを使います。
+標準のCursor経路:
 
 ```powershell
-specimpact onboard .\examples\dirty_sier_excel\docs `
-  --provider codex `
-  --model default `
-  --aliases .\examples\dirty_sier_excel\aliases.yml
-
-specimpact analyze .\examples\dirty_sier_excel\changes\利用限度額上限変更.md --llm-first
-specimpact report --format markdown
-specimpact impacts list
-specimpact export-obsidian .\vault
+cd C:\work\my-system-impact
+specimpact init
+specimpact agent doctor --host cursor --project .
 ```
 
-LLM を使わない確認:
+Cursorへ`plugins/cursor` MarketplaceからPluginを入れ、`/specimpact-onboard`を実行します。
+取り込み後、チャットへ自然文で変更を伝えます。
+
+```text
+入会申込画面の「利用限度額」の上限を999万円から9999万円に変更したい。
+画面、validation、API、DB、外部IF、境界値テストへの影響を調べて。
+```
+
+CLIだけでサンプルを確認する場合:
 
 ```powershell
 specimpact onboard .\examples\dirty_sier_excel\docs `
   --no-llm `
   --aliases .\examples\dirty_sier_excel\aliases.yml
+
+specimpact analyze .\examples\dirty_sier_excel\changes\利用限度額上限変更.md `
+  --llm-first --no-llm
+specimpact report --format markdown
 ```
 
 ## 4. LLM provider
 
-標準導線は LLM-first です。Codex CLI を第一候補としています。
+標準導線はCursor / AntigravityのHost LLMです。SpecImpact側にprovider API keyを設定する
+必要はありません。sampling対応hostではMCP sampling、非対応hostではprepare/submit Skillを使います。
+
+```powershell
+specimpact mcp --stdio --project C:\work\my-system-impact
+```
+
+Hostを使わないCLI fallbackでは、Codex CLI、OpenAI、Ollamaを設定できます。
 
 ```powershell
 specimpact llm configure --provider codex --model default
@@ -81,7 +97,23 @@ specimpact llm configure --provider ollama --model <model> --base-url http://loc
 specimpact llm disable
 ```
 
-OpenAI、Codex CLI、remote Ollama、OpenAI embeddings は外部送信確認が必要です。localhost Ollama と local embeddings はローカルで動作します。
+外部Host、OpenAI、Codex CLI、remote Ollama、OpenAI embeddings は外部送信確認が必要です。
+HostではMCP elicitation、またはlocalhost承認画面で発行した10分・1回限りGrantを使います。
+localhost Ollama と local embeddings はローカルで動作します。
+
+### Agent hostのprepare / submit
+
+初期導入では、ingest_sourcesの完了後、Dirty Excel Regionごとに
+prepare_graph_contextからsubmit_graph_extractionの順で実行します。
+
+変更管理では、prepare_change、submit_change_atoms、prepare_impact_context、
+submit_impact_hypotheses、get_change_sessionの順に進め、人間の判断後に
+set_impact_decisionを実行します。
+
+本文がwithheldの場合はapproval_urlを開きます。Hostがelicitation非対応なら、画面に出た
+tokenをauthorize_prepared_contextへ1回だけ渡します。approved=trueでは代用できません。
+
+Cursorの詳細はcursor.md、Antigravityはantigravity.mdを参照してください。
 
 ## 5. 設計書を取り込む
 
@@ -263,7 +295,7 @@ Artifact note には relation と evidence link が入ります。Impact note �
 specimpact export-obsidian .\vault --report-only
 ```
 
-## 12. GUI
+## 12. Admin Console（既存GUI）
 
 ```powershell
 specimpact gui
@@ -273,7 +305,8 @@ specimpact gui
 実行できます。LLM transmission auditには安全なmetadataだけが表示されます。失敗した取り込み、
 分析、外部送信承認、Vault出力は`ジョブと監査`画面のRecovery列を確認して再実行してください。
 
-GUI は `127.0.0.1` のみに bind します。
+Admin Consoleは日常チャットの代替ではなく、設計書viewer、Graph、統一Review Queue、
+Jobs/Audit、Privacy、Obsidianをまとめて確認する管理画面です。`127.0.0.1` のみに bind します。
 
 主な画面:
 

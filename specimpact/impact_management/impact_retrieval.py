@@ -28,6 +28,19 @@ EXPAND_RELATIONS = {
     "CALLS",
     "COVERS",
     "MENTIONS",
+    "contains",
+    "displays",
+    "accepts_input",
+    "validates",
+    "calls",
+    "reads",
+    "writes",
+    "maps_to",
+    "sends",
+    "receives",
+    "tested_by",
+    "depends_on",
+    "may_affect",
 }
 
 
