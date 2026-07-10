@@ -283,6 +283,8 @@ GUI は `127.0.0.1` のみに bind します。
 
 案件が未登録の場合は、GUI内で案件フォルダーを作成するか、ガイド付きサンプルを生成できます。
 設計書画面はMarkdown/text、Dirty Excel、OpenAPI、DDL、CSVのmanaged uploadに対応します。
+変更レビューは、選択した起点設計書のdocument IDと関連graph要素を分析contextへ含めます。
+候補、設計書、evidenceの選択はURLへ保存され、evidenceを押すと引用元の行またはcellへ移動します。
 
 詳細は [gui_manual_ja.md](gui_manual_ja.md) を参照してください。
 

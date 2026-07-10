@@ -699,7 +699,8 @@ def execute(project: Project, action: str, params: dict[str, Any]) -> dict[str, 
             heading = "GUI Change Request"
             body = f"# {heading}\n\n{body}\n"
         if source:
-            body = f"{body.rstrip()}\n\n## Selected Design Document\n\n{source}\n"
+            context = _selected_design_context(store, source)
+            body = f"{body.rstrip()}\n\n{context}\n"
         change_path = store.root / "gui" / "change_request.md"
         store.write_text(change_path, body)
         report = analyze_change_llm_first(
@@ -1000,6 +1001,44 @@ def _resolve_project_file(project: Project, file_name: str) -> Path | None:
 
 def _path_key(value: str) -> str:
     return os.path.normcase(os.path.normpath(value))
+
+
+def _selected_design_context(store: LocalStore, source: str) -> str:
+    documents = store.read("documents", Document)
+    selected = next(
+        (
+            item
+            for item in documents
+            if item.document_id == source or _path_key(item.path) == _path_key(source)
+        ),
+        None,
+    )
+    if selected is None:
+        return f"## Selected Design Document\n\n- Source: {source}"
+    artifacts = [
+        item
+        for item in store.read("artifacts", Artifact)
+        if selected.document_id in item.source_document_ids
+    ]
+    entities = [
+        item
+        for item in store.read("entities", Entity)
+        if selected.document_id in item.source_document_ids
+    ]
+    lines = [
+        "## Selected Design Document",
+        "",
+        f"- Document ID: {selected.document_id}",
+        f"- Title: {selected.title}",
+        f"- Source: {selected.path}",
+    ]
+    if artifacts:
+        artifact_names = ", ".join(item.display_name for item in artifacts[:30])
+        lines.append(f"- Graph artifacts: {artifact_names}")
+    if entities:
+        entity_names = ", ".join(item.display_name for item in entities[:30])
+        lines.append(f"- Graph entities: {entity_names}")
+    return "\n".join(lines)
 
 
 def _looks_text(path: Path) -> bool:

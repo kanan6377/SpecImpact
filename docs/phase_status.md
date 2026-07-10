@@ -273,3 +273,32 @@ Completion checklist:
 
 Notes: Source Library deliberately reports current ingestion state only. Version history, graph diff,
 and stale propagation remain Phase 5 work.
+
+## v1.2.0 UX Phase 3
+
+Status: complete
+
+Scope:
+- selected design-document Graph Context
+- candidate/source/evidence deep links
+- evidence-to-source focus navigation
+- verifier detail presentation
+- change-review reload restoration
+
+Completion checklist:
+- [x] Selected source contributes document and graph context
+- [x] Candidate, source, and evidence selections are URL-addressable
+- [x] Evidence opens its exact highlighted source location
+- [x] Reload restores the same review position
+- [x] Verifier fields are visible in the Inspector
+- [x] Selected-source context regression test passes
+- [x] Real-project browser verification complete
+- [x] README and manuals updated
+- [x] `docs/reviews/v1.2.0-ux-phase-3.md` written
+- [x] Full pytest passes (139 tests)
+- [x] Full ruff check passes
+- [x] compileall passes
+- [x] release-check passes (21 cases)
+
+Notes: Decision mutations remain assigned to Phase 4. This phase improves analysis context and
+navigation without changing priority semantics or finalizing impacts automatically.

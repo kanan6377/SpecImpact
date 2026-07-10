@@ -39,6 +39,10 @@ export interface Impact {
   artifact_type: string;
   review_priority: string;
   evidence_strength: string;
+  match_type?: string;
+  relation_distance?: number;
+  rule_assessment?: string;
+  needs_review?: boolean;
   reason: string;
   relation_paths: string[];
   evidence_ids: string[];

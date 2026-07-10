@@ -69,6 +69,19 @@ function updateUrl(view: ViewName, projectId: string | null, replace = false): v
   window.history[replace ? "replaceState" : "pushState"]({}, "", url);
 }
 
+function updateReviewUrl(projectId: string, impactId: string, sourceId: string, evidenceId = ""): void {
+  const params = new URLSearchParams();
+  params.set("project_id", projectId);
+  if (impactId) params.set("impact", impactId);
+  if (sourceId) params.set("source", sourceId);
+  if (evidenceId) params.set("evidence", evidenceId);
+  window.history.replaceState({}, "", `/ui/impact-board?${params.toString()}`);
+}
+
+function reviewParam(name: string): string {
+  return new URLSearchParams(window.location.search).get(name) ?? "";
+}
+
 export function App() {
   const [view, setView] = useState<ViewName>(currentView);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -124,7 +137,7 @@ export function App() {
         return;
       }
       setProjectId(selected.project_id);
-      updateUrl(currentView(), selected.project_id, true);
+      if (requested !== selected.project_id) updateUrl(currentView(), selected.project_id, true);
       await loadProject(selected.project_id);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "GUIを初期化できませんでした");
@@ -457,8 +470,11 @@ function ImpactWorkspace({ projectId, report, design, onDesignChange, onRefresh 
   onRefresh: () => void;
 }) {
   const impacts = useMemo(() => groupedImpacts(report).filter((impact) => impact.priority !== "hidden"), [report]);
-  const [selectedImpactId, setSelectedImpactId] = useState(impacts[0]?.artifact_id ?? "");
+  const initialReview = useRef({ impact: reviewParam("impact"), source: reviewParam("source"), evidence: reviewParam("evidence") }).current;
+  const [selectedImpactId, setSelectedImpactId] = useState(() => initialReview.impact || impacts[0]?.artifact_id || "");
   const [selectedDocument, setSelectedDocument] = useState("");
+  const [focusedEvidenceId, setFocusedEvidenceId] = useState(initialReview.evidence);
+  const [selectionReady, setSelectionReady] = useState(false);
   const [query, setQuery] = useState("");
   const [changeText, setChangeText] = useState("");
   const [analysisState, setAnalysisState] = useState<"idle" | "running">("idle");
@@ -466,15 +482,40 @@ function ImpactWorkspace({ projectId, report, design, onDesignChange, onRefresh 
   const [inspectorOpen, setInspectorOpen] = useState(true);
 
   useEffect(() => {
-    if (!selectedImpactId && impacts[0]) setSelectedImpactId(impacts[0].artifact_id);
+    if (selectionReady || !design) return;
+    const requestedDocument = design.documents.find((document) => (document.document_id ?? document.file) === initialReview.source);
+    setSelectedDocument(requestedDocument?.file ?? design.documents[0]?.file ?? "");
+    if (!impacts.some((impact) => impact.artifact_id === selectedImpactId)) {
+      setSelectedImpactId(impacts[0]?.artifact_id ?? "");
+    }
+    setSelectionReady(true);
+  }, [design, impacts, initialReview.source, selectedImpactId, selectionReady]);
+
+  useEffect(() => {
+    if (!impacts.length) return;
+    if (!impacts.some((impact) => impact.artifact_id === selectedImpactId)) {
+      setSelectedImpactId(impacts[0].artifact_id);
+    }
   }, [impacts, selectedImpactId]);
 
   useEffect(() => {
-    if (!selectedDocument && design?.documents[0]) setSelectedDocument(design.documents[0].file);
-  }, [design, selectedDocument]);
+    if (selectionReady && design?.documents[0] && !design.documents.some((item) => item.file === selectedDocument)) {
+      setSelectedDocument(design.documents[0].file);
+    }
+  }, [design, selectedDocument, selectionReady]);
 
   const selectedImpact = impacts.find((impact) => impact.artifact_id === selectedImpactId) ?? impacts[0];
   const selectedDoc = design?.documents.find((document) => document.file === selectedDocument) ?? design?.documents[0];
+
+  useEffect(() => {
+    if (!selectionReady || !selectedImpact || !selectedDoc) return;
+    updateReviewUrl(
+      projectId,
+      selectedImpact.artifact_id,
+      selectedDoc.document_id ?? selectedDoc.file,
+      focusedEvidenceId,
+    );
+  }, [focusedEvidenceId, projectId, selectedDoc, selectedImpact, selectionReady]);
 
   const selectImpact = async (impact: RankedImpact) => {
     setSelectedImpactId(impact.artifact_id);
@@ -482,7 +523,10 @@ function ImpactWorkspace({ projectId, report, design, onDesignChange, onRefresh 
       const nextDesign = await api.designDocuments(projectId, impact.evidence_ids);
       onDesignChange(nextDesign);
       const highlighted = nextDesign.documents.find((document) => document.highlight_count > 0);
-      setSelectedDocument(highlighted?.file ?? nextDesign.documents[0]?.file ?? "");
+      const nextDocument = highlighted ?? nextDesign.documents[0];
+      setSelectedDocument(nextDocument?.file ?? "");
+      setFocusedEvidenceId("");
+      updateReviewUrl(projectId, impact.artifact_id, nextDocument?.document_id ?? nextDocument?.file ?? "");
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : "設計書を読み込めませんでした");
     }
@@ -495,7 +539,7 @@ function ImpactWorkspace({ projectId, report, design, onDesignChange, onRefresh 
     }
     setAnalysisState("running");
     setMessage("外部送信の有無を確認しています。");
-    const params = { body: changeText.trim(), design_document: selectedDocument };
+    const params = { body: changeText.trim(), design_document: selectedDoc?.document_id ?? selectedDocument };
     try {
       const preview = await api.externalPreview(projectId, "analyze_text_llm_first", params);
       const approved = !preview.required || window.confirm(formatTransmissionPreview(preview.transmissions));
@@ -516,6 +560,20 @@ function ImpactWorkspace({ projectId, report, design, onDesignChange, onRefresh 
     }
   };
 
+  const selectDocument = (file: string) => {
+    setSelectedDocument(file);
+    setFocusedEvidenceId("");
+    const document = design?.documents.find((item) => item.file === file);
+    updateReviewUrl(projectId, selectedImpact?.artifact_id ?? "", document?.document_id ?? file);
+  };
+
+  const revealEvidence = (evidenceId: string) => {
+    const document = design?.documents.find((item) => item.evidence.some((evidence) => evidence.evidence_id === evidenceId));
+    if (document) setSelectedDocument(document.file);
+    setFocusedEvidenceId(evidenceId);
+    updateReviewUrl(projectId, selectedImpact?.artifact_id ?? "", document?.document_id ?? document?.file ?? selectedDocument, evidenceId);
+  };
+
   const filtered = impacts.filter((impact) => `${impact.display_name} ${impact.artifact_id} ${impact.reason}`.toLowerCase().includes(query.toLowerCase()));
   return (
     <div className={`review-page ${inspectorOpen ? "inspector-open" : ""}`}>
@@ -527,7 +585,7 @@ function ImpactWorkspace({ projectId, report, design, onDesignChange, onRefresh 
           actions={!inspectorOpen ? <button className="icon-button" onClick={() => setInspectorOpen(true)} title="Inspectorを開く" aria-label="Inspectorを開く"><PanelRightOpen size={18} /></button> : undefined}
         />
         <section className="change-composer" aria-label="変更影響分析">
-          <label><span>起点となる設計書</span><select value={selectedDocument} onChange={(event) => setSelectedDocument(event.target.value)}><option value="">案件全体</option>{design?.documents.map((document) => <option value={document.file} key={document.file}>{document.title}</option>)}</select></label>
+          <label><span>起点となる設計書</span><select value={selectedDocument} onChange={(event) => selectDocument(event.target.value)}><option value="">案件全体</option>{design?.documents.map((document) => <option value={document.file} key={document.file}>{document.title}</option>)}</select></label>
           <label className="change-input"><span>変更内容</span><textarea value={changeText} onChange={(event) => setChangeText(event.target.value)} placeholder="例: 利用限度額の上限を999万円から9999万円に変更する" rows={2} /></label>
           <button className="primary-button" onClick={() => void runAnalysis()} disabled={analysisState === "running"}>{analysisState === "running" ? <LoaderCircle className="spin" size={17} /> : <Bolt size={17} />}影響分析</button>
         </section>
@@ -540,12 +598,12 @@ function ImpactWorkspace({ projectId, report, design, onDesignChange, onRefresh 
             </div>
           </section>
           <section className="source-pane" aria-label="設計書参照">
-            <div className="pane-toolbar source-toolbar"><div><FileText size={16} /><strong>{selectedDoc?.title ?? "設計書"}</strong></div>{selectedDoc && <select value={selectedDoc.file} onChange={(event) => setSelectedDocument(event.target.value)}>{design?.documents.map((document) => <option value={document.file} key={document.file}>{document.title} ({document.highlight_count})</option>)}</select>}</div>
-            <DocumentViewer document={selectedDoc} />
+            <div className="pane-toolbar source-toolbar"><div><FileText size={16} /><strong>{selectedDoc?.title ?? "設計書"}</strong></div>{selectedDoc && <select value={selectedDoc.file} onChange={(event) => selectDocument(event.target.value)}>{design?.documents.map((document) => <option value={document.file} key={document.file}>{document.title} ({document.highlight_count})</option>)}</select>}</div>
+            <DocumentViewer document={selectedDoc} focusedEvidenceId={focusedEvidenceId} />
           </section>
         </div>
       </section>
-      {inspectorOpen && <ImpactInspector impact={selectedImpact} onClose={() => setInspectorOpen(false)} />}
+      {inspectorOpen && <ImpactInspector impact={selectedImpact} onClose={() => setInspectorOpen(false)} onRevealEvidence={revealEvidence} />}
     </div>
   );
 }
@@ -560,26 +618,35 @@ function ImpactRow({ impact, selected, onSelect }: { impact: RankedImpact; selec
   );
 }
 
-function DocumentViewer({ document }: { document: DesignDocument | undefined }) {
+function DocumentViewer({ document, focusedEvidenceId }: { document: DesignDocument | undefined; focusedEvidenceId: string }) {
+  const viewer = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!focusedEvidenceId || !viewer.current) return;
+    const target = Array.from(viewer.current.querySelectorAll<HTMLElement>("[data-evidence-ids]")).find((element) =>
+      (element.dataset.evidenceIds ?? "").split(" ").includes(focusedEvidenceId),
+    );
+    target?.scrollIntoView({ block: "center" });
+  }, [document?.file, focusedEvidenceId]);
   if (!document) return <EmptyState icon={FileText} title="設計書がありません" body="この案件には表示可能な設計書がありません。" />;
   if (document.cells.length) {
-    return <div className="document-scroll"><table className="cell-table"><thead><tr><th>Sheet</th><th>Cell</th><th>Value</th></tr></thead><tbody>{document.cells.map((cell) => <tr key={`${cell.sheet_name}-${cell.cell}`} className={cell.highlight ? "highlight" : ""}><td>{cell.sheet_name}</td><td><code>{cell.cell}</code>{cell.merged_range && <small>{cell.merged_range}</small>}</td><td>{cell.value}</td></tr>)}</tbody></table></div>;
+    return <div className="document-scroll" ref={viewer}><table className="cell-table"><thead><tr><th>Sheet</th><th>Cell</th><th>Value</th></tr></thead><tbody>{document.cells.map((cell) => <tr key={`${cell.sheet_name}-${cell.cell}`} data-evidence-ids={cell.evidence_ids.join(" ")} className={`${cell.highlight ? "highlight" : ""} ${cell.evidence_ids.includes(focusedEvidenceId) ? "evidence-focus" : ""}`}><td>{cell.sheet_name}</td><td><code>{cell.cell}</code>{cell.merged_range && <small>{cell.merged_range}</small>}</td><td>{cell.value}</td></tr>)}</tbody></table></div>;
   }
   if (document.rows.length) {
-    return <div className="document-scroll source-code">{document.rows.map((row) => <div className={`source-row ${row.highlight ? "highlight" : ""}`} key={row.line}><span>{row.line}</span><code>{row.text || " "}</code></div>)}</div>;
+    return <div className="document-scroll source-code" ref={viewer}>{document.rows.map((row) => <div data-evidence-ids={row.evidence_ids.join(" ")} className={`source-row ${row.highlight ? "highlight" : ""} ${row.evidence_ids.includes(focusedEvidenceId) ? "evidence-focus" : ""}`} key={row.line}><span>{row.line}</span><code>{row.text || " "}</code></div>)}</div>;
   }
-  return <div className="document-scroll evidence-fallback">{document.evidence.map((evidence) => <article key={evidence.evidence_id}><code>{evidence.evidence_id}</code><p>{evidence.quote}</p></article>)}</div>;
+  return <div className="document-scroll evidence-fallback" ref={viewer}>{document.evidence.map((evidence) => <article data-evidence-ids={evidence.evidence_id} className={evidence.evidence_id === focusedEvidenceId ? "evidence-focus" : ""} key={evidence.evidence_id}><code>{evidence.evidence_id}</code><p>{evidence.quote}</p></article>)}</div>;
 }
 
-function ImpactInspector({ impact, onClose }: { impact: RankedImpact | undefined; onClose: () => void }) {
+function ImpactInspector({ impact, onClose, onRevealEvidence }: { impact: RankedImpact | undefined; onClose: () => void; onRevealEvidence: (evidenceId: string) => void }) {
   if (!impact) return <aside className="inspector"><button className="inspector-close icon-button" onClick={onClose} title="Inspectorを閉じる" aria-label="Inspectorを閉じる"><X size={17} /></button><EmptyState icon={FileSearch} title="候補を選択" body="候補を選ぶと根拠と経路を表示します。" compact /></aside>;
   return (
     <aside className="inspector" aria-label="Evidence Inspector">
       <div className="inspector-title"><button className="inspector-close icon-button" onClick={onClose} title="Inspectorを閉じる" aria-label="Inspectorを閉じる"><X size={17} /></button><p className="eyebrow">Evidence inspector</p><h2>{impact.display_name}</h2><div className="tag-row"><StatusTag value={impact.priority} /><StatusTag value={impact.evidence_strength} /><StatusTag value={impact.artifact_type} /></div></div>
       <InspectorSection title="Reason"><p>{impact.reason}</p></InspectorSection>
+      <InspectorSection title="Verification"><dl className="verification-list"><div><dt>Match</dt><dd>{impact.match_type ?? "—"}</dd></div><div><dt>Rule</dt><dd>{impact.rule_assessment ?? "—"}</dd></div><div><dt>Distance</dt><dd>{impact.relation_distance ?? "—"}</dd></div><div><dt>Relation status</dt><dd>{impact.relation_statuses?.join(", ") || "—"}</dd></div></dl></InspectorSection>
       <InspectorSection title="Relation path">{impact.relation_paths.map((path) => <code className="path-code" key={path}>{path}</code>)}</InspectorSection>
       <InspectorSection title="Required actions"><ul>{(impact.required_actions ?? []).map((action) => <li key={action}>{action}</li>)}</ul></InspectorSection>
-      <InspectorSection title="Evidence">{impact.evidence?.map((evidence) => <article className="evidence-block" key={evidence.evidence_id}><code>{evidence.evidence_id}</code><small>{evidence.source_location.file} · L{evidence.source_location.line_start}</small><p>{evidence.quote}</p></article>)}</InspectorSection>
+      <InspectorSection title="Evidence">{impact.evidence?.map((evidence) => <button type="button" className="evidence-block" key={evidence.evidence_id} onClick={() => onRevealEvidence(evidence.evidence_id)}><code>{evidence.evidence_id}</code><small>{evidence.source_location.file} · L{evidence.source_location.line_start}</small><span>{evidence.quote}</span></button>)}</InspectorSection>
       {impact.llm_reason && <InspectorSection title="LLM hypothesis"><p>{impact.llm_reason}</p></InspectorSection>}
     </aside>
   );

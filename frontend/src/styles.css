@@ -193,6 +193,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .source-row > span { padding-right: 10px; color: #64748b; text-align: right; user-select: none; }
 .source-row code { white-space: pre-wrap; overflow-wrap: anywhere; }
 .source-row.highlight { color: #1f2937; }
+.evidence-focus { outline: 2px solid var(--focus); outline-offset: -2px; }
 .evidence-fallback { padding: 12px; }
 .evidence-fallback article { padding: 10px 0; border-bottom: 1px solid var(--border); }
 
@@ -211,10 +212,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .inspector-section p { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.55; }
 .inspector-section ul { margin: 0; padding-left: 18px; color: var(--text-secondary); font-size: 12px; line-height: 1.55; }
 .path-code { display: block; padding: 8px; border: 1px solid var(--border); border-radius: 5px; overflow-wrap: anywhere; color: #334155; background: var(--surface-muted); font-size: 10px; line-height: 1.5; }
-.evidence-block { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.evidence-block { width: 100%; display: block; padding: 8px 0; border: 0; border-bottom: 1px solid var(--border); color: inherit; background: transparent; text-align: left; }
+.evidence-block:hover { background: var(--surface-muted); }
 .evidence-block:last-child { border-bottom: 0; }
 .evidence-block > code { display: block; color: var(--accent); font-size: 9px; }
 .evidence-block > small { display: block; margin: 3px 0; overflow: hidden; color: var(--text-tertiary); text-overflow: ellipsis; white-space: nowrap; }
+.evidence-block > span { display: block; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.verification-list { margin: 0; }
+.verification-list > div { display: grid; grid-template-columns: 85px minmax(0, 1fr); gap: 8px; padding: 4px 0; }
+.verification-list dt { color: var(--text-tertiary); font-size: 10px; }
+.verification-list dd { margin: 0; overflow-wrap: anywhere; color: var(--text-secondary); font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 10px; }
 
 .graph-page { height: 100%; display: flex; flex-direction: column; padding: 20px 22px 0; overflow: hidden; }
 .graph-page > .view-header { flex: 0 0 auto; margin-bottom: 12px; }

@@ -481,6 +481,38 @@ def test_source_library_summarizes_managed_ingest_and_endpoint(tmp_path: Path) -
     assert redirect.headers["location"] == f"/ui/sources?project_id={project.project_id}"
 
 
+def test_llm_first_text_analysis_includes_selected_document_graph_context(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "demo"
+    copy_demo(demo_source(), target)
+    project = ProjectRegistry(tmp_path / "registry").add(target)
+    execute(project, "demo_run", {})
+    selected = next(
+        item
+        for item in source_library_data(project)["sources"]
+        if item["title"] == "カード入会申込画面"
+    )
+
+    execute(
+        project,
+        "analyze_text_llm_first",
+        {
+            "body": "希望利用限度額の上限を変更する",
+            "design_document": selected["source_id"],
+            "no_llm": True,
+        },
+    )
+
+    change = (
+        Path(project.path) / ".specimpact" / "gui" / "change_request.md"
+    ).read_text(encoding="utf-8")
+    assert "## Selected Design Document" in change
+    assert f"Document ID: {selected['source_id']}" in change
+    assert "Title: カード入会申込画面" in change
+    assert "Graph artifacts:" in change
+
+
 def test_session_tokens_are_bounded_and_expire(tmp_path: Path) -> None:
     app = create_app(registry_root=tmp_path / "registry", max_sessions=4)
     with TestClient(app, base_url="http://127.0.0.1") as client:

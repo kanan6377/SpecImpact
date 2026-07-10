@@ -68,6 +68,10 @@ evidenceを持つ状態です。versionやstale判定は後続phaseで追加し�
 5. `影響分析` を実行する
 6. 左の候補、中央の設計書、右のEvidence Inspectorを照合する
 
+起点設計書を選ぶと、ファイルパスだけでなくdocument ID、タイトル、その文書由来のartifact/entityを
+Graph Contextとして変更要求へ追加します。これは分析対象を選択文書だけへ狭めるfilterではなく、
+GraphRAGが変更要求を解釈する起点です。案件全体の依存関係は引き続き探索します。
+
 候補を選ぶと、関連する設計書へ切り替えられます。該当行またはExcel cellは黄色で
 ハイライトされ、Excel検索結果のように変更確認箇所を追えます。Inspectorには以下を表示します。
 
@@ -76,6 +80,11 @@ evidenceを持つ状態です。versionやstale判定は後続phaseで追加し�
 - relation path
 - LLMが提案したrequired actions
 - evidence ID、元ファイル、行番号またはcell、quote
+
+Inspectorのevidenceを選ぶと、中央paneが該当設計書へ切り替わり、引用元の行またはcellをfocus表示します。
+候補、設計書、evidence IDはURLの `impact`、`source`、`evidence` queryへ保存されるため、再読み込みや
+URL共有で同じレビュー位置へ戻れます。Verifier欄ではmatch type、rule assessment、relation distance、
+relation statusを確認できます。
 
 `must_review` は影響確定ではなく、直接evidenceとgraph pathがあるため必ず確認すべき候補です。
 Inspectorは狭幅画面ではoverlayになり、右上の閉じるbuttonで設計書へ戻れます。
