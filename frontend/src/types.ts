@@ -1,4 +1,4 @@
-export type ViewName = "dashboard" | "sources" | "impact-board" | "graph" | "reviews" | "jobs" | "settings";
+export type ViewName = "dashboard" | "sources" | "impact-board" | "graph" | "reviews" | "vault" | "jobs" | "settings";
 
 export interface Project {
   project_id: string;
@@ -144,6 +144,7 @@ export interface Job {
   started_at: string | null;
   finished_at: string | null;
   error_summary: string | null;
+  result_summary?: Record<string, unknown> | string | null;
 }
 
 export interface AliasData {
@@ -173,5 +174,22 @@ export interface ReviewQueue {
     actionable: number;
     by_kind: Record<string, number>;
     by_status: Record<string, number>;
+  };
+}
+
+export interface IntegrationData {
+  obsidian: {
+    default_output: string;
+    artifact_notes: number;
+    evidence_notes: number;
+    impact_notes: number;
+    change_notes: number;
+    canvas_files: number;
+    layout: string[];
+  };
+  audit: {
+    llm_events: Array<Record<string, unknown>>;
+    review_sessions: Array<Record<string, unknown>>;
+    latest_replay: Record<string, unknown> | null;
   };
 }

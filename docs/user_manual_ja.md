@@ -269,6 +269,10 @@ specimpact export-obsidian .\vault --report-only
 specimpact gui
 ```
 
+`Obsidian`画面では、出力予定のnote件数とVault構成を確認し、GUIからknowledge graph exportを
+実行できます。LLM transmission auditには安全なmetadataだけが表示されます。失敗した取り込み、
+分析、外部送信承認、Vault出力は`ジョブと監査`画面のRecovery列を確認して再実行してください。
+
 GUI は `127.0.0.1` のみに bind します。
 
 主な画面:

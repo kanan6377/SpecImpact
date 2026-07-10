@@ -34,12 +34,41 @@ from specimpact.graphrag import (
     extract_graph_with_llm,
     is_loopback_url,
     llm_status,
+    redact_payload,
 )
 from specimpact.loaders import load_document
 from specimpact.models import Artifact, Chunk, Entity, Impact, Relation
 from specimpact.store import LocalStore
 
 runner = CliRunner()
+
+
+def test_external_payload_redaction_covers_common_customer_identifiers() -> None:
+    payload = {
+        "text": (
+            "氏名: 山田 太郎\n顧客番号: CUST-123456\n"
+            "email=user@example.test phone=090-1234-5678\n"
+            "url=https://example.test/customer/1 token=sk-1234567890"
+        ),
+        "account_number": "ABCD1234",
+        "design_term": "requestedCreditLimit",
+    }
+
+    redacted = redact_payload(payload)
+
+    serialized = json.dumps(redacted, ensure_ascii=False)
+    for secret in (
+        "山田 太郎",
+        "CUST-123456",
+        "user@example.test",
+        "090-1234-5678",
+        "https://example.test/customer/1",
+        "sk-1234567890",
+        "ABCD1234",
+    ):
+        assert secret not in serialized
+    assert redacted["design_term"] == "requestedCreditLimit"
+    assert serialized.count("[REDACTED]") >= 6
 
 
 def test_llm_config_status_and_loopback_detection(tmp_path: Path) -> None:

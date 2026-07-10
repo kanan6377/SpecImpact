@@ -130,6 +130,20 @@ job履歴へ保存しません。失敗時はstatusと安全な入力要約か�
 設定画面ではprovider/model、local fallback、backend、案件path、最新run、Privacy Doctorを確認します。
 外部LLM送信はpreviewとjob単位の承認が必要で、core側でも再検証します。
 
+### Obsidianと送信監査
+
+`Obsidian`画面は、ローカルJSONL graphをレビュー用Vaultへ変換します。出力前にArtifact、
+Evidence、Impact、Canvasの予定件数と生成ディレクトリを確認できます。`Vaultへ出力`は案件の
+job queueを通り、`Dashboard.md`、Artifact / Evidence / Change / Impact note、Canvasを生成します。
+
+同画面のLLM transmission auditは、provider、model、purpose、item count、redaction有無、
+source/prompt/response hashだけを表示します。prompt本文、設計書本文、evidence quote、
+raw response、API keyはAPIのallowlistにも含めません。Latest review replayはrun、change、
+retrieval、impact件数を表示し、分析を追跡できるようにします。
+
+`ジョブと監査`画面でfailed jobを確認すると、外部送信承認、入力ファイル、LLM設定、Vaultの
+書き込み権限など、actionに応じた復旧手順が表示されます。
+
 ## 7. URL互換性
 
 現行URL:
@@ -140,6 +154,7 @@ job履歴へ保存しません。失敗時はstatusと安全な入力要約か�
 /ui/impact-board
 /ui/graph
 /ui/reviews
+/ui/vault
 /ui/jobs
 /ui/settings
 ```

@@ -31,3 +31,9 @@ of that model download. Install and cache the model ahead of time for offline en
 LLM trace rows store provider, model, purpose, timestamps, hashes, and minimal ID summaries. They
 do not store document bodies, prompt text, raw provider responses, evidence quotes, LLM reasons,
 or API keys.
+
+Before an external provider call, payload redaction covers email addresses, phone numbers, URLs,
+API-key-like values, long numeric identifiers, and labeled person, customer, member, and account
+identifiers. The GUI audit endpoint applies a second allowlist and returns only transmission
+metadata. Redaction reduces accidental disclosure risk but does not replace the required external
+transmission preview and explicit approval.

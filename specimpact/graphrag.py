@@ -460,6 +460,16 @@ def redact_url(url: object) -> str | None:
 
 
 REDACTION_PATTERNS = (
+    re.compile(
+        r"(?:氏名|名前|顧客名|口座名義|full[_ ]?name|customer[_ ]?name)"
+        r"\s*[:：=]\s*[^\r\n,，。]{2,80}",
+        re.I,
+    ),
+    re.compile(
+        r"(?:顧客番号|会員番号|口座番号|customer[_ -]?id|account[_ -]?number)"
+        r"\s*[:：=]\s*[A-Za-z0-9_-]{4,40}",
+        re.I,
+    ),
     re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
     re.compile(r"\b0\d{1,4}[- ]?\d{1,4}[- ]?\d{3,4}\b"),
     re.compile(r"https?://[^\s)]+"),
@@ -477,7 +487,12 @@ def redact_payload(value: Any) -> Any:
         return {
             key: (
                 "[REDACTED]"
-                if re.search(r"key|token|secret|password", str(key), re.I)
+                if re.search(
+                    r"key|token|secret|password|full[_ ]?name|customer[_ ]?name|"
+                    r"customer[_ ]?id|account[_ ]?number|email|phone",
+                    str(key),
+                    re.I,
+                )
                 else redact_payload(item)
             )
             for key, item in value.items()
@@ -690,13 +705,14 @@ def _trace_row(
     payload: dict[str, Any],
     result: BaseModel,
 ) -> dict[str, Any]:
+    redacted_payload = redact_payload(payload)
     return {
         "event": "llm",
         "provider": client.provider,
         "model": client.model,
         "purpose": purpose,
         "item_count": _payload_item_count(payload),
-        "redacted": True,
+        "redacted": redacted_payload != payload,
         "source_hash": _payload_source_hash(payload),
         "chunk_id": chunk_id,
         "prompt_hash": _hash(payload),

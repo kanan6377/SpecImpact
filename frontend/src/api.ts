@@ -2,6 +2,7 @@ import type {
   AliasData,
   DesignDocuments,
   GraphData,
+  IntegrationData,
   Job,
   Overview,
   Project,
@@ -50,6 +51,8 @@ export const api = {
   graph: (projectId: string) => request<GraphData>(`/api/projects/${projectId}/graph`),
   aliases: (projectId: string) => request<AliasData>(`/api/projects/${projectId}/aliases`),
   reviews: (projectId: string) => request<ReviewQueue>(`/api/projects/${projectId}/reviews`),
+  integrations: (projectId: string) =>
+    request<IntegrationData>(`/api/projects/${projectId}/integrations`),
   jobs: (projectId: string) =>
     request<{ jobs: Job[] }>(`/api/projects/${projectId}/jobs`),
   designDocuments: (projectId: string, evidenceIds: string[] = []) => {

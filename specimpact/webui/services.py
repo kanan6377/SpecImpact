@@ -786,6 +786,73 @@ def review_queue_data(project: Project) -> dict[str, Any]:
     }
 
 
+def integration_data(project: Project) -> dict[str, Any]:
+    """Return safe Obsidian preview and replay/audit metadata."""
+    store = store_for(project)
+    try:
+        run_dir = latest_run_dir(store)
+    except ValueError:
+        run_dir = None
+    traces = _safe_audit_rows(store.root / "trace.jsonl")
+    if run_dir is not None:
+        traces.extend(_safe_audit_rows(run_dir / "trace.jsonl"))
+    sessions_path = store.root / "review_sessions.jsonl"
+    sessions = (
+        [
+            {
+                key: row.get(key)
+                for key in (
+                    "run_id",
+                    "change_id",
+                    "llm_provider",
+                    "llm_model",
+                    "retrieved_count",
+                    "impact_count",
+                )
+            }
+            for row in _jsonl_rows(sessions_path)
+        ]
+        if sessions_path.exists()
+        else []
+    )
+    replay = None
+    if run_dir is not None and (run_dir / "review_replay.json").exists():
+        raw_replay = json.loads((run_dir / "review_replay.json").read_text(encoding="utf-8"))
+        replay = {
+            "run_id": raw_replay.get("run_id"),
+            "change_id": raw_replay.get("change_id"),
+            "llm_provider": raw_replay.get("llm_provider"),
+            "llm_model": raw_replay.get("llm_model"),
+            "atom_count": len(raw_replay.get("atom_ids", [])),
+            "retrieved_path_count": len(raw_replay.get("retrieved_paths", [])),
+            "impact_count": len(raw_replay.get("impact_ids", [])),
+        }
+    return {
+        "obsidian": {
+            "default_output": str(Path(project.path) / "obsidian-vault"),
+            "artifact_notes": len(store.read("artifacts", Artifact))
+            + len(store.read("entities", Entity)),
+            "evidence_notes": len(store.read("evidence", Evidence)),
+            "impact_notes": len(json.loads(list_impacts(store))),
+            "change_notes": 1 if run_dir is not None else 0,
+            "canvas_files": 1 if run_dir is not None else 0,
+            "layout": [
+                "SpecImpact/Dashboard.md",
+                "SpecImpact/Artifacts/*.md",
+                "SpecImpact/Evidence/*.md",
+                "SpecImpact/Changes/*.md",
+                "SpecImpact/Impacts/*.md",
+                "SpecImpact/Canvases/*.canvas",
+            ],
+        },
+        "audit": {
+            "llm_events": traces[-100:],
+            "review_sessions": sessions[-50:],
+            "latest_replay": replay,
+        },
+    }
+
+
 def external_preview(project: Project, action: str, params: dict[str, Any]) -> dict[str, Any]:
     store = store_for(project)
     config = load_config(store)
@@ -1047,7 +1114,15 @@ def execute(project: Project, action: str, params: dict[str, Any]) -> dict[str, 
             params.get("reason", ""),
         ).model_dump()
     elif action == "obsidian_export":
-        result = {"output": str(export_obsidian(store, _path(project, params, "path")))}
+        result = {
+            "output": str(
+                export_obsidian(
+                    store,
+                    _path(project, params, "path"),
+                    report_only=bool(params.get("report_only")),
+                )
+            )
+        }
     elif action == "eval":
         result = (
             evaluate_dataset(
@@ -1345,6 +1420,37 @@ def _value_counts(values) -> dict[str, int]:
     for value in values:
         counts[value] = counts.get(value, 0) + 1
     return counts
+
+
+def _jsonl_rows(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def _safe_audit_rows(path: Path) -> list[dict[str, Any]]:
+    allowed = {
+        "event",
+        "provider",
+        "model",
+        "purpose",
+        "item_count",
+        "redacted",
+        "source_hash",
+        "chunk_id",
+        "prompt_hash",
+        "response_hash",
+        "created_at",
+    }
+    return [
+        {key: value for key, value in row.items() if key in allowed}
+        for row in _jsonl_rows(path)
+        if row.get("event") == "llm" and row.get("provider") and row.get("purpose")
+    ]
 
 
 def _health_check(store: LocalStore) -> dict[str, Any] | None:

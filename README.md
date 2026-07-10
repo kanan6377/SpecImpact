@@ -215,10 +215,19 @@ specimpact export-obsidian .\vault --report-only
 
 ## GUI
 
+GUIは、設計書の投入から影響レビュー、証跡確認、Obsidian連携までを一つの案件内で扱う
+Evidence Review Workspaceです。LLMの提案は確定結果にせず、根拠と一緒に人間が判断します。
+
 ```powershell
 python -m pip install -e ".[gui]"
 specimpact gui
 ```
+
+`Obsidian`画面では、現在のArtifact / Evidence / Change / Impact件数と生成先を確認してから、
+linked note、Dataview用frontmatter、CanvasをVaultへ出力できます。同じ画面でLLM送信の
+provider、model、purpose、件数、redaction有無、hashと最新review replayを確認できます。
+prompt本文、設計書本文、raw responseは表示しません。`ジョブと監査`画面は失敗した処理ごとに
+再実行前の確認事項を表示します。
 
 GUI は `127.0.0.1` のみに bind します。
 

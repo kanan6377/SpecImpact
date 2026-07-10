@@ -2,6 +2,7 @@ import cytoscape from "cytoscape";
 import {
   AlertTriangle,
   Bolt,
+  BookOpen,
   CheckCircle2,
   ChevronRight,
   CircleDot,
@@ -31,6 +32,7 @@ import type {
   DesignDocuments,
   GraphData,
   Impact,
+  IntegrationData,
   Job,
   Overview,
   Project,
@@ -47,11 +49,12 @@ const VIEWS: Array<{ id: ViewName; label: string; icon: typeof LayoutDashboard }
   { id: "impact-board", label: "変更レビュー", icon: Bolt },
   { id: "graph", label: "ナレッジグラフ", icon: Network },
   { id: "reviews", label: "レビュー", icon: ClipboardCheck },
+  { id: "vault", label: "Obsidian", icon: BookOpen },
   { id: "jobs", label: "ジョブと監査", icon: ListChecks },
   { id: "settings", label: "設定", icon: Settings },
 ];
 
-const WORKSPACE_VIEWS = VIEWS.filter((view) => ["dashboard", "sources", "impact-board", "graph", "reviews"].includes(view.id));
+const WORKSPACE_VIEWS = VIEWS.filter((view) => ["dashboard", "sources", "impact-board", "graph", "reviews", "vault"].includes(view.id));
 const SYSTEM_VIEWS = VIEWS.filter((view) => ["jobs", "settings"].includes(view.id));
 
 const TERMINAL_STATES = new Set(["succeeded", "failed", "cancelled", "interrupted"]);
@@ -96,6 +99,7 @@ export function App() {
   const [design, setDesign] = useState<DesignDocuments | null>(null);
   const [sources, setSources] = useState<SourceSummary[]>([]);
   const [reviews, setReviews] = useState<ReviewQueue | null>(null);
+  const [integrations, setIntegrations] = useState<IntegrationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -110,8 +114,9 @@ export function App() {
       api.designDocuments(nextProjectId),
       api.sources(nextProjectId),
       api.reviews(nextProjectId),
+      api.integrations(nextProjectId),
     ]);
-    const [overviewResult, reportResult, graphResult, jobsResult, designResult, sourcesResult, reviewsResult] = results;
+    const [overviewResult, reportResult, graphResult, jobsResult, designResult, sourcesResult, reviewsResult, integrationsResult] = results;
     if (overviewResult.status === "rejected") {
       setError(overviewResult.reason instanceof Error ? overviewResult.reason.message : "案件を読み込めませんでした");
       setLoading(false);
@@ -124,6 +129,7 @@ export function App() {
     setDesign(designResult.status === "fulfilled" ? designResult.value : null);
     setSources(sourcesResult.status === "fulfilled" ? sourcesResult.value.sources : []);
     setReviews(reviewsResult.status === "fulfilled" ? reviewsResult.value : null);
+    setIntegrations(integrationsResult.status === "fulfilled" ? integrationsResult.value : null);
     setLoading(false);
   }, []);
 
@@ -211,6 +217,7 @@ export function App() {
               design={design}
               sources={sources}
               reviews={reviews}
+              integrations={integrations}
               onDesignChange={setDesign}
               onRefresh={refresh}
               onNavigate={navigate}
@@ -299,6 +306,7 @@ function ActiveView(props: {
   design: DesignDocuments | null;
   sources: SourceSummary[];
   reviews: ReviewQueue | null;
+  integrations: IntegrationData | null;
   onDesignChange: (design: DesignDocuments) => void;
   onRefresh: () => Promise<void>;
   onNavigate: (view: ViewName) => void;
@@ -308,6 +316,7 @@ function ActiveView(props: {
   if (props.view === "impact-board") return <ImpactWorkspace {...props} />;
   if (props.view === "graph") return <GraphView graph={props.graph} />;
   if (props.view === "reviews") return <ReviewQueueView projectId={props.projectId} queue={props.reviews} onRefresh={props.onRefresh} />;
+  if (props.view === "vault") return <IntegrationsView projectId={props.projectId} data={props.integrations} onRefresh={props.onRefresh} />;
   if (props.view === "jobs") return <JobsView jobs={props.jobs} />;
   return <SettingsView overview={props.overview} />;
 }
@@ -828,8 +837,76 @@ function formatMetadata(value: unknown): string {
   return typeof value === "object" ? JSON.stringify(value) : String(value);
 }
 
+function IntegrationsView({ projectId, data, onRefresh }: { projectId: string; data: IntegrationData | null; onRefresh: () => Promise<void> }) {
+  const [path, setPath] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  useEffect(() => {
+    if (!path && data?.obsidian.default_output) setPath(data.obsidian.default_output);
+  }, [data, path]);
+
+  const exportVault = async () => {
+    if (!path.trim()) {
+      setMessage("Obsidian Vaultの出力先を入力してください。");
+      return;
+    }
+    setBusy(true);
+    setMessage("Obsidian notesを生成しています…");
+    try {
+      const created = await api.enqueue(projectId, "obsidian_export", { path: path.trim(), report_only: false }, false, "settings");
+      const completed = await waitForJob(projectId, created.job.job_id);
+      const summary = typeof completed.result_summary === "object" ? completed.result_summary : null;
+      const result = summary && typeof summary.result === "object" ? summary.result as Record<string, unknown> : null;
+      setMessage(`出力しました: ${String(result?.output ?? path.trim())}`);
+      await onRefresh();
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "Obsidian exportに失敗しました");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const audit = data?.audit.llm_events ?? [];
+  const sessions = data?.audit.review_sessions ?? [];
+  const replay = data?.audit.latest_replay;
+  return <div className="page page-integrations">
+    <ViewHeader eyebrow="Knowledge workspace" title="Obsidianと監査" description="Graphをlinked notesへ出力し、LLM送信とreview replayを安全なmetadataで確認します。" />
+    <div className="integration-grid">
+      <section className="section-panel obsidian-panel">
+        <div className="section-heading"><span><BookOpen size={17} />Obsidian Vault</span></div>
+        <div className="obsidian-content"><div className="obsidian-metrics"><div><span>Artifacts</span><strong>{data?.obsidian.artifact_notes ?? 0}</strong></div><div><span>Evidence</span><strong>{data?.obsidian.evidence_notes ?? 0}</strong></div><div><span>Impacts</span><strong>{data?.obsidian.impact_notes ?? 0}</strong></div><div><span>Canvas</span><strong>{data?.obsidian.canvas_files ?? 0}</strong></div></div><label className="vault-path"><span>出力先</span><input value={path} onChange={(event) => setPath(event.target.value)} placeholder="C:\\path\\to\\vault" /></label><button className="primary-button" disabled={busy} onClick={() => void exportVault()}>{busy ? <LoaderCircle className="spin" size={17} /> : <BookOpen size={17} />}Vaultへ出力</button>{message && <p className="form-message" role="status">{message}</p>}<div className="vault-layout"><strong>生成される構成</strong>{data?.obsidian.layout.map((item) => <code key={item}>{item}</code>)}</div></div>
+      </section>
+      <section className="section-panel replay-panel">
+        <div className="section-heading"><span><RefreshCw size={17} />Latest review replay</span></div>
+        {replay ? <dl className="settings-list">{Object.entries(replay).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{String(value ?? "—")}</dd></div>)}</dl> : <EmptyState icon={RefreshCw} title="Replayはありません" body="LLM-first分析後に再現metadataが表示されます。" compact />}
+      </section>
+    </div>
+    <section className="table-panel audit-panel"><div className="section-heading"><span><ShieldCheck size={17} />LLM transmission audit</span><small>{audit.length} events · {sessions.length} sessions</small></div><table className="jobs-table"><thead><tr><th>Purpose</th><th>Provider / Model</th><th>Items</th><th>Redaction</th><th>Source hash</th><th>Created</th></tr></thead><tbody>{audit.slice().reverse().map((event, index) => <tr key={`${String(event.prompt_hash)}-${index}`}><td>{String(event.purpose ?? "—")}</td><td><strong>{String(event.provider ?? "—")}</strong><small>{String(event.model ?? "—")}</small></td><td>{String(event.item_count ?? "—")}</td><td><StatusTag value={event.redacted ? "redacted" : "unchanged"} /></td><td><code>{String(event.source_hash ?? "—").slice(0, 16)}</code></td><td>{event.created_at ? formatDate(String(event.created_at)) : "—"}</td></tr>)}</tbody></table>{!audit.length && <EmptyState icon={ShieldCheck} title="LLM送信履歴はありません" body="外部送信を含む処理の安全なmetadataだけを表示します。" compact />}</section>
+  </div>;
+}
+
 function JobsView({ jobs }: { jobs: Job[] }) {
-  return <div className="page"><ViewHeader eyebrow="Operations" title="ジョブと監査" description="案件内の更新処理は順番に実行されます。" /><section className="table-panel"><table className="jobs-table"><thead><tr><th>Action</th><th>State</th><th>Input</th><th>Created</th><th>Finished</th></tr></thead><tbody>{jobs.map((job) => <tr key={job.job_id}><td><strong>{job.action}</strong><small>{job.job_id.slice(0, 10)}</small></td><td><StatusTag value={job.state} /></td><td>{job.input_kind}</td><td>{formatDate(job.created_at)}</td><td>{job.finished_at ? formatDate(job.finished_at) : "—"}</td></tr>)}</tbody></table>{!jobs.length && <EmptyState icon={ListChecks} title="ジョブ履歴はありません" body="更新処理を実行すると履歴が保存されます。" />}</section></div>;
+  return <div className="page"><ViewHeader eyebrow="Operations" title="ジョブと監査" description="案件内の更新処理は順番に実行されます。失敗時は復旧方法を確認できます。" /><section className="table-panel"><table className="jobs-table"><thead><tr><th>Action</th><th>State</th><th>Input</th><th>Created</th><th>Finished</th><th>Recovery</th></tr></thead><tbody>{jobs.map((job) => <tr key={job.job_id}><td><strong>{job.action}</strong><small>{job.job_id.slice(0, 10)}</small></td><td><StatusTag value={job.state} /></td><td>{job.input_kind}</td><td>{formatDate(job.created_at)}</td><td>{job.finished_at ? formatDate(job.finished_at) : "—"}</td><td className="recovery-cell">{job.state === "failed" ? recoveryHint(job) : "—"}</td></tr>)}</tbody></table>{!jobs.length && <EmptyState icon={ListChecks} title="ジョブ履歴はありません" body="更新処理を実行すると履歴が保存されます。" />}</section></div>;
+}
+
+function recoveryHint(job: Job): string {
+  const detail = String(job.error_summary ?? "").toLowerCase();
+  if (detail.includes("approval") || detail.includes("external transmission")) {
+    return "外部送信previewを確認し、承認してから再実行してください。";
+  }
+  if (job.action === "ingest_dirty_excel") {
+    return "Excelファイルの場所、拡張子、読み取り権限を確認して再実行してください。";
+  }
+  if (job.action.startsWith("ingest")) {
+    return "入力ファイルとLLM設定を確認してください。外部LLMなしでもlocal fallbackで再実行できます。";
+  }
+  if (job.action.startsWith("analyze")) {
+    return "変更内容、対象設計書、LLM provider設定を確認して再実行してください。";
+  }
+  if (job.action === "obsidian_export") {
+    return "Vault出力先の存在と書き込み権限を確認してください。";
+  }
+  return "入力値と設定を確認し、同じ操作を再実行してください。";
 }
 
 function SettingsView({ overview }: { overview: Overview | null }) {

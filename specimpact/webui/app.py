@@ -35,6 +35,7 @@ from specimpact.webui.services import (
     external_preview,
     graph_data,
     impact_decisions_data,
+    integration_data,
     project_overview,
     report_data,
     review_queue_data,
@@ -45,7 +46,16 @@ from specimpact.webui.services import (
 )
 from specimpact.webui.uploads import save_uploads
 
-PAGES = {"dashboard", "sources", "impact-board", "graph", "reviews", "jobs", "settings"}
+PAGES = {
+    "dashboard",
+    "sources",
+    "impact-board",
+    "graph",
+    "reviews",
+    "vault",
+    "jobs",
+    "settings",
+}
 LEGACY_PAGES = {
     "demo": "dashboard",
     "ingest": "sources",
@@ -336,6 +346,10 @@ def create_app(
     @app.get("/api/projects/{project_id}/freshness")
     def freshness(project_id: str):
         return freshness_data(store_for(_project(app, project_id)))
+
+    @app.get("/api/projects/{project_id}/integrations")
+    def integrations(project_id: str):
+        return integration_data(_project(app, project_id))
 
     @app.post("/api/projects/{project_id}/tool")
     def read_only_tool(project_id: str, body: ToolRequest):

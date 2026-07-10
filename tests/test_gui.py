@@ -30,6 +30,7 @@ from specimpact.webui.services import (
     execute,
     external_preview,
     graph_data,
+    integration_data,
     report_data,
     review_queue_data,
     source_library_data,
@@ -659,6 +660,67 @@ def test_guided_demo_is_copied_and_generates_local_candidates(tmp_path: Path) ->
     assert _lines(store / "entities.jsonl", Entity)
     assert _lines(store / "relations.jsonl", Relation)
     assert _lines(store / "evidence.jsonl", Evidence)
+
+
+def test_integrations_api_exposes_safe_audit_and_exports_obsidian_graph(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "demo"
+    copy_demo(demo_source(), target)
+    project = ProjectRegistry(tmp_path / "registry").add(target)
+    execute(project, "demo_run", {})
+    store = LocalStore(Path(project.path) / ".specimpact")
+    trace = {
+        "event": "llm",
+        "provider": "fake",
+        "model": "fixture",
+        "purpose": "impact_hypothesis",
+        "item_count": 3,
+        "redacted": True,
+        "source_hash": "source-hash",
+        "prompt_hash": "prompt-hash",
+        "response_hash": "response-hash",
+        "created_at": "2026-07-10T00:00:00Z",
+        "prompt": "must never be returned",
+        "result_summary": {"secret": "must never be returned"},
+    }
+    (store.root / "trace.jsonl").write_text(
+        json.dumps({"event": "legacy", "result_summary": "ignored"})
+        + "\n"
+        + json.dumps(trace, ensure_ascii=False)
+        + "\n",
+        encoding="utf-8",
+    )
+
+    data = integration_data(project)
+
+    assert data["obsidian"]["artifact_notes"] > 0
+    assert data["obsidian"]["evidence_notes"] > 0
+    assert "SpecImpact/Dashboard.md" in data["obsidian"]["layout"]
+    event = data["audit"]["llm_events"][0]
+    assert len(data["audit"]["llm_events"]) == 1
+    assert event["redacted"] is True
+    assert "prompt" not in event
+    assert "result_summary" not in event
+
+    vault = tmp_path / "vault"
+    result = execute(
+        project,
+        "obsidian_export",
+        {"path": str(vault), "report_only": False},
+    )
+    assert result["result"]["output"].endswith("Dashboard.md")
+    vault_root = vault / "SpecImpact"
+    assert (vault_root / "Dashboard.md").is_file()
+    assert list((vault_root / "Artifacts").glob("*.md"))
+    assert list((vault_root / "Evidence").glob("*.md"))
+    assert list((vault_root / "Canvases").glob("*.canvas"))
+
+    app = create_app(registry_root=tmp_path / "registry")
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        response = client.get(f"/api/projects/{project.project_id}/integrations")
+    assert response.status_code == 200
+    assert response.json()["obsidian"]["artifact_notes"] > 0
 
 
 def test_packaged_demo_matches_repository_sample() -> None:

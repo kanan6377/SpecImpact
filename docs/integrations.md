@@ -30,6 +30,11 @@ Dataview can list open review statuses.
 
 `--report-only` preserves the legacy behavior and copies only the latest Markdown report.
 
+The GUI `Obsidian` workspace previews note counts and the target layout before enqueueing the same
+export through the project job queue. It also exposes allowlisted LLM transmission metadata and the
+latest review replay summary. Prompt bodies, source text, evidence quotes, raw responses, and API
+keys are not returned by this API.
+
 ## Review Import And Diff
 
 `specimpact review import <json>` stores reviewer decisions locally. Use

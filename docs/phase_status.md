@@ -390,3 +390,31 @@ Completion checklist:
 
 Notes: No patentability conclusion is claimed. Professional patent advice and measured technical
 effect are required before the gate can change.
+
+## v1.2.0 UX Phase 7
+
+Status: complete
+
+Scope:
+- GUI-native Obsidian knowledge-graph export
+- allowlisted LLM transmission audit and review replay
+- expanded external payload redaction
+- failed-job recovery guidance
+
+Completion checklist:
+- [x] Obsidian export preview and project job are available in the GUI
+- [x] Artifact, Evidence, Change, Impact, Dashboard, and Canvas output remains supported
+- [x] Audit API excludes prompt/source/response bodies
+- [x] Review replay exposes bounded reconstruction metadata
+- [x] Common labeled identifiers and sensitive keys are redacted
+- [x] Failed jobs show action-specific recovery guidance
+- [x] Service, API, export, and redaction tests added
+- [x] README and manuals updated
+- [x] `docs/reviews/v1.2.0-ux-phase-7.md` written
+- [x] Full pytest passes (144 tests)
+- [x] Full ruff check passes
+- [x] compileall passes
+- [x] release-check passes (21 cases)
+
+Notes: Obsidian is a review projection. Local JSONL remains the system of record, and external
+transmission still requires explicit approval.
