@@ -2,19 +2,12 @@ from __future__ import annotations
 
 from specimpact.graphrag import LLMClient, client_from_config
 from specimpact.impact_management.change_atoms import ChangeAtom
-from specimpact.impact_management.decision_store import ImpactDecision
 from specimpact.impact_management.impact_retrieval import RetrievedPath
 from specimpact.llm_graph.schemas import ImpactHypothesisLLMResult
-from specimpact.llm_graph.verifier import classify_impact
+from specimpact.llm_graph.verifier import classify_impact, grounding_strength
 from specimpact.models import Artifact, Evidence, Impact, Relation
 from specimpact.store import LocalStore
 
-PRIORITY_STRENGTH = {
-    "must_review": "strong",
-    "should_review": "medium",
-    "may_review": "weak",
-    "hidden": "none",
-}
 PRIORITY_ORDER = {"must_review": 0, "should_review": 1, "may_review": 2, "hidden": 3}
 
 
@@ -29,7 +22,7 @@ def build_impact_hypotheses(
     artifacts = {item.artifact_id: item for item in store.read("artifacts", Artifact)}
     evidence = {item.evidence_id: item for item in store.read("evidence", Evidence)}
     all_relations = store.read("relations", Relation)
-    prior_decisions = _prior_decisions(store)
+    prior_decisions = {}  # Human decisions remain bound to their immutable analysis snapshot.
     client = llm_client or (client_from_config(store) if use_llm else None)
     impacts = []
     for path in retrieved:
@@ -48,7 +41,6 @@ def build_impact_hypotheses(
         )
         if priority == "hidden":
             continue
-        priority = _apply_prior_decision(priority, prior_decisions.get(artifact.artifact_id))
         llm_result = _llm_hypothesis(
             client,
             artifact,
@@ -61,7 +53,8 @@ def build_impact_hypotheses(
         if llm_result and llm_result.review_priority_suggestion:
             priority = _apply_llm_priority(priority, llm_result.review_priority_suggestion)
         evidence_ids = (
-            [evidence_id for evidence_id in llm_result.evidence_ids if evidence_id in evidence]
+            [evidence_id for evidence_id in llm_result.evidence_ids
+             if evidence_id in evidence and evidence_id in path.evidence_ids]
             if llm_result
             else path.evidence_ids
         ) or path.evidence_ids
@@ -71,7 +64,7 @@ def build_impact_hypotheses(
                 display_name=artifact.display_name,
                 artifact_type=artifact.artifact_type,
                 review_priority=priority,
-                evidence_strength=PRIORITY_STRENGTH[priority],
+                evidence_strength=grounding_strength(store, path.relations, evidence_ids),
                 match_type="exact" if priority == "must_review" else "semantic",
                 relation_distance=len(path.relations),
                 rule_assessment="explicit_relation"
@@ -107,24 +100,6 @@ def _best_atom(atoms: list[ChangeAtom], path: RetrievedPath) -> ChangeAtom:
     if len(atoms) == 1:
         return atoms[0]
     raise ValueError("Multiple changes require an operation-bound retrieval path")
-
-
-def _prior_decisions(store: LocalStore) -> dict[str, str]:
-    result: dict[str, str] = {}
-    for decision in store.read("impact_decisions", ImpactDecision):
-        if decision.status in {"accepted", "rejected"}:
-            result[decision.candidate_node_id] = decision.status
-    return result
-
-
-def _apply_prior_decision(priority: str, status: str | None) -> str:
-    if status == "accepted" and priority == "may_review":
-        return "should_review"
-    if status == "rejected" and priority == "must_review":
-        return "should_review"
-    if status == "rejected" and priority == "should_review":
-        return "may_review"
-    return priority
 
 
 def _apply_llm_priority(verifier_priority: str, suggestion: str) -> str:

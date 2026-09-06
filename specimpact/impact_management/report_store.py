@@ -20,6 +20,12 @@ def persist_analysis_report(
     llm_model: str | None,
 ) -> Report:
     run_id = uuid4().hex[:12]
+    from specimpact.impact_management.change_atoms import ChangeAtom
+    from specimpact.semantic.service import markdown_summary, record_analysis
+
+    atoms = [a for a in store.read("change_atoms", ChangeAtom) if a.atom_id in atom_ids
+             and a.change_id == change.change_id]
+    impacts, semantic = record_analysis(store, change, run_id, impacts, atoms)
     report = Report(run_id=run_id, change=change, impacts=impacts)
     run_dir = store.root / "runs" / run_id
     store.write_json(run_dir / "change_request.json", change.model_dump())
@@ -48,8 +54,12 @@ def persist_analysis_report(
     )
     from specimpact.core import render_markdown
 
-    store.write_text(run_dir / "report.md", render_markdown(report, store))
-    ensure_decisions_for_report(store, change.change_id, [impact.artifact_id for impact in impacts])
+    store.write_text(
+        run_dir / "report.md", render_markdown(report, store) + markdown_summary(semantic)
+    )
+    ensure_decisions_for_report(
+        store, change.change_id, [impact.artifact_id for impact in impacts], semantic.analysis_id
+    )
     store.write_text(store.root / "latest_run", run_id)
     _append_review_session(
         store,

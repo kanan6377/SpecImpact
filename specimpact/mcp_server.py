@@ -199,10 +199,14 @@ def create_mcp_server(project_path: Path | str):
         change_id: str,
         ctx: Context,
         sample_with_host: bool = True,
+        offset: int = 0,
+        limit: int = 100,
     ) -> dict:
         """Prepare candidate subgraphs and Evidence for host impact analysis."""
         runtime.require_initialized()
-        prepared = runtime.host_workflow.prepare_impact_context(change_id)
+        prepared = runtime.host_workflow.prepare_impact_context(
+            change_id, offset=offset, limit=limit
+        )
         prepared = await _elicit_and_authorize(runtime, prepared, ctx)
         return (
             await _sample_prepared(

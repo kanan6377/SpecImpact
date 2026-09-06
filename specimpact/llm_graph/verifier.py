@@ -1,7 +1,23 @@
 from __future__ import annotations
 
+import re
+
 from specimpact.models import Evidence, Relation
 from specimpact.store import LocalStore
+
+
+def grounding_strength(store: LocalStore, path: list[Relation], evidence_ids: list[str]) -> str:
+    """Describe persisted path grounding independently of review priority."""
+    available = {e.evidence_id for e in store.read("evidence", Evidence)}
+    selected = set(evidence_ids) & available
+    if not path or not selected:
+        return "none"
+    if all(r.polarity == "explicit" and r.status == "confirmed"
+           and set(r.evidence_ids) & selected for r in path):
+        return "strong"
+    if any(r.polarity == "explicit" and set(r.evidence_ids) & selected for r in path):
+        return "medium"
+    return "weak"
 
 
 def classify_impact(
@@ -15,12 +31,15 @@ def classify_impact(
     artifact_type: str | None = None,
 ) -> tuple[str, str]:
     evidence = {item.evidence_id: item for item in store.read("evidence", Evidence)}
-    selected = [evidence[item] for item in evidence_ids if item in evidence]
+    allowed = {eid for relation in relation_path for eid in relation.evidence_ids}
+    selected = [evidence[item] for item in evidence_ids if item in evidence and item in allowed]
     if not relation_path or not selected:
         return "hidden", "No graph path with persisted evidence was found."
     text = "\n".join(item.quote for item in selected)
     direct_term = any(term and term in text for term in target_terms)
-    direct_before = bool(before and before in text)
+    direct_before = bool(before and re.search(
+        rf"(?<![0-9]){re.escape(before)}(?![0-9])", text
+    ))
     has_explicit_path = any(relation.polarity == "explicit" for relation in relation_path)
     all_inferred = all(relation.polarity == "inferred" for relation in relation_path)
     compatible = _property_compatible(change_property, artifact_type)

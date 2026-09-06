@@ -1,5 +1,13 @@
 # Phase Status
 
+## Specification kernel phase 4
+
+Status: complete; pytest 288 passed / 1 skipped, ruff passed
+
+Common CLI/Host/Application report analysis, operation-bound paginated Host submissions,
+stale-context rejection, immutable review provenance and inspection/replay/exchange CLI.
+Review: `docs/reviews/kernel-phase-4.md`.
+
 ## Specification kernel phase 3
 
 Status: complete; pytest 280 passed / 1 skipped, ruff passed
@@ -735,6 +743,7 @@ Corpus.
 Future-phase leakage check: no automatic design-document editing, Neo4j requirement, new Web UI,
 Excel/PDF/docx conversion, SharePoint/Microsoft Graph, NotebookLM, M365 Copilot remote MCP, or
 VS Code custom editor was introduced.
+
 
 
 

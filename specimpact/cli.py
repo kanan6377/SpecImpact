@@ -88,6 +88,7 @@ changes_app = typer.Typer(help="List parsed changes.")
 impacts_app = typer.Typer(help="Manage impact review decisions.")
 agent_app = typer.Typer(help="Install and diagnose Agent host integrations.")
 benchmark_app = typer.Typer(help="Run reproducible public-corpus compatibility benchmarks.")
+analysis_app = typer.Typer(help="Inspect, replay and exchange immutable specification analyses.")
 
 
 def _version_callback(value: bool) -> None:
@@ -123,6 +124,69 @@ app.add_typer(changes_app, name="changes")
 app.add_typer(impacts_app, name="impacts")
 app.add_typer(agent_app, name="agent")
 app.add_typer(benchmark_app, name="benchmark")
+app.add_typer(analysis_app, name="analysis")
+
+
+def _analysis_identifier(identifier: str) -> str:
+    if identifier == "latest":
+        return _call(latest_run_dir, LocalStore()).name
+    return identifier
+
+
+@analysis_app.command("show")
+def analysis_show(identifier: str = "latest") -> None:
+    """Show typed cases, assertions and coverage from the authoritative local store."""
+    from specimpact.semantic.repository import AnalysisRepository
+
+    _, _, result = _call(AnalysisRepository(LocalStore().root).load,
+                         _analysis_identifier(identifier))
+    typer.echo(result.model_dump_json(indent=2))
+
+
+@analysis_app.command("replay")
+def analysis_replay(identifier: str = "latest") -> None:
+    """Recompute a saved snapshot and verify equality without calling an LLM."""
+    from specimpact.semantic.repository import AnalysisRepository
+
+    result = _call(AnalysisRepository(LocalStore().root).replay,
+                   _analysis_identifier(identifier))
+    typer.echo(f"Verified {result.analysis_id}")
+
+
+@analysis_app.command("export")
+def analysis_export(path: Path, identifier: str = "latest") -> None:
+    """Export a local snapshot including Evidence quotes; treat it as source material."""
+    from specimpact.semantic.repository import AnalysisRepository
+
+    payload = _call(AnalysisRepository(LocalStore().root).export,
+                    _analysis_identifier(identifier))
+    LocalStore().write_json(path, payload)
+    typer.echo(str(path))
+
+
+@analysis_app.command("import")
+def analysis_import(path: Path) -> None:
+    """Validate and import an exported snapshot without changing legacy graph files."""
+    from specimpact.semantic.repository import AnalysisRepository, read_export
+
+    result = _call(AnalysisRepository(LocalStore().root).import_snapshot, _call(read_export, path))
+    typer.echo(result.analysis_id)
+
+
+@analysis_app.command("decide")
+def analysis_decide(
+    case_id: str, status: str, actor: str = typer.Option(...),
+    reason: str = typer.Option(...), identifier: str = "latest",
+) -> None:
+    """Append an explicit human decision bound to one immutable analysis case."""
+    from specimpact.semantic.repository import AnalysisRepository, DecisionEvent
+
+    repo = AnalysisRepository(LocalStore().root)
+    _, _, result = _call(repo.load, _analysis_identifier(identifier))
+    event = _call(DecisionEvent, analysis_id=result.analysis_id, case_id=case_id,
+                  actor=actor, status=status, reason=reason)
+    _call(repo.decide, event)
+    typer.echo(event.event_id)
 
 
 @benchmark_app.command("fetch-fintan")

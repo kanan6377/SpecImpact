@@ -164,3 +164,37 @@ def test_multiple_paths_and_contradictory_specifications_survive():
     assert len(case.relation_paths) == 2
     assert len(case.assertion_ids) == 2
     assert "contradictory_source_assertions" in case.verification.unresolved
+
+
+def test_confirmed_neighbor_does_not_validate_an_unconfirmed_property():
+    data = source()
+    data.relations[0].status = "unconfirmed"
+    data.evidence.append(
+        data.evidence[0].model_copy(
+            update={
+                "evidence_id": "mention-only",
+                "quote": "name is mentioned here",
+            }
+        )
+    )
+    data.relations.append(
+        data.relations[0].model_copy(
+            update={
+                "relation_id": "mention-rel",
+                "relation_type": "MENTIONS",
+                "status": "confirmed",
+                "evidence_ids": ["mention-only"],
+            }
+        )
+    )
+    result = analyze(data).cases[0]
+    assert result.outcome == "unresolved"
+    assert "unconfirmed_property_assertion" in result.verification.unresolved
+
+
+def test_change_unit_conversion_requires_review():
+    data = source()
+    data.operations[0].before.unit = "bytes"
+    result = analyze(data).cases[0]
+    assert result.outcome == "unresolved"
+    assert "change_unit_conversion_not_verified" in result.verification.unresolved

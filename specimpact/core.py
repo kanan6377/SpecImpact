@@ -169,6 +169,9 @@ def analyze_change(
         )
         llm_trace.extend(_rerank_impacts(store, body, impacts, client))
     run_id = uuid4().hex[:12]
+    from specimpact.semantic.service import markdown_summary, record_analysis
+
+    impacts, semantic = record_analysis(store, change, run_id, impacts)
     report = Report(run_id=run_id, change=change, impacts=impacts)
     run_dir = store.root / "runs" / run_id
     store.write_json(run_dir / "change_request.json", change.model_dump())
@@ -183,8 +186,15 @@ def analyze_change(
     report_json = {"run_id": run_id, "change": change.model_dump(), **report.grouped()}
     validate_report(report_json)
     store.write_json(run_dir / "report.json", report_json)
-    store.write_text(run_dir / "report.md", render_markdown(report, store))
+    store.write_text(
+        run_dir / "report.md", render_markdown(report, store) + markdown_summary(semantic)
+    )
     _write_trace(store, run_dir, changed_entities, impacts, rejected, suggestions, llm_trace)
+    from specimpact.impact_management.decision_store import ensure_decisions_for_report
+
+    ensure_decisions_for_report(
+        store, change.change_id, [impact.artifact_id for impact in impacts], semantic.analysis_id
+    )
     store.write_text(store.root / "latest_run", run_id)
     return report
 
@@ -449,6 +459,7 @@ def render_markdown(report: Report, store: LocalStore) -> str:
                     f"- Evidence strength: {impact.evidence_strength}",
                     f"- Rule assessment: {impact.rule_assessment}",
                     f"- Relation statuses: {', '.join(impact.relation_statuses) or 'direct_match'}",
+                    *(f"- Warning: {warning}" for warning in impact.warnings),
                     *(
                         [
                             f"- LLM judgement: {impact.llm_judgement}",
@@ -464,6 +475,9 @@ def render_markdown(report: Report, store: LocalStore) -> str:
             )
             if impact.evidence_ids:
                 for evidence_id in impact.evidence_ids:
+                    if evidence_id not in evidence:
+                        lines.append(f"  - Missing evidence: {evidence_id}")
+                        continue
                     item = evidence[evidence_id]
                     lines.append(
                         f"  - {item.source_location.file}:"

@@ -1,5 +1,23 @@
 # SpecImpact CLI リファレンス
 
+## 仕様分析の履歴
+
+`analyze`と`analyze --llm-first`は共通の仕様分析カーネルの結果も保存します。
+対応するラベル付き長さ制約は既存レポートに反映し、それ以外は
+`legacy_candidate_not_a_verified_constraint_comparison`を付けたレビュー候補として保持します。
+
+```powershell
+specimpact analysis show
+specimpact analysis replay
+specimpact analysis export .\analysis-snapshot.json
+specimpact analysis import .\analysis-snapshot.json
+specimpact analysis decide <case-id> accepted --actor reviewer --reason "Checked original"
+```
+
+`show`、`replay`、`export`は分析IDまたはreport IDを任意指定できます（既定は`latest`）。
+exportには原典のEvidence引用が含まれます。設計書と同じ扱いで保管してください。
+importは再検証してから保存し、従来のJSONLグラフを書き換えません。
+
 このページは、通常利用で使うCLIコマンドの早見表です。最初の操作手順は
 [user_manual_ja.md](user_manual_ja.md) を参照してください。
 

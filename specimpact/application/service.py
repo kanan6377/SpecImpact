@@ -517,8 +517,14 @@ def source_library_data(project: Project) -> dict[str, Any]:
 
 
 def report_data(project: Project) -> dict[str, Any]:
+    from specimpact.semantic.service import analysis_summary
+
     store = store_for(project)
     report = json.loads((latest_run_dir(store) / "report.json").read_text(encoding="utf-8"))
+    report["specification_analysis"] = analysis_summary(store, report["run_id"])
+    host_coverage = latest_run_dir(store) / "host_submission_coverage.json"
+    if host_coverage.exists():
+        report["host_submission_coverage"] = json.loads(host_coverage.read_text(encoding="utf-8"))
     evidence = {item.evidence_id: item for item in store.read("evidence", Evidence)}
     for group in ("must_review", "should_review", "may_review", "hidden"):
         for impact in report.get(group, []):

@@ -107,14 +107,14 @@ class AliasCandidate(BaseModel):
     relation_context: list[str] = Field(default_factory=list)
     evidence_quotes: list[str] = Field(default_factory=list)
     llm_reason: str = ""
-    confidence_label: Literal["high", "medium", "low", "unknown"] = "unknown"
+    unresolved_questions: list[str] = Field(default_factory=list)
 
 
 class AliasJudgement(BaseModel):
     judgement: Literal["same", "related", "different", "unsure"] = "unsure"
     reason: str = ""
     evidence_ids: list[str] = Field(default_factory=list)
-    confidence_label: Literal["high", "medium", "low", "unknown"] = "unknown"
+    unresolved_questions: list[str] = Field(default_factory=list)
 
 
 class ImpactHypothesisLLMResult(BaseModel):

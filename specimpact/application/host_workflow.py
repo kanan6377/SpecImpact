@@ -26,17 +26,12 @@ from specimpact.impact_management.impact_retrieval import retrieve_impacts
 from specimpact.impact_management.report_store import persist_analysis_report
 from specimpact.llm_graph.prompts import DIRTY_EXCEL_FEW_SHOTS, prompt_for_region_type
 from specimpact.llm_graph.schemas import GraphProposal, RegionExtractionResult
-from specimpact.llm_graph.verifier import classify_impact
+from specimpact.llm_graph.verifier import classify_impact, grounding_strength
 from specimpact.models import Artifact, ChangeRequest, Evidence, Impact, Relation
+from specimpact.semantic.repository import workspace_fingerprint
 from specimpact.store import LocalStore
 
 PRIORITY_ORDER = {"must_review": 0, "should_review": 1, "may_review": 2, "hidden": 3}
-PRIORITY_STRENGTH = {
-    "must_review": "strong",
-    "should_review": "medium",
-    "may_review": "weak",
-    "hidden": "none",
-}
 
 
 class HostImpactHypothesis(BaseModel):
@@ -101,7 +96,15 @@ class HostWorkflow:
             },
         )
 
-    def prepare_impact_context(self, change_id: str) -> PreparedContext:
+    def prepare_impact_context(
+        self, change_id: str, *, offset: int = 0, limit: int = 100,
+    ) -> PreparedContext:
+        if offset < 0 or not 1 <= limit <= 100:
+            raise ValueError("offset must be non-negative and limit must be between 1 and 100")
+        with ProjectWriteLock(self.store.root):
+            return self._prepare_impact_context(change_id, offset, limit)
+
+    def _prepare_impact_context(self, change_id: str, offset: int, limit: int) -> PreparedContext:
         self._require_initialized()
         atoms = [
             item
@@ -113,11 +116,12 @@ class HostWorkflow:
         artifacts = {item.artifact_id: item for item in self.store.read("artifacts", Artifact)}
         evidence = {item.evidence_id: item for item in self.store.read("evidence", Evidence)}
         candidates = []
-        for path in retrieve_impacts(self.store, atoms):
+        for path in sorted(retrieve_impacts(self.store, atoms),
+                           key=lambda p: (p.atom_id or "", p.node_id)):
             artifact = artifacts.get(path.node_id)
             if not artifact:
                 continue
-            atom = atoms[0]
+            atom = next(a for a in atoms if a.atom_id == path.atom_id)
             candidates.append(
                 {
                     "candidate_node_id": artifact.artifact_id,
@@ -137,10 +141,15 @@ class HostWorkflow:
                     ],
                 }
             )
+        total = len(candidates)
+        candidates = candidates[offset:offset + limit]
         payload = {
             "change_id": change_id,
             "change_atoms": [item.model_dump() for item in atoms],
-            "candidates": candidates[:100],
+            "candidates": candidates,
+            "candidate_page": {"offset": offset, "limit": limit, "total": total,
+                               "next_offset": offset + limit if offset + limit < total else None,
+                               "partial": offset > 0 or offset + limit < total},
             "output_schema": HostImpactSubmission.model_json_schema(),
         }
         session = self._session_record(change_id)
@@ -164,6 +173,7 @@ class HostWorkflow:
                 "change_id": change_id,
                 "title": session.get("title", change_id),
                 "change_path": session.get("change_path", ""),
+                "workspace_fingerprint": workspace_fingerprint(self.store, atoms),
             },
         )
 
@@ -310,7 +320,8 @@ class HostWorkflow:
             self._log_warning(context, "change_id_mismatch")
             raise ValueError("Host Impact output used an unexpected change_id")
         candidates = {
-            item["candidate_node_id"]: item for item in context.payload.get("candidates", [])
+            (item["candidate_node_id"], item["atom_id"]): item
+            for item in context.payload.get("candidates", [])
         }
         atoms = {
             item.atom_id: item
@@ -320,13 +331,22 @@ class HostWorkflow:
         persisted_evidence = {
             item.evidence_id for item in self.store.read("evidence", Evidence)
         }
+        seen = set()
         for hypothesis in submission.hypotheses:
-            candidate = candidates.get(hypothesis.candidate_node_id)
+            if not hypothesis.atom_id:
+                matching = [key for key in candidates if key[0] == hypothesis.candidate_node_id]
+                if len(matching) == 1:
+                    hypothesis.atom_id = matching[0][1]
+            key = (hypothesis.candidate_node_id, hypothesis.atom_id)
+            candidate = candidates.get(key)
             if not candidate:
                 self._log_warning(context, "unknown_candidate_node")
                 raise ValueError(
-                    f"Unknown prepared candidate node: {hypothesis.candidate_node_id}"
+                    f"Unknown or ambiguous prepared candidate/atom: {key}"
                 )
+            if key in seen:
+                raise ValueError("Duplicate candidate/atom hypothesis")
+            seen.add(key)
             if hypothesis.atom_id and hypothesis.atom_id not in atoms:
                 self._log_warning(context, "unknown_change_atom")
                 raise ValueError(f"Unknown Change Atom: {hypothesis.atom_id}")
@@ -345,7 +365,38 @@ class HostWorkflow:
                 )
 
         def operation() -> dict[str, Any]:
-            impacts = self._verified_impacts(submission, candidates, atoms)
+            current_atoms = [a for a in self.store.read("change_atoms", ChangeAtom)
+                             if a.change_id == change_id]
+            if record.get("workspace_fingerprint") != workspace_fingerprint(
+                self.store, current_atoms
+            ):
+                raise ValueError("Prepared analysis is stale; prepare the impact context again")
+            # Retain prior pages for this exact input snapshot; never borrow another run's advice.
+            hypothesis_path = self.store.root / "host_impact_results.jsonl"
+            saved = self._read_jsonl(hypothesis_path)
+            fingerprint = record["workspace_fingerprint"]
+            for hypothesis in submission.hypotheses:
+                one = HostImpactSubmission(change_id=change_id, hypotheses=[hypothesis])
+                verified = self._verified_impacts(one, candidates, atoms)[0]
+                saved = [r for r in saved if not (
+                    r["fingerprint"] == fingerprint
+                    and r["artifact_id"] == hypothesis.candidate_node_id
+                    and r["atom_id"] == hypothesis.atom_id
+                )]
+                saved.append({"fingerprint": fingerprint,
+                              "artifact_id": hypothesis.candidate_node_id,
+                              "atom_id": hypothesis.atom_id, "impact": verified.model_dump()})
+            self._write_jsonl(hypothesis_path, saved)
+            advice = {(r["artifact_id"], r["atom_id"]): Impact.model_validate(r["impact"])
+                      for r in saved if r["fingerprint"] == fingerprint}
+            impacts = []
+            pending = []
+            for path in retrieve_impacts(self.store, current_atoms):
+                key = (path.node_id, path.atom_id)
+                if key in advice:
+                    impacts.append(advice[key])
+                else:
+                    pending.append({"artifact_id": path.node_id, "atom_id": path.atom_id})
             change_path = Path(record["change_path"])
             body = change_path.read_text(encoding="utf-8") if change_path.is_file() else ""
             change = ChangeRequest(
@@ -373,6 +424,15 @@ class HostWorkflow:
                 llm_provider=f"host:{self.host.host}",
                 llm_model=self.host.model or "unknown",
             )
+            run_dir = self.store.root / "runs" / report.run_id
+            self.store.write_json(run_dir / "host_submission_coverage.json", {
+                "submitted": len(advice), "pending": pending,
+                "total": len(advice) + len(pending), "partial": bool(pending),
+            })
+            if pending:
+                report_path = run_dir / "report.md"
+                self.store.write_text(report_path, report_path.read_text(encoding="utf-8") +
+                                      f"\n- Host hypotheses pending: {len(pending)}\n")
             self._upsert_session(
                 change_id=change_id,
                 title=record["title"],
@@ -581,17 +641,16 @@ class HostWorkflow:
     def _verified_impacts(
         self,
         submission: HostImpactSubmission,
-        candidates: dict[str, dict[str, Any]],
+        candidates: dict[tuple[str, str], dict[str, Any]],
         atoms: dict[str, ChangeAtom],
     ) -> list[Impact]:
         artifacts = {item.artifact_id: item for item in self.store.read("artifacts", Artifact)}
         relations = {item.relation_id: item for item in self.store.read("relations", Relation)}
-        default_atom = next(iter(atoms.values()))
         impacts = []
         for hypothesis in submission.hypotheses:
-            candidate = candidates[hypothesis.candidate_node_id]
+            candidate = candidates[(hypothesis.candidate_node_id, hypothesis.atom_id)]
             artifact = artifacts[hypothesis.candidate_node_id]
-            atom = atoms.get(hypothesis.atom_id or "", default_atom)
+            atom = atoms[hypothesis.atom_id]
             relation_path = [
                 relations[relation_id]
                 for relation_id in candidate["relation_ids"]
@@ -615,7 +674,9 @@ class HostWorkflow:
                     display_name=artifact.display_name,
                     artifact_type=artifact.artifact_type,
                     review_priority=priority,
-                    evidence_strength=PRIORITY_STRENGTH[priority],
+                    evidence_strength=grounding_strength(
+                        self.store, relation_path, hypothesis.evidence_ids
+                    ),
                     match_type="exact" if priority == "must_review" else "semantic",
                     relation_distance=len(relation_path),
                     rule_assessment=(

@@ -90,7 +90,7 @@ def suggest_alias_candidates(
                 relation_context=relation_context,
                 evidence_quotes=evidence_quotes,
                 llm_reason=judgement.reason if client else "",
-                confidence_label=judgement.confidence_label,
+                unresolved_questions=judgement.unresolved_questions,
             )
         )
     store.write(

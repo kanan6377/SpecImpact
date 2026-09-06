@@ -288,6 +288,20 @@ def _case(source, op, seed, artifact, assertions, paths, identity_resolved):
         unresolved.append("unconfirmed_or_inferred_path")
     if not direct:
         unresolved.append("dependency_transformation_not_verified")
+    if assertions and not all(
+        any(
+            len(path) == 1
+            and path[0].relation_type in DIRECT
+            and path[0].status == "confirmed"
+            and path[0].polarity == "explicit"
+            and assertion.anchor.evidence_id in path[0].evidence_ids
+            for path in paths
+        )
+        for assertion in assertions
+    ):
+        unresolved.append("unconfirmed_property_assertion")
+    if op.before and op.after and (op.before.unit == "unknown" or op.before.unit != op.after.unit):
+        unresolved.append("change_unit_conversion_not_verified")
     if op.conditions or any(a.conditions for a in assertions):
         unresolved.append("conditions_require_review")
     values = {(a.value.value, a.value.unit) for a in assertions}

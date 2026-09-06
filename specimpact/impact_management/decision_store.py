@@ -15,6 +15,10 @@ class ImpactDecision(BaseModel):
     status: str = "unreviewed"
     reason: str = ""
     updated_at: str = Field(default_factory=utc_now)
+    analysis_id: str | None = None
+    decision_analysis_id: str | None = None
+    case_ids: list[str] = Field(default_factory=list)
+    needs_revalidation: bool = False
 
 
 STATUSES = {
@@ -49,6 +53,17 @@ def set_impact_status(
     decision.status = status
     decision.reason = reason
     decision.updated_at = utc_now()
+    if decision.analysis_id and status != "unreviewed":
+        from specimpact.semantic.repository import AnalysisRepository, DecisionEvent
+
+        repository = AnalysisRepository(store.root)
+        for case_id in decision.case_ids:
+            repository.decide(DecisionEvent(
+                analysis_id=decision.analysis_id, case_id=case_id, actor="local-user",
+                status=status, reason=reason or "Explicit local review action",
+            ))
+        decision.decision_analysis_id = decision.analysis_id
+        decision.needs_revalidation = False
     store.write("impact_decisions", decisions)
     return decision
 
@@ -64,6 +79,7 @@ def ensure_decisions_for_report(
     store: LocalStore,
     change_id: str,
     candidate_ids: list[str],
+    analysis_id: str | None = None,
 ) -> None:
     decisions = store.read("impact_decisions", ImpactDecision)
     existing = {item.impact_id for item in decisions}
@@ -77,6 +93,18 @@ def ensure_decisions_for_report(
                     candidate_node_id=candidate_id,
                 )
             )
+    if analysis_id:
+        from specimpact.semantic.repository import AnalysisRepository
+
+        _, _, analysis = AnalysisRepository(store.root).load(analysis_id)
+        for decision in decisions:
+            if decision.change_id == change_id and decision.candidate_node_id in candidate_ids:
+                decision.analysis_id = analysis_id
+                decision.case_ids = [c.case_id for c in analysis.cases
+                                     if c.artifact_id == decision.candidate_node_id]
+                decision.needs_revalidation = decision.status != "unreviewed" and (
+                    decision.decision_analysis_id != analysis_id
+                )
     store.write("impact_decisions", decisions)
 
 
