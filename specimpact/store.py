@@ -78,7 +78,20 @@ class LocalStore:
             if os.path.exists(temp_name):
                 os.unlink(temp_name)
 
-    def merge_graph(
+    def merge_graph(self, **records) -> None:
+        from specimpact.application.security import ProjectWriteLock
+
+        with ProjectWriteLock(self.root):
+            self._validate_document_identities(records.get("documents", []))
+            for relation in records.get("relations", []):
+                validate_relation(relation.model_dump())
+            for evidence in records.get("evidence", []):
+                validate_evidence(evidence.model_dump())
+            self.write_json(self.root / "graph_merge_state.json", {"status": "writing"})
+            self._merge_graph(**records)
+            self.write_json(self.root / "graph_merge_state.json", {"status": "ready"})
+
+    def _merge_graph(
         self,
         *,
         documents: list[Document],

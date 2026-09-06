@@ -1,5 +1,12 @@
 # Phase Status
 
+## Specification kernel phase 3
+
+Status: complete; pytest 280 passed / 1 skipped, ruff passed
+
+Transactional SQLite analysis snapshots, immutable runs, replay/export/import and version-bound
+decision events; process-locked capture. Review: `docs/reviews/kernel-phase-3.md`.
+
 ## Specification kernel phase 2
 
 Status: complete; pytest 275 passed / 1 skipped, ruff passed
@@ -728,6 +735,7 @@ Corpus.
 Future-phase leakage check: no automatic design-document editing, Neo4j requirement, new Web UI,
 Excel/PDF/docx conversion, SharePoint/Microsoft Graph, NotebookLM, M365 Copilot remote MCP, or
 VS Code custom editor was introduced.
+
 
 
 

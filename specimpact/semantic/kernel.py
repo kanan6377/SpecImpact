@@ -253,12 +253,16 @@ def _case(source, op, seed, artifact, assertions, paths, identity_resolved):
     evidence = {e.evidence_id: e for e in source.evidence}
     documents = {d.document_id: d for d in source.documents}
     evidence_ids = sorted({eid for path in paths for edge in path for eid in edge.evidence_ids})
-    references = bool(evidence_ids) and all(
-        eid in evidence
-        and evidence[eid].document_id in documents
-        and bool(documents[evidence[eid].document_id].hash)
-        and eid not in source.stale_evidence_ids
-        for eid in evidence_ids
+    references = (
+        "incomplete_graph_merge" not in source.source_gaps
+        and bool(evidence_ids)
+        and all(
+            eid in evidence
+            and evidence[eid].document_id in documents
+            and bool(documents[evidence[eid].document_id].hash)
+            and eid not in source.stale_evidence_ids
+            for eid in evidence_ids
+        )
     )
     # An edge is grounded only by its own supplied evidence, not another path's quote.
     grounded = any(

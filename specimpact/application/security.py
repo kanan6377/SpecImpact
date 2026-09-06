@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import os
+import threading
 import time
 from pathlib import Path
 from types import TracebackType
+
+_local_locks = threading.local()
 
 
 class WorkspaceBoundary:
@@ -31,8 +34,16 @@ class ProjectWriteLock:
         self.path = Path(store_root) / "write.lock"
         self.timeout = timeout
         self._handle = None
+        self._nested = False
+        self._key = str(self.path.resolve())
 
     def __enter__(self) -> ProjectWriteLock:
+        held = getattr(_local_locks, "held", {})
+        _local_locks.held = held
+        if held.get(self._key, 0):
+            held[self._key] += 1
+            self._nested = True
+            return self
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._handle = self.path.open("a+b")
         self._handle.seek(0, os.SEEK_END)
@@ -43,6 +54,7 @@ class ProjectWriteLock:
         while True:
             try:
                 self._acquire()
+                held[self._key] = 1
                 return self
             except OSError as error:
                 if time.monotonic() >= deadline:
@@ -59,6 +71,11 @@ class ProjectWriteLock:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        held = getattr(_local_locks, "held", {})
+        if self._nested:
+            held[self._key] -= 1
+            self._nested = False
+            return
         if self._handle is None:
             return
         try:
@@ -66,6 +83,7 @@ class ProjectWriteLock:
         finally:
             self._handle.close()
             self._handle = None
+            held.pop(self._key, None)
 
     def _acquire(self) -> None:
         assert self._handle is not None
