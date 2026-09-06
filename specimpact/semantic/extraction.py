@@ -53,14 +53,22 @@ def operation_from_atom(atom: ChangeAtom) -> ChangeOperation:
             unresolved.append(f"{name}_not_a_typed_length")
         else:
             explicit_unit = getattr(atom, f"{name}_unit")
-            values.append(LengthValue(value=int(match[1]), unit=(
-                explicit_unit if explicit_unit != "unknown" else unit_for(raw or "")
-            )))
+            values.append(
+                LengthValue(
+                    value=int(match[1]),
+                    unit=(explicit_unit if explicit_unit != "unknown" else unit_for(raw or "")),
+                )
+            )
     return ChangeOperation(
-        operation_id=atom.atom_id, change_id=atom.change_id, target_terms=atom.target_terms,
-        scope=atom.scope, property="max_length" if atom.property == "length" else (
-            atom.property or atom.operation
-        ), before=values[0], after=values[1], conditions=atom.conditions, unresolved=unresolved,
+        operation_id=atom.atom_id,
+        change_id=atom.change_id,
+        target_terms=atom.target_terms,
+        scope=atom.scope,
+        property="max_length" if atom.property == "length" else (atom.property or atom.operation),
+        before=values[0],
+        after=values[1],
+        conditions=atom.conditions,
+        unresolved=unresolved,
     )
 
 
@@ -69,17 +77,24 @@ def anchor_for(evidence: Evidence, documents: dict[str, Document]) -> SourceAnch
     location = evidence.source_location
     sheet = re.search(r"\[([^\[\]]+)!([A-Z]+[0-9]+(?::[A-Z]+[0-9]+)?)\]", evidence.quote)
     return SourceAnchor(
-        evidence_id=evidence.evidence_id, document_id=evidence.document_id,
-        source_hash=doc.hash if doc else "", quote_hash=content_id("quote", evidence.quote),
-        file=location.file, line_start=max(1, location.line_start),
-        line_end=max(1, location.line_end), sheet=sheet[1] if sheet else None,
-        cells=sorted(set(re.findall(r"\b[A-Z]{1,3}[1-9][0-9]*(?::[A-Z]+[0-9]+)?\b",
-                                    evidence.quote))),
+        evidence_id=evidence.evidence_id,
+        document_id=evidence.document_id,
+        source_hash=doc.hash if doc else "",
+        quote_hash=content_id("quote", evidence.quote),
+        file=location.file,
+        line_start=max(1, location.line_start),
+        line_end=max(1, location.line_end),
+        sheet=sheet[1] if sheet else None,
+        cells=sorted(
+            set(re.findall(r"\b[A-Z]{1,3}[1-9][0-9]*(?::[A-Z]+[0-9]+)?\b", evidence.quote))
+        ),
     )
 
 
 def extract_assertions(
-    entities: list[Entity], relations: list[Relation], evidence: list[Evidence],
+    entities: list[Entity],
+    relations: list[Relation],
+    evidence: list[Evidence],
     documents: list[Document],
 ) -> tuple[list[Mention], list[SpecAssertion]]:
     docs = {d.document_id: d for d in documents}
@@ -98,20 +113,26 @@ def extract_assertions(
                 continue
             mention = Mention(
                 mention_id=content_id("mention", [ev.evidence_id, entity.entity_id]),
-                text=entity.display_name, entity_id=entity.entity_id,
-                scope=entity.scope, anchor=anchor,
+                text=entity.display_name,
+                entity_id=entity.entity_id,
+                scope=entity.scope,
+                anchor=anchor,
             )
             found_mentions[mention.mention_id] = mention
-            related = [r for r in by_evidence.get(ev.evidence_id, [])
-                       if r.target_id == entity.entity_id]
+            related = [
+                r for r in by_evidence.get(ev.evidence_id, []) if r.target_id == entity.entity_id
+            ]
             for row, header in rows:
                 if not any(mentions(row, n) for n in names):
                     continue
                 # Do not attach one row's value to several distinct fields.
-                other_fields = [e for e in entities if e.entity_id != entity.entity_id
-                                and normalize(e.display_name) != normalize(entity.display_name)
-                                and any(mentions(row, n) for n in
-                                        [e.display_name, e.canonical_name])]
+                other_fields = [
+                    e
+                    for e in entities
+                    if e.entity_id != entity.entity_id
+                    and normalize(e.display_name) != normalize(entity.display_name)
+                    and any(mentions(row, n) for n in [e.display_name, e.canonical_name])
+                ]
                 if other_fields:
                     continue
                 value, method = _length(row, header)
@@ -120,15 +141,29 @@ def extract_assertions(
                 conditions = [row] if re.search(r"\bif\b|場合|条件", row, re.I) else []
                 for relation in related:
                     assertion = SpecAssertion(
-                        assertion_id=content_id("assertion", [
-                            ev.evidence_id, relation.source_id, entity.entity_id, row,
-                        ]), subject_id=entity.entity_id, artifact_id=relation.source_id,
-                        scope=entity.scope, value=value, conditions=conditions, anchor=anchor,
-                        extraction_method=method, status=relation.status,
+                        assertion_id=content_id(
+                            "assertion",
+                            [
+                                ev.evidence_id,
+                                relation.source_id,
+                                entity.entity_id,
+                                row,
+                            ],
+                        ),
+                        subject_id=entity.entity_id,
+                        artifact_id=relation.source_id,
+                        scope=entity.scope,
+                        value=value,
+                        conditions=conditions,
+                        anchor=anchor,
+                        extraction_method=method,
+                        status=relation.status,
                     )
                     assertions[assertion.assertion_id] = assertion
-    return (sorted(found_mentions.values(), key=lambda m: m.mention_id),
-            sorted(assertions.values(), key=lambda a: a.assertion_id))
+    return (
+        sorted(found_mentions.values(), key=lambda m: m.mention_id),
+        sorted(assertions.values(), key=lambda a: a.assertion_id),
+    )
 
 
 def _rows(quote: str) -> list[tuple[str, list[str]]]:

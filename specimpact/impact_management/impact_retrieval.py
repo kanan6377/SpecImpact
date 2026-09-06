@@ -9,10 +9,12 @@ from specimpact.store import LocalStore
 
 
 class RetrievedPath:
-    def __init__(self, node_id: str, relations: list[Relation], evidence_ids: list[str]) -> None:
+    def __init__(self, node_id: str, relations: list[Relation], evidence_ids: list[str],
+                 atom_id: str | None = None) -> None:
         self.node_id = node_id
         self.relations = relations
         self.evidence_ids = evidence_ids
+        self.atom_id = atom_id
 
 
 EXPAND_RELATIONS = {
@@ -41,10 +43,21 @@ EXPAND_RELATIONS = {
     "tested_by",
     "depends_on",
     "may_affect",
+    "same_as",
 }
 
 
 def retrieve_impacts(store: LocalStore, atoms: list[ChangeAtom]) -> list[RetrievedPath]:
+    result = []
+    for atom in atoms:
+        for path in _retrieve_one(store, atom):
+            path.atom_id = atom.atom_id
+            result.append(path)
+    return result
+
+
+def _retrieve_one(store: LocalStore, atom: ChangeAtom) -> list[RetrievedPath]:
+    atoms = [atom]
     entities = store.read("entities", Entity)
     relations = store.read("relations", Relation)
     evidence = {item.evidence_id: item for item in store.read("evidence", Evidence)}
@@ -109,7 +122,7 @@ def _seed_from_evidence(
     evidence: dict[str, Evidence],
     atoms: list[ChangeAtom],
 ) -> set[str]:
-    terms = {term for atom in atoms for term in [*atom.target_terms, atom.before or ""] if term}
+    terms = {term for atom in atoms for term in atom.target_terms if term}
     seeds = set()
     for relation in relations:
         for evidence_id in relation.evidence_ids:

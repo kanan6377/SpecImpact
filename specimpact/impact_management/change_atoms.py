@@ -151,6 +151,11 @@ def _heuristic_atoms(change_id: str, body: str) -> list[ChangeAtom]:
         (line.lstrip("# ").strip() for line in body.splitlines() if line.strip()),
         body[:40],
     )
+    target_match = re.search(
+        r"([一-龥ぁ-んァ-ヶA-Za-z0-9_]+?)の(?:最大長|上限|下限|桁数|必須|方式)", text
+    )
+    if target_match:
+        fallback = target_match[1]
     return [
         ChangeAtom(
             atom_id=f"atom.{_short_hash(change_id + fallback)}",
@@ -201,10 +206,6 @@ def _target_terms(target: str, text: str) -> list[str]:
         for match in re.findall(r"\b[A-Z][A-Z0-9_]*LIMIT[A-Z0-9_]*\b", text)
         if match not in terms
     )
-    if "限度" in target or "限度" in text:
-        for alias in ("requestedCreditLimit", "REQUESTED_CREDIT_LIMIT", "LIMIT_AMT"):
-            if alias not in terms:
-                terms.append(alias)
     return terms
 
 

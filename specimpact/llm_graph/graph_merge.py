@@ -38,13 +38,13 @@ RELATION_MAP = {
     "calls": "CALLS",
     "reads": "READS",
     "writes": "WRITES",
-    "maps_to": "REQUEST_FIELD",
+    "maps_to": "maps_to",
     "sends": "SENDS",
     "receives": "RECEIVES",
     "tested_by": "COVERS",
-    "depends_on": "CALLS",
-    "same_as": "MENTIONS",
-    "may_affect": "MENTIONS",
+    "depends_on": "depends_on",
+    "same_as": "same_as",
+    "may_affect": "may_affect",
 }
 
 

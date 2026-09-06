@@ -101,8 +101,12 @@ def build_impact_hypotheses(
     )
 
 
-def _best_atom(atoms: list[ChangeAtom], _path: RetrievedPath) -> ChangeAtom:
-    return atoms[0]
+def _best_atom(atoms: list[ChangeAtom], path: RetrievedPath) -> ChangeAtom:
+    if path.atom_id:
+        return next(atom for atom in atoms if atom.atom_id == path.atom_id)
+    if len(atoms) == 1:
+        return atoms[0]
+    raise ValueError("Multiple changes require an operation-bound retrieval path")
 
 
 def _prior_decisions(store: LocalStore) -> dict[str, str]:
