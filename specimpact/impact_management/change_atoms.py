@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -20,6 +21,10 @@ class ChangeAtom(BaseModel):
     before: str | None = None
     after: str | None = None
     likely_node_types: list[str] = Field(default_factory=list)
+    scope: str = ""
+    before_unit: Literal["characters", "bytes", "unknown"] = "unknown"
+    after_unit: Literal["characters", "bytes", "unknown"] = "unknown"
+    conditions: list[str] = Field(default_factory=list)
 
 
 class ChangeAtomExtraction(BaseModel):
@@ -84,12 +89,20 @@ def list_changes(store: LocalStore) -> str:
 
 
 def _heuristic_atoms(change_id: str, body: str) -> list[ChangeAtom]:
+    clauses = [line.strip().lstrip("-* ") for line in re.split(r"[\n。；;]", body)
+               if line.strip() and not line.strip().startswith("#")]
+    if len(clauses) > 1:
+        parsed = [_heuristic_atoms(change_id, clause) for clause in clauses]
+        concrete = [atom for group in parsed for atom in group if atom.before or atom.after]
+        if concrete:
+            return list({atom.atom_id: atom for atom in concrete}.values())
     text = body.replace("\n", " ")
     patterns = [
         (
             r"(?P<target>[一-龥ぁ-んァ-ヶA-Za-z0-9_]+?)の"
             r"(?P<prop>最大長|最大桁数|文字数|桁数)を"
-            r"(?P<before>[0-9]+)(?:文字|桁)?から(?P<after>[0-9]+)(?:文字|桁)?へ"
+            r"(?P<before>[0-9]+)(?P<bu>文字|桁|バイト)?から"
+            r"(?P<after>[0-9]+)(?P<au>文字|桁|バイト)?へ"
         ),
         (
             r"(?P<target>[一-龥ぁ-んァ-ヶA-Za-z0-9_]+?)\s+"
@@ -126,6 +139,12 @@ def _heuristic_atoms(change_id: str, body: str) -> list[ChangeAtom]:
                 before=before,
                 after=after,
                 likely_node_types=DEFAULT_NODE_TYPES,
+                before_unit={"文字": "characters", "バイト": "bytes"}.get(
+                    match.groupdict().get("bu"), "unknown"
+                ),
+                after_unit={"文字": "characters", "バイト": "bytes"}.get(
+                    match.groupdict().get("au"), "unknown"
+                ),
             )
         ]
     fallback = next(

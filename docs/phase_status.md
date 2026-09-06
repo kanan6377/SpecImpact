@@ -1,5 +1,12 @@
 # Phase Status
 
+## Specification kernel phase 1
+
+Status: complete; pytest 260 passed / 1 skipped, ruff passed
+
+Typed source anchors, mentions, identity assertions, length specifications and change operations;
+multi-change parsing and explicit character/byte units. Review: `docs/reviews/kernel-phase-1.md`.
+
 ## Specification kernel phase 0
 
 Status: complete; pytest 249 passed / 1 skipped, ruff passed
@@ -714,4 +721,5 @@ Corpus.
 Future-phase leakage check: no automatic design-document editing, Neo4j requirement, new Web UI,
 Excel/PDF/docx conversion, SharePoint/Microsoft Graph, NotebookLM, M365 Copilot remote MCP, or
 VS Code custom editor was introduced.
+
 

@@ -51,6 +51,7 @@ class Entity(BaseModel):
     entity_type: str
     display_name: str
     canonical_name: str
+    scope: str = ""
     aliases: list[str] = Field(default_factory=list)
     source_document_ids: list[str] = Field(default_factory=list)
     extraction_methods: list[str] = Field(default_factory=list)
