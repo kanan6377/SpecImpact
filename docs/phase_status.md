@@ -1,5 +1,12 @@
 # Phase Status
 
+## Specification kernel phase 0
+
+Status: complete; pytest 249 passed / 1 skipped, ruff passed
+
+Implementation contract and baseline frozen in `docs/specs/specification-kernel.md`.
+Review: `docs/reviews/kernel-phase-0.md`. No future-phase implementation introduced.
+
 ## v0.1.0-alpha-1
 
 Status: complete
@@ -707,3 +714,4 @@ Corpus.
 Future-phase leakage check: no automatic design-document editing, Neo4j requirement, new Web UI,
 Excel/PDF/docx conversion, SharePoint/Microsoft Graph, NotebookLM, M365 Copilot remote MCP, or
 VS Code custom editor was introduced.
+
