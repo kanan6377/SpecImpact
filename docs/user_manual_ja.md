@@ -412,4 +412,19 @@ python -m compileall -q specimpact
 specimpact release-check .\examples\evaluation\release_cases.yml
 ```
 
+### 公開実設計書ベンチマーク
+
+Fintanの公開実設計書を、固定されたManifestとcommitから取得して評価できます。設計書本体はリポジトリへ含めず、取得物の出所とSHA-256を`provenance.json`へ記録します。
+
+```powershell
+specimpact benchmark fetch-fintan .\temp\fintan-corpus
+specimpact benchmark run-fintan .\temp\fintan-corpus `
+  --workspace .\temp\fintan-workspace `
+  --aliases .\examples\fintan_benchmark\aliases.yml `
+  --change .\examples\fintan_benchmark\change_project_name_length.md `
+  --expected .\examples\fintan_benchmark\expected_project_name_length.json
+```
+
+`fetch-fintan`は選定された21冊だけを展開します。`run-fintan`はプロジェクト名の最大長128→256変更を対象に、画面、DB、外部IF、バッチ、メッセージ、単体テストのEvidence付きレビュー候補を生成します。`must_review`は最終決定ではなく、原典とEvidenceを人間が確認する優先度です。詳細は[Fintan互換性ベンチマーク報告書](reviews/fintan-compatibility-benchmark.md)を参照してください。
+
 `release-check` は OSS 公開向けの品質 gate です。評価ケース数、must review recall、visible precision、evidence coverage などを確認します。

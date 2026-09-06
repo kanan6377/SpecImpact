@@ -1,0 +1,30 @@
+metadata:
+  repository: https://github.com/Fintan-contents/spring-sample-project.git
+  commit: a0ce5854ac0b40025e89a5319c9157ef07650b65
+  license: Fintan コンテンツ使用許諾条項 (documents); Apache License 2.0 (source code)
+  license_url: https://fintan.jp/page/295/
+  attribution: Fintan Contents, spring-sample-project, based on the Nablarch system development guide
+  scenario: project-name 128→256
+  file_count: 21
+files:
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/070_データモデル設計/ドメイン定義書_サンプルプロジェクト.xlsx", local_filename: "01_domain_definition.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/070_データモデル設計/テーブル定義書_A1_プロジェクト管理システム.xlsx", local_filename: "02_table_definition_A1.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/010_システム機能設計/システム機能設計書(画面)_WA10201_プロジェクト登録.xlsx", local_filename: "03_screen_function_WA10201.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/010_システム機能設計/システム機能設計書(画面)_WA10202_プロジェクト照会.xlsx", local_filename: "04_screen_function_WA10202.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/010_システム機能設計/システム機能設計書(画面)_WA10203_プロジェクト更新.xlsx", local_filename: "05_screen_function_WA10203.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/010_システム機能設計/システム機能設計書(画面)_WA10206_プロジェクトアップロード.xlsx", local_filename: "06_screen_function_WA10206.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/010_システム機能設計/システム機能設計書(バッチ)_BA10601／期間内プロジェクト一覧出力バッチ.xlsx", local_filename: "07_batch_function_BA10601.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/010_システム機能設計/システム機能設計書(バッチ)_BA10602／プロジェクト一括登録バッチ.xlsx", local_filename: "08_batch_function_BA10602.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/010_システム機能設計/システム機能設計書(バッチ)_BA10603／ユーザ別従事プロジェクト抽出バッチ.xlsx", local_filename: "09_batch_function_BA10603.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/030_インタフェース設計/外部インタフェース設計書(I／Fファイル)_N21AA001／登録用プロジェクト一覧.xlsx", local_filename: "10_external_if_N21AA001.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/030_インタフェース設計/外部インタフェース設計書(I／Fファイル)_N21AA002／期間内プロジェクト一覧.xlsx", local_filename: "11_external_if_N21AA002.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/030_インタフェース設計/外部インタフェース設計書(I／Fファイル)_N21AA003／ユーザ別従事プロジェクト一覧.xlsx", local_filename: "12_external_if_N21AA003.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/050_メッセージ設計/メッセージ設計書(画面)_A1_プロジェクト管理システム.xlsx", local_filename: "13_screen_message_spec.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/050_メッセージ設計/メッセージ設計書(バッチ)_A1_プロジェクト管理システム.xlsx", local_filename: "14_batch_message_spec.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/110_テスト仕様書/単体テスト仕様書_リクエスト・取引単体(画面)_WA10201_プロジェクト登録.xlsx", local_filename: "15_screen_unit_test_WA10201.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/110_テスト仕様書/単体テスト仕様書_リクエスト・取引単体(画面)_WA10202_プロジェクト照会.xlsx", local_filename: "16_screen_unit_test_WA10202.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/110_テスト仕様書/単体テスト仕様書_リクエスト・取引単体(画面)_WA10203_プロジェクト更新.xlsx", local_filename: "17_screen_unit_test_WA10203.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/110_テスト仕様書/単体テスト仕様書_リクエスト・取引単体(画面)_WA10206_プロジェクトアップロード.xlsx", local_filename: "18_screen_unit_test_WA10206.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/110_テスト仕様書/単体テスト仕様書_リクエスト・取引単体(バッチ)_BA10601_期間内プロジェクト一覧出力バッチ.xlsx", local_filename: "19_batch_unit_test_BA10601.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/110_テスト仕様書/単体テスト仕様書_リクエスト・取引単体(バッチ)_BA10602_プロジェクト一括登録バッチ.xlsx", local_filename: "20_batch_unit_test_BA10602.xlsx"}
+  - {source_path: "設計書/A1_プロジェクト管理システム/030_アプリ設計/110_テスト仕様書/単体テスト仕様書_リクエスト・取引単体(バッチ)_BA10603_ユーザ別従事プロジェクト抽出バッチ.xlsx", local_filename: "21_batch_unit_test_BA10603.xlsx"}

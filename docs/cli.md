@@ -187,3 +187,23 @@ ruff check .
 python -m compileall -q specimpact
 specimpact release-check .\examples\evaluation\release_cases.yml
 ```
+
+## 公開実設計書ベンチマーク
+
+Fintanの固定commitから、Manifestで指定した21冊のWorkbookだけを取得します。取得処理はgit objectを使用し、リポジトリ全体をCheckoutしません。出力にはSHA-256付き`provenance.json`が生成されます。
+
+```powershell
+specimpact benchmark fetch-fintan .\temp\fintan-corpus
+```
+
+取得済みCorpusを決定論的に評価します。`--workspace`は空のWorkspaceを指定してください。
+
+```powershell
+specimpact benchmark run-fintan .\temp\fintan-corpus `
+  --workspace .\temp\fintan-workspace `
+  --aliases .\examples\fintan_benchmark\aliases.yml `
+  --change .\examples\fintan_benchmark\change_project_name_length.md `
+  --expected .\examples\fintan_benchmark\expected_project_name_length.json
+```
+
+このベンチマークは最終影響を自動確定しません。Evidence、Graph path、Verifier結果をレビュー候補として出力します。原典はFintanコンテンツ使用許諾条項に従い、詳細は[実験報告書](reviews/fintan-compatibility-benchmark.md)を参照してください。

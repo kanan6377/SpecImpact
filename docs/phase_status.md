@@ -669,3 +669,41 @@ Completion checklist:
 Notes: The skipped Windows symlink test is limited to accounts without symbolic-link privileges.
 SharePoint/Microsoft Graph, NotebookLM Enterprise, M365 Copilot remote MCP, and a VS Code custom
 editor remain explicitly outside v1.3.0.
+
+## Fintan Compatibility Experiment
+
+Status: complete
+
+Scope:
+- Fixed-commit Fintan public design-workbook fetch without vendoring the source files
+- 21-workbook project-name 128→256 compatibility baseline
+- Dirty Excel classification, Evidence Graph, deterministic evaluation, and HostWorkflow semantic round trip
+- Provenance SHA-256, one-time external approval, Host hypothesis submission, and verifier result documentation
+
+Completion checklist:
+- [x] 21 selected Workbook sources and Fintan license/attribution are documented
+- [x] Fixed commit and SHA-256 provenance approach are documented
+- [x] Deterministic acceptance gates and final measurements are documented
+- [x] Initial boundary-anchor failure and remediation are documented
+- [x] Host LLM preview, one-time grant, audit, and verifier outcomes are documented
+- [x] `docs/reviews/fintan-compatibility-benchmark.md` written
+- [x] README, CLI, Japanese user manual, example guide, and CHANGELOG updated
+- [x] Full pytest passes (249 passed, 1 skipped)
+- [x] Full ruff check passes
+- [x] compileall passes
+- [x] Release-check passes (21 cases)
+- [x] Focused Fintan regression suite passes
+- [x] Scope and future-phase leakage checks documented
+
+Results: 19/19 expected workbooks, zero false positives, 20/20 Evidence anchors, 100% Evidence and
+cell-address coverage, 0% unknown sheets, and 40 visible candidates. Host submission produced 33
+`must_review` and 7 `should_review` results after verifier assessment.
+
+Known limitations: 12 sheets contain unsupported drawings/images, one unresolved mention remains,
+and visual semantics are not analyzed. The real-corpus Host semantic round trip used direct
+HostWorkflow; MCP stdio is covered by existing handshake/tests and was not used to submit this
+Corpus.
+
+Future-phase leakage check: no automatic design-document editing, Neo4j requirement, new Web UI,
+Excel/PDF/docx conversion, SharePoint/Microsoft Graph, NotebookLM, M365 Copilot remote MCP, or
+VS Code custom editor was introduced.

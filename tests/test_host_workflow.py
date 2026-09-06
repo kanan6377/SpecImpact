@@ -135,6 +135,39 @@ def test_impact_submission_rejects_unknown_evidence_and_nodes(workflow: HostWork
         )
 
 
+def test_external_impact_context_preserves_numeric_evidence_ids(
+    workflow: HostWorkflow,
+) -> None:
+    numeric_evidence_id = "ev.1234567890"
+    evidence = workflow.store.read("evidence", Evidence)
+    evidence[0].evidence_id = numeric_evidence_id
+    relations = workflow.store.read("relations", Relation)
+    relations[0].evidence_ids = [numeric_evidence_id]
+    workflow.store.write("evidence", evidence)
+    workflow.store.write("relations", relations)
+
+    change_id = _submit_valid_change_atom(workflow).change_id
+    prepared = workflow.prepare_impact_context(change_id)
+    grant = ApprovalManager(workflow.project).issue_grant(
+        prepared.transmission_preview.preview_id,
+        decision="approve",
+    )
+    authorized = workflow.authorize_context(prepared.context_id, grant.token)
+    candidate = authorized.payload["candidates"][0]
+
+    assert candidate["evidence_ids"] == [numeric_evidence_id]
+    submitted = workflow.submit_impact_hypotheses(
+        authorized.context_id,
+        _impact_payload(
+            change_id,
+            candidate_node_id=ARTIFACT_ID,
+            evidence_ids=[numeric_evidence_id],
+        ),
+        "numeric-evidence-id",
+    )
+    assert submitted.impacts[0]["evidence_ids"] == [numeric_evidence_id]
+
+
 def test_llm_only_must_review_is_downgraded_and_impact_submission_is_idempotent(
     workflow: HostWorkflow,
 ) -> None:

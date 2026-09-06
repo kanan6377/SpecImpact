@@ -71,6 +71,11 @@ def retrieve_impacts(store: LocalStore, atoms: list[ChangeAtom]) -> list[Retriev
                     next_path,
                     next_evidence,
                 )
+            elif len(next_path) == len(current.relations):
+                # A sheet can mention the same field in several evidence-addressed regions.
+                # Keep one shortest graph path, but retain all equal-distance supporting evidence
+                # so boundary values are not lost merely because another region was visited first.
+                current.evidence_ids = sorted({*current.evidence_ids, *next_evidence})
             if (
                 len(next_path) < _max_depth(relation.relation_type)
                 and relation.source_id not in visited

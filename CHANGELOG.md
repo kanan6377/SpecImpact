@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Fintan public design-workbook compatibility benchmark documentation, including fixed-commit provenance, deterministic acceptance results, Host LLM verifier results, reproducibility commands, and known limitations.
+- CLI documentation for `benchmark fetch-fintan` and `benchmark run-fintan`.
+
 ## 1.3.0 - Agent Host
 
 ### Added

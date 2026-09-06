@@ -77,6 +77,20 @@ def test_external_payload_redaction_covers_common_customer_identifiers() -> None
     assert serialized.count("[REDACTED]") >= 6
 
 
+def test_external_payload_redaction_preserves_opaque_graph_ids() -> None:
+    payload = {
+        "evidence_ids": ["ev.1234567890", "ev.abcdef1234"],
+        "relation_id": "rel.9876543210",
+        "standalone_customer_number": "1234567890",
+    }
+
+    redacted = redact_payload(payload)
+
+    assert redacted["evidence_ids"] == ["ev.1234567890", "ev.abcdef1234"]
+    assert redacted["relation_id"] == "rel.9876543210"
+    assert redacted["standalone_customer_number"] == "[REDACTED]"
+
+
 def test_llm_config_status_and_loopback_detection(tmp_path: Path) -> None:
     store = LocalStore(tmp_path / ".specimpact")
     configure_llm(store, "ollama", "qwen-test", "http://localhost:11434")

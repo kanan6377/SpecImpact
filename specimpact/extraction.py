@@ -585,7 +585,11 @@ def _chunk_for_line(chunks: list[Chunk], line_number: int) -> Chunk:
 
 def _slug(value: str) -> str:
     ascii_slug = re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
-    return ascii_slug or f"item_{_short_hash(value)}"
+    if not ascii_slug:
+        return f"item_{_short_hash(value)}"
+    if any(ord(char) > 127 and char.isalnum() for char in value):
+        return f"{ascii_slug}_{_short_hash(value)}"
+    return ascii_slug
 
 
 def _short_hash(value: str) -> str:

@@ -16,6 +16,57 @@ KEYWORDS: list[tuple[SheetType, tuple[str, ...]]] = [
     ("revision_history", ("改訂", "履歴", "revision")),
 ]
 
+WORKBOOK_FILENAME_HINTS: tuple[tuple[SheetType, tuple[str, ...]], ...] = (
+    (
+        "external_interface",
+        (
+            "外部インターフェース",
+            "外部インタフェース",
+            "外部if",
+            "external_if",
+            "external interface",
+        ),
+    ),
+    (
+        "db_mapping",
+        (
+            "テーブル定義",
+            "ドメイン定義",
+            "テーブル・ドメイン",
+            "table_definition",
+            "domain_definition",
+            "table definition",
+            "domain definition",
+        ),
+    ),
+    (
+        "screen_item_definition",
+        (
+            "画面・システム機能設計",
+            "画面システム機能設計",
+            "システム機能設計書(画面)",
+            "画面設計",
+            "screen_function",
+            "screen system function design",
+        ),
+    ),
+    (
+        "batch_definition",
+        (
+            "バッチ・システム機能設計",
+            "バッチシステム機能設計",
+            "システム機能設計書(バッチ)",
+            "batch_function",
+            "batch system function design",
+        ),
+    ),
+    (
+        "validation_rule",
+        ("メッセージ設計", "screen_message", "batch_message", "message design"),
+    ),
+    ("test_case", ("単体テスト", "単体試験", "unit_test", "unit test")),
+)
+
 # A workbook often embeds the same revision block in every sheet.  Header
 # signatures therefore take precedence over global keyword counts.
 HEADER_SIGNATURES: list[
@@ -63,13 +114,25 @@ def classify_sheets(
     llm_client: LLMClient | None = None,
 ) -> list[DirtySheet]:
     by_sheet = {sheet.sheet_id: [] for sheet in sheets}
+    workbook_hint = _workbook_filename_hint(cells)
     for cell in cells:
         if cell.value:
             by_sheet.setdefault(cell.sheet_id, []).append(cell.value)
     result = []
     for sheet in sheets:
         text = " ".join([sheet.sheet_name, *by_sheet.get(sheet.sheet_id, [])[:80]])
+        special_type = _special_sheet_type(sheet.sheet_name)
         sheet_type, matches = _classify_text(text)
+        header_type, header_matches = _classify_header(text)
+        if special_type is not None:
+            sheet_type = special_type
+            matches = [sheet.sheet_name]
+        elif header_matches:
+            sheet_type = header_type
+            matches = header_matches
+        elif workbook_hint is not None:
+            sheet_type, hint = workbook_hint
+            matches = [hint]
         sheet.sheet_type = sheet_type
         if matches:
             sheet.evidence_level = "layout_and_heading"
@@ -77,7 +140,7 @@ def classify_sheets(
         else:
             sheet.evidence_level = "none"
             sheet.reason = "no sheet-name or heading keyword matched"
-        if llm_client is not None:
+        if llm_client is not None and special_type is None:
             sample = "\n".join(by_sheet.get(sheet.sheet_id, [])[:120])
             llm_result = llm_client.structured(
                 "dirty_excel_sheet_classification",
@@ -102,6 +165,30 @@ def classify_sheets(
     return result
 
 
+def _workbook_filename_hint(cells: list[DirtyCell]) -> tuple[SheetType, str] | None:
+    paths = {cell.file_path for cell in cells if cell.file_path}
+    if not paths:
+        return None
+    filename_text = " ".join(paths).casefold()
+    for sheet_type, hints in WORKBOOK_FILENAME_HINTS:
+        for hint in hints:
+            if hint.casefold() in filename_text:
+                return sheet_type, hint
+    return None
+
+
+def _special_sheet_type(name: str) -> SheetType | None:
+    folded = name.casefold()
+    if any(token in folded for token in ("改訂", "履歴", "revision", "history")):
+        return "revision_history"
+    if any(
+        token in folded
+        for token in ("表紙", "目次", "はじめに", "cover", "contents", "toc", "introduction")
+    ):
+        return "cover"
+    return None
+
+
 def classify_sheet_text(name: str, text: str) -> dict[str, str]:
     sheet_type, matches = _classify_text(f"{name} {text}")
     return {
@@ -112,6 +199,14 @@ def classify_sheet_text(name: str, text: str) -> dict[str, str]:
 
 
 def _classify_text(text: str) -> tuple[SheetType, list[str]]:
+    header_type, header_matches = _classify_header(text)
+    if header_matches:
+        return header_type, header_matches
+
+    return _classify_keywords(text)
+
+
+def _classify_header(text: str) -> tuple[SheetType, list[str]]:
     folded = text.casefold()
     for sheet_type, signature in HEADER_SIGNATURES:
         matches = [
@@ -121,7 +216,11 @@ def _classify_text(text: str) -> tuple[SheetType, list[str]]:
         ]
         if len(matches) == len(signature):
             return sheet_type, matches
+    return "unknown", []
 
+
+def _classify_keywords(text: str) -> tuple[SheetType, list[str]]:
+    folded = text.casefold()
     best_type: SheetType = "unknown"
     best_matches: list[str] = []
     for sheet_type, keywords in KEYWORDS:

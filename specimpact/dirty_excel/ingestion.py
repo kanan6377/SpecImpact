@@ -7,6 +7,7 @@ from typing import Callable
 
 from specimpact.dirty_excel.cell_renderer import write_rendered
 from specimpact.dirty_excel.evidence_builder import document_graph_for_regions
+from specimpact.dirty_excel.mention_graph import build_sheet_mention_graph
 from specimpact.dirty_excel.models import (
     DirtyCell,
     DirtyIngestSummary,
@@ -114,6 +115,18 @@ def ingest_dirty_excel(
                 document,
                 aliases,
                 workbook_path,
+            )
+        )
+        graph.extend(
+            build_sheet_mention_graph(
+                workbook_path,
+                sheets,
+                cells,
+                regions,
+                proposals,
+                chunks_by_region,
+                document,
+                aliases,
             )
         )
         all_workbooks.append(workbook)
@@ -268,6 +281,32 @@ def _rebuild_proposal_graph(
             AliasCatalog.load(store.root / "aliases.yml"),
             source_path,
         )
+    )
+    workbook_sheets = [
+        item
+        for item in store.read("dirty_sheets", DirtySheet)
+        if item.workbook_id == workbook.workbook_id
+    ]
+    workbook_cells = [
+        item
+        for item in store.read("dirty_cells", DirtyCell)
+        if item.workbook_id == workbook.workbook_id
+    ]
+    document_graph.extend(
+        build_sheet_mention_graph(
+            source_path,
+            workbook_sheets,
+            workbook_cells,
+            regions,
+            active,
+            chunks_by_region,
+            document,
+            AliasCatalog.load(store.root / "aliases.yml"),
+        )
+    )
+    store.write(
+        "dirty_regions",
+        [item for item in all_regions if item.workbook_id != workbook.workbook_id] + regions,
     )
     store.merge_graph(**document_graph.__dict__)
 

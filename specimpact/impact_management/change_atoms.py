@@ -44,7 +44,7 @@ def parse_change_atoms(
 ) -> ChangeAtomExtraction:
     if not change_path.is_file():
         raise ValueError(f"Change request does not exist: {change_path}")
-    body = change_path.read_text(encoding="utf-8")
+    body = change_path.read_text(encoding="utf-8-sig")
     change_id = f"change.{change_path.stem}"
     if client:
         extraction = client.structured(
@@ -86,17 +86,30 @@ def list_changes(store: LocalStore) -> str:
 def _heuristic_atoms(change_id: str, body: str) -> list[ChangeAtom]:
     text = body.replace("\n", " ")
     patterns = [
+        (
+            r"(?P<target>[一-龥ぁ-んァ-ヶA-Za-z0-9_]+?)の"
+            r"(?P<prop>最大長|最大桁数|文字数|桁数)を"
+            r"(?P<before>[0-9]+)(?:文字|桁)?から(?P<after>[0-9]+)(?:文字|桁)?へ"
+        ),
+        (
+            r"(?P<target>[一-龥ぁ-んァ-ヶA-Za-z0-9_]+?)\s+"
+            r"(?P<before>[0-9]+)\s*(?:→|->|=>|-->)\s*(?P<after>[0-9]+)"
+        ),
         r"[「\"](?P<target>[^」\"]+)[」\"].*?(?P<prop>上限|下限|桁数|必須|方式|値).*?(?P<before>[0-9A-Za-z一-龥ぁ-んァ-ヶ万円]+)から(?P<after>[0-9A-Za-z一-龥ぁ-んァ-ヶ万円]+)",
         r"(?P<target>[一-龥ぁ-んァ-ヶA-Za-z0-9_]+).*?(?P<prop>上限|下限|桁数|必須|方式|値).*?(?P<before>[0-9A-Za-z一-龥ぁ-んァ-ヶ万円]+)から(?P<after>[0-9A-Za-z一-龥ぁ-んァ-ヶ万円]+)",
         r"(?P<target>[A-Za-z_][A-Za-z0-9_]+).*?(?P<before>[0-9]+).*?(?P<after>[0-9]+)",
     ]
-    for pattern in patterns:
+    for pattern_index, pattern in enumerate(patterns):
         match = re.search(pattern, text)
         if not match:
             continue
         target = match.group("target").strip(" の")
         target_terms = _target_terms(target, text)
-        prop = _property_for(match.groupdict().get("prop") or "")
+        prop = (
+            "length"
+            if pattern_index == 1
+            else _property_for(match.groupdict().get("prop") or "")
+        )
         before = _clean_value(match.groupdict().get("before"))
         after = _clean_value(match.groupdict().get("after"))
         return [
@@ -136,6 +149,8 @@ def _merge_atoms(current: list[ChangeAtom], extraction: ChangeAtomExtraction) ->
 
 
 def _property_for(label: str) -> str | None:
+    if label in {"最大長", "最大桁数", "文字数", "桁数"}:
+        return "length"
     if "上限" in label:
         return "max_value"
     if "下限" in label:

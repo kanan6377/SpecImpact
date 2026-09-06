@@ -1,0 +1,50 @@
+{
+  "scenario_id": "fintan.project_name.length.128_to_256",
+  "expected_impacted_files": [
+    "01_domain_definition.xlsx",
+    "02_table_definition_A1.xlsx",
+    "03_screen_function_WA10201.xlsx",
+    "04_screen_function_WA10202.xlsx",
+    "05_screen_function_WA10203.xlsx",
+    "07_batch_function_BA10601.xlsx",
+    "08_batch_function_BA10602.xlsx",
+    "09_batch_function_BA10603.xlsx",
+    "10_external_if_N21AA001.xlsx",
+    "11_external_if_N21AA002.xlsx",
+    "12_external_if_N21AA003.xlsx",
+    "13_screen_message_spec.xlsx",
+    "14_batch_message_spec.xlsx",
+    "15_screen_unit_test_WA10201.xlsx",
+    "16_screen_unit_test_WA10202.xlsx",
+    "17_screen_unit_test_WA10203.xlsx",
+    "19_batch_unit_test_BA10601.xlsx",
+    "20_batch_unit_test_BA10602.xlsx",
+    "21_batch_unit_test_BA10603.xlsx"
+  ],
+  "negative_control_files": [
+    "06_screen_function_WA10206.xlsx",
+    "18_screen_unit_test_WA10206.xlsx"
+  ],
+  "evidence_anchors": [
+    {"file": "01_domain_definition.xlsx", "sheet": "1. ドメイン定義", "cell": "B15"},
+    {"file": "02_table_definition_A1.xlsx", "sheet": "2 プロジェクト", "cell": "B12"},
+    {"file": "02_table_definition_A1.xlsx", "sheet": "9 プロジェクトワーク", "cell": "B13"},
+    {"file": "03_screen_function_WA10201.xlsx", "sheet": "2. WA1020101(プロジェクト登録画面)", "cell": "AD62"},
+    {"file": "04_screen_function_WA10202.xlsx", "sheet": "2. WA1020201(プロジェクト検索画面)", "cell": "AD73"},
+    {"file": "05_screen_function_WA10203.xlsx", "sheet": "2. WA1020301(プロジェクト更新画面)", "cell": "AD63"},
+    {"file": "07_batch_function_BA10601.xlsx", "sheet": "2. BA1060101(期間内プロジェクト一覧ファイル作成)", "cell": "L42"},
+    {"file": "08_batch_function_BA10602.xlsx", "sheet": "2. BA1060201(ワークテーブル登録)", "cell": "L47"},
+    {"file": "09_batch_function_BA10603.xlsx", "sheet": "2. BA1060301(ユーザ別従事プロジェクト抽出)", "cell": "L44"},
+    {"file": "10_external_if_N21AA001.xlsx", "sheet": "3.1.プロジェクト情報レコード", "cell": "B9"},
+    {"file": "11_external_if_N21AA002.xlsx", "sheet": "3.1. プロジェクト情報レコード", "cell": "B9"},
+    {"file": "12_external_if_N21AA003.xlsx", "sheet": "3.1. プロジェクト情報レコード", "cell": "B9"},
+    {"file": "13_screen_message_spec.xlsx", "sheet": "ja", "cell": "K39"},
+    {"file": "14_batch_message_spec.xlsx", "sheet": "ja", "cell": "O12"},
+    {"file": "15_screen_unit_test_WA10201.xlsx", "sheet": "1.1.WA1020101", "cell": "I23"},
+    {"file": "16_screen_unit_test_WA10202.xlsx", "sheet": "1.1.WA1020201", "cell": "I13"},
+    {"file": "17_screen_unit_test_WA10203.xlsx", "sheet": "1.1.WA1020301", "cell": "I25"},
+    {"file": "19_batch_unit_test_BA10601.xlsx", "sheet": "BA1060101", "cell": "I178"},
+    {"file": "20_batch_unit_test_BA10602.xlsx", "sheet": "1.1. BA1060201", "cell": "I23"},
+    {"file": "21_batch_unit_test_BA10603.xlsx", "sheet": "BA1060301", "cell": "I181"}
+  ]
+}

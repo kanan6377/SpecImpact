@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from pathlib import Path
 from typing import Any
 
 from specimpact.dirty_excel.models import DirtyCell, DirtyRegion
@@ -90,11 +91,19 @@ def extract_region_heuristic(region: DirtyRegion, cells: list[DirtyCell]) -> Reg
             continue
         if region.region_type == "screen_item_table":
             screen_name = (
-                _first(values, "画面名", "screen_name", "col_2")
-                or _clean_sheet_name(region.sheet_name)
+                _first(values, "画面名", "画面ID", "screen_name", "screen id")
+                or _artifact_name(region, cells)
             )
             field_name = _first(
-                values, "項目名", "物理名", "item_name", "field", "col_5", "col_4"
+                values,
+                "出力項目名",
+                "入力項目名",
+                "項目名",
+                "論理名称",
+                "論理名",
+                "物理名",
+                "item_name",
+                "field",
             )
             api_name = _first(values, "呼び出すAPI", "API", "api", "col_10")
             if screen_name and field_name:
@@ -107,8 +116,8 @@ def extract_region_heuristic(region: DirtyRegion, cells: list[DirtyCell]) -> Reg
                 edge(screen, "CALLS", api, evidence_ids, "screen calls API")
         elif region.region_type == "api_mapping_table":
             api_name = (
-                _first(values, "API名", "api_name", "API", "col_2")
-                or _clean_sheet_name(region.sheet_name)
+                _first(values, "API名", "api_name", "API", "endpoint")
+                or _artifact_name(region, cells)
             )
             field_name = _first(
                 values, "物理名", "項目名", "field", "リクエスト項目", "col_6", "col_5"
@@ -125,12 +134,19 @@ def extract_region_heuristic(region: DirtyRegion, cells: list[DirtyCell]) -> Reg
                 edge(api, relation, field, evidence_ids, "API field relation")
         elif region.region_type == "db_mapping_table":
             table_name = (
-                _first(values, "テーブル名", "table_name", "col_1")
-                or _clean_sheet_name(region.sheet_name)
+                _first(values, "テーブル名", "テーブル物理名", "table_name")
+                or _artifact_name(region, cells)
             )
-            column_name = _first(values, "カラム名", "column_name", "物理名", "col_3")
+            column_name = _first(
+                values, "カラム名", "カラム物理名", "column_name", "物理名称", "物理名"
+            )
             logical_name = _first(
-                values, "カラム論理名", "logical_name", "項目名", "col_4"
+                values,
+                "カラム論理名",
+                "logical_name",
+                "論理名称",
+                "論理名",
+                "項目名",
             )
             if table_name and column_name:
                 table = node("DBTable", table_name, evidence_ids, "DB table row")
@@ -149,19 +165,38 @@ def extract_region_heuristic(region: DirtyRegion, cells: list[DirtyCell]) -> Reg
                 )
                 edge(column, "DEFINES", field, evidence_ids, "column defines field")
         elif region.region_type == "validation_block":
-            name = _first(values, "チェック名", "チェックID", "validation", "col_2", "col_1")
-            target = _first(values, "対象項目", "物理名", "項目名", "target", "col_5", "col_4")
+            name = _first(values, "チェック名", "チェックID", "validation") or _artifact_name(
+                region, cells
+            )
+            target = _first(
+                values,
+                "対象項目",
+                "論理名称",
+                "論理名",
+                "物理名称",
+                "物理名",
+                "項目名",
+                "target",
+            )
             if name and target:
                 validation = node("ValidationRule", name, evidence_ids, "validation row")
                 field = node("ScreenField", target, evidence_ids, "validation target field")
                 edge(validation, "VALIDATES", field, evidence_ids, "validation validates field")
         elif region.region_type == "external_if_table":
             if_name = (
-                _first(values, "IF名", "if_name", "外部IF", "col_2")
-                or _clean_sheet_name(region.sheet_name)
+                _first(values, "IF名", "if_name", "外部IF", "インタフェースID")
+                or _artifact_name(region, cells)
             )
             field_name = _first(
-                values, "物理名", "項目名", "送信項目", "受信項目", "field", "col_5", "col_4"
+                values,
+                "項目名",
+                "論理名称",
+                "論理名",
+                "物理名称",
+                "物理名",
+                "送信項目",
+                "受信項目",
+                "field",
             )
             if if_name and field_name:
                 external = node("ExternalIF", if_name, evidence_ids, "external IF row")
@@ -169,9 +204,11 @@ def extract_region_heuristic(region: DirtyRegion, cells: list[DirtyCell]) -> Reg
                 edge(external, "SENDS", field, evidence_ids, "external IF sends field")
         elif region.region_type == "test_case_table":
             test_name = _first(
-                values, "テスト名", "テストケースID", "試験ID", "test", "col_2", "col_1"
+                values, "テスト名", "テストケースID", "試験ID", "test"
+            ) or _artifact_name(region, cells)
+            target = _first(
+                values, "対象項目", "確認観点", "項目名", "入力条件", "期待結果", "target"
             )
-            target = _first(values, "対象項目", "確認観点", "項目名", "target", "col_4")
             if test_name and target:
                 test = node("TestCase", test_name, evidence_ids, "test row")
                 field = node("ScreenField", target, evidence_ids, "test target")
@@ -294,6 +331,12 @@ def _canonical_hint(name: str) -> str | None:
 
 def _clean_sheet_name(name: str) -> str:
     return re.sub(r"(定義書|一覧|シート|項目|設計書)$", "", name).strip() or name
+
+
+def _artifact_name(region: DirtyRegion, cells: list[DirtyCell]) -> str:
+    source = next((Path(cell.file_path).stem for cell in cells if cell.file_path), "")
+    source = re.sub(r"^\d+_", "", source)
+    return f"{source} / {region.sheet_name}" if source else _clean_sheet_name(region.sheet_name)
 
 
 def _short_hash(value: str) -> str:

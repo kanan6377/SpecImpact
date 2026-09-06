@@ -112,11 +112,27 @@ def _region_type(sheet: DirtySheet, cells: list[DirtyCell]) -> RegionType:
     if any(token in cell_text for token in ("改訂", "履歴", "版数", "revision")):
         return "revision_history"
     nonempty = [cell.value for cell in cells if cell.value not in (None, "")]
-    if len(nonempty) <= 2 and len(cells) <= 6:
-        return "note_block"
     validation_tokens = ("チェックID", "チェック名", "エラーメッセージ")
     if any(token in cell_text for token in validation_tokens):
         return "validation_block"
+    if all(token in cell_text for token in ("論理名称", "物理名称", "桁数")):
+        if sheet.sheet_type == "screen_item_definition":
+            return "screen_item_table"
+        if sheet.sheet_type == "external_interface":
+            return "external_if_table"
+        if sheet.sheet_type == "api_mapping":
+            return "api_mapping_table"
+        return "db_mapping_table"
+    if all(token in cell_text for token in ("項目名", "項目ID", "長さ(Byte)")):
+        if sheet.sheet_type == "external_interface":
+            return "external_if_table"
+        if sheet.sheet_type == "db_mapping":
+            return "db_mapping_table"
+        return "screen_item_table"
+    if "入力条件" in cell_text and "期待結果" in cell_text:
+        return "test_case_table"
+    if len(nonempty) <= 2 and len(cells) <= 6:
+        return "note_block"
     if "テーブル名" in cell_text and "カラム名" in cell_text:
         return "db_mapping_table"
     if any(token in folded for token in ("外部if", "if名", "interface name")) and any(

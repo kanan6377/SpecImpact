@@ -14,6 +14,7 @@ from specimpact import __version__
 from specimpact.application import ApplicationService, project_from_path
 from specimpact.application.agent_doctor import agent_doctor
 from specimpact.application.agent_hook import handle_agent_hook
+from specimpact.benchmarks import fetch_fintan_corpus, run_fintan_benchmark
 from specimpact.core import (
     analyze_change,
     explain_why,
@@ -86,6 +87,7 @@ change_app = typer.Typer(help="Parse and inspect structured change atoms.")
 changes_app = typer.Typer(help="List parsed changes.")
 impacts_app = typer.Typer(help="Manage impact review decisions.")
 agent_app = typer.Typer(help="Install and diagnose Agent host integrations.")
+benchmark_app = typer.Typer(help="Run reproducible public-corpus compatibility benchmarks.")
 
 
 def _version_callback(value: bool) -> None:
@@ -120,6 +122,51 @@ app.add_typer(change_app, name="change")
 app.add_typer(changes_app, name="changes")
 app.add_typer(impacts_app, name="impacts")
 app.add_typer(agent_app, name="agent")
+app.add_typer(benchmark_app, name="benchmark")
+
+
+@benchmark_app.command("fetch-fintan")
+def benchmark_fetch_fintan(
+    output: Path,
+    manifest: Path = typer.Option(
+        Path("examples/fintan_benchmark/source_manifest.yml"),
+        help="Pinned Fintan source manifest.",
+    ),
+) -> None:
+    """Fetch the licensed Fintan benchmark subset without vendoring it."""
+    target = _call(fetch_fintan_corpus, manifest, output)
+    typer.echo(f"Fetched Fintan benchmark corpus: {target}")
+
+
+@benchmark_app.command("run-fintan")
+def benchmark_run_fintan(
+    corpus: Path,
+    workspace: Path = typer.Option(..., help="Empty workspace for benchmark state."),
+    aliases: Path = typer.Option(
+        Path("examples/fintan_benchmark/aliases.yml"),
+        help="Reviewed project-name aliases.",
+    ),
+    change: Path = typer.Option(
+        Path("examples/fintan_benchmark/change_project_name_length.md"),
+        help="Benchmark change request.",
+    ),
+    expected: Path = typer.Option(
+        Path("examples/fintan_benchmark/expected_project_name_length.json"),
+        help="Expected workbook and cell oracle.",
+    ),
+) -> None:
+    """Run the deterministic Fintan evidence-index compatibility benchmark."""
+    result = _call(
+        run_fintan_benchmark,
+        corpus,
+        workspace,
+        aliases_path=aliases,
+        change_path=change,
+        expected_path=expected,
+    )
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    if result["status"] != "pass":
+        raise typer.Exit(code=1)
 
 
 @agent_app.command("doctor")

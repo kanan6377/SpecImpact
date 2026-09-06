@@ -478,7 +478,7 @@ REDACTION_PATTERNS = (
         r"(?:api[_-]?key|token|secret)[=:][A-Za-z0-9_\-]{8,})\b",
         re.I,
     ),
-    re.compile(r"\b\d{7,12}\b"),
+    re.compile(r"(?<![A-Za-z0-9_.-])\d{7,12}(?![A-Za-z0-9_.-])"),
 )
 
 

@@ -1,0 +1,9 @@
+aliases:
+  entity.project_name:
+    canonical_type: BusinessField
+    aliases:
+      - プロジェクト名
+      - PJ名
+      - PROJECT_NAME
+      - projectName
+      - project_name

@@ -16,6 +16,25 @@ specimpact mcp --stdio --project C:\work\my-system-impact
 Run `specimpact init` in the project before using operational tools. An uninitialized server only
 returns onboarding data from its project resource; it does not expose source bodies.
 
+## Codex CLI / Desktop
+
+Codexからも同じstdio MCP serverを利用できます。外部Hostとして扱い、本文送信前のPreviewと
+一回限りGrantを必須にする登録例です。
+
+```powershell
+codex mcp add specimpact `
+  --env SPECIMPACT_HOST=codex `
+  --env SPECIMPACT_HOST_EXTERNAL=true `
+  -- specimpact mcp --stdio --project C:\work\my-system-impact
+
+codex mcp list
+```
+
+Codex CLI、Desktop、IDE extensionは同じCodex MCP設定を参照します。登録後はCodexへ
+「SpecImpact MCPを使って設計書を取り込み、この変更の影響候補をEvidence付きで調べて」と
+自然文で依頼できます。SpecImpact側の正式状態は`.specimpact/*.jsonl`に保存され、Codexの応答
+だけで`must_review`や人間の決定を確定しません。
+
 ## Tools
 
 | Tool | Purpose |

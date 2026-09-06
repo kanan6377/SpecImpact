@@ -48,7 +48,16 @@ def _property_compatible(change_property: str | None, artifact_type: str | None)
     if prop in {"max_value", "min_value", "length", "required"}:
         return any(
             token in artifact
-            for token in ("field", "validation", "column", "api", "screen", "test", "external")
+            for token in (
+                "field",
+                "validation",
+                "column",
+                "table",
+                "api",
+                "screen",
+                "test",
+                "external",
+            )
         )
     return True
 

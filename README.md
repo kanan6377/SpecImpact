@@ -301,7 +301,22 @@ python -m compileall -q specimpact
 specimpact release-check .\examples\evaluation\release_cases.yml
 ```
 
-v1.3.0では206 testsと21件のrelease benchmarkを継続しています。テストは外部LLMを呼ばず、
+## 公開実設計書ベンチマーク
+
+Fintanの公開実設計書を固定コミットから21冊だけ取得し、プロジェクト名の最大長128→256変更をEvidence付きで評価できます。原典WorkbookはVendoringせず、取得物のprovenanceとSHA-256を保存します。
+
+```powershell
+specimpact benchmark fetch-fintan .\temp\fintan-corpus
+specimpact benchmark run-fintan .\temp\fintan-corpus `
+  --workspace .\temp\fintan-workspace `
+  --aliases .\examples\fintan_benchmark\aliases.yml `
+  --change .\examples\fintan_benchmark\change_project_name_length.md `
+  --expected .\examples\fintan_benchmark\expected_project_name_length.json
+```
+
+詳細な測定結果、制約、ライセンス、Host LLM実験は[`docs/reviews/fintan-compatibility-benchmark.md`](docs/reviews/fintan-compatibility-benchmark.md)を参照してください。
+
+v1.3.0では249 tests passed、1 skippedを確認し、21件のrelease benchmarkを継続しています。テストは外部LLMを呼ばず、
 Fake Host / FakeLLMClientでsampling、structured output、Grant、evidence検証、alias判断、impact hypothesisを固定します。
 
 ## ドキュメント
