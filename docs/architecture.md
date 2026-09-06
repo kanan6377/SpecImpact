@@ -1,5 +1,14 @@
 # Agent Host Architecture
 
+## Specification kernel boundary
+
+All existing report-producing paths additionally call `semantic/service.py`, which captures
+normalized ingestion state and invokes one bounded kernel. SQLite owns immutable analysis
+snapshots, results and decision events; JSONL remains the legacy ingestion and compatibility
+surface shown below. `specimpact.locking` supplies a common reentrant process lock without
+depending on Application imports. See [the kernel contract](specification_kernel.md) for current
+rules, normalized-source retention, transport behavior and migration limits.
+
 ## Runtime Boundaries
 
 ```mermaid

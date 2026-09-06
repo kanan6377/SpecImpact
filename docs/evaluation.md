@@ -18,3 +18,8 @@ duplicated expected results appear independent.
 - Metrics are for review-candidate recall and visible precision, not final impact correctness.
 - Dirty input, alias collisions, false positives, and important candidates hidden by ranking should
   be reviewed separately during adoption.
+
+The later [Fintan experiment](reviews/fintan-compatibility-benchmark.md) covers selected public
+design workbooks for one maximum-length change. It does not establish general enterprise accuracy.
+The [kernel walkthrough](../examples/specification_kernel/README.md) and semantic tests add
+authored adversarial and transactional regressions; they are not independent holdout evidence.

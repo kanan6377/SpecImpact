@@ -16,7 +16,18 @@
 - Antigravity Plugin with Skills, Rules, Hook, Artifact templates, and installers
 - host/CLI/provider/heuristic fallback order without weakening the Evidence verifier
 
-## Next: Enterprise Sources
+## Next: Specification Evaluation
+
+- Independently reviewed corpus split by system and workbook template
+- Measure correction burden and review time against search and the legacy workflow
+- Improve labelled extraction and selective re-analysis based on observed failure cases
+- Expand typed rules beyond maximum length only after separate phase gates
+
+The initial [specification kernel](specification_kernel.md) now provides versioned assertions,
+bounded comparison, coverage, replay and snapshot-bound review. Full binary source archiving,
+arbitrary conditions and transformations are still outside its current typed contract.
+
+## Later: Enterprise Sources
 
 - SharePoint and Microsoft Graph source connector with tenant policy controls
 - OneDrive version metadata and remote source freshness

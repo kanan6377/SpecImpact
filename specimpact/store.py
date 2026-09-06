@@ -79,7 +79,7 @@ class LocalStore:
                 os.unlink(temp_name)
 
     def merge_graph(self, **records) -> None:
-        from specimpact.application.security import ProjectWriteLock
+        from specimpact.locking import ProjectWriteLock
 
         with ProjectWriteLock(self.root):
             self._validate_document_identities(records.get("documents", []))

@@ -163,3 +163,26 @@ def test_host_pages_bind_each_candidate_to_its_own_operation(tmp_path):
     )
     with pytest.raises(ValueError, match="offset"):
         host.prepare_impact_context(atoms.change_id, offset=-1)
+
+
+def test_host_rejects_changed_request_before_persisting_any_advice(tmp_path):
+    host, atoms = local_host(tmp_path)
+    prepared = host.prepare_impact_context(atoms.change_id)
+    candidate = prepared.payload["candidates"][0]
+    (tmp_path / "change.md").write_text("Changed request", encoding="utf-8")
+    with pytest.raises(ValueError, match="stale"):
+        host.submit_impact_hypotheses(prepared.context_id, payload(atoms, candidate), "changed")
+    assert not (host.store.root / "host_impact_results.jsonl").exists()
+
+
+def test_report_keeps_original_evidence_after_reingestion(tmp_path):
+    from specimpact.models import Evidence
+
+    store, change = workspace(tmp_path)
+    analyze_change(store, change, no_llm=True)
+    evidence = store.read("evidence", Evidence)
+    original = evidence[0].quote
+    evidence[0].quote = "new unrelated source"
+    store.write("evidence", evidence)
+    report = report_data(project_from_path(tmp_path))
+    assert report["must_review"][0]["evidence"][0]["quote"] == original

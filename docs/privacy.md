@@ -1,5 +1,10 @@
 # Privacy
 
+New specification analysis uses a local SQLite repository alongside legacy JSONL ingestion.
+Snapshots and explicit `analysis export` files contain normalized Evidence quotes and must be
+handled as design-document content. They are separate from metadata-only transmission audit
+records. Replay and import use no external provider and never auto-edit source documents.
+
 SpecImpact defaults to the local JSONL backend. Starting the CLI or Admin Console does not call an
 external LLM. An Agent host receives source content only through an approval-gated MCP tool. Use
 `specimpact doctor --privacy` and `specimpact agent doctor` to inspect the active runtime.

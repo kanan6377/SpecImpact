@@ -4,6 +4,14 @@
 
 ### Added
 
+- Schema-v2 specification kernel with typed maximum-length assertions, scoped change operations,
+  property-specific verification, independent evidence strength and explicit coverage gaps.
+- Local SQLite analysis snapshots, deterministic replay, validated export/import and immutable
+  review decisions bound to analysis versions. New `analysis` inspection and review commands.
+- Operation-bound, paginated Host impact preparation with stale-context rejection and persistent
+  submitted pages. Legacy report/CLI/Console compatibility and explicit unsupported-rule warnings.
+- Adversarial, storage, transport and golden Markdown walkthrough tests; no source auto-editing.
+
 - Fintan public design-workbook compatibility benchmark documentation, including fixed-commit provenance, deterministic acceptance results, Host LLM verifier results, reproducibility commands, and known limitations.
 - CLI documentation for `benchmark fetch-fintan` and `benchmark run-fintan`.
 

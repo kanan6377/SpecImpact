@@ -153,6 +153,10 @@ class HostWorkflow:
             "output_schema": HostImpactSubmission.model_json_schema(),
         }
         session = self._session_record(change_id)
+        request_path = Path(session.get("change_path", ""))
+        request_hash = _json_hash(
+            request_path.read_text(encoding="utf-8") if request_path.is_file() else ""
+        )
         return self._prepare(
             purpose="impact-hypothesis",
             schema_name=HostImpactSubmission.__name__,
@@ -174,6 +178,7 @@ class HostWorkflow:
                 "title": session.get("title", change_id),
                 "change_path": session.get("change_path", ""),
                 "workspace_fingerprint": workspace_fingerprint(self.store, atoms),
+                "change_request_hash": request_hash,
             },
         )
 
@@ -371,10 +376,18 @@ class HostWorkflow:
                 self.store, current_atoms
             ):
                 raise ValueError("Prepared analysis is stale; prepare the impact context again")
+            change_path = Path(record["change_path"])
+            body = change_path.read_text(encoding="utf-8") if change_path.is_file() else ""
+            if record.get("change_request_hash") != _json_hash(body):
+                raise ValueError(
+                    "Prepared change request is stale; prepare the impact context again"
+                )
             # Retain prior pages for this exact input snapshot; never borrow another run's advice.
             hypothesis_path = self.store.root / "host_impact_results.jsonl"
             saved = self._read_jsonl(hypothesis_path)
-            fingerprint = record["workspace_fingerprint"]
+            fingerprint = _json_hash([
+                record["workspace_fingerprint"], record["change_request_hash"],
+            ])
             for hypothesis in submission.hypotheses:
                 one = HostImpactSubmission(change_id=change_id, hypotheses=[hypothesis])
                 verified = self._verified_impacts(one, candidates, atoms)[0]
@@ -397,8 +410,6 @@ class HostWorkflow:
                     impacts.append(advice[key])
                 else:
                     pending.append({"artifact_id": path.node_id, "atom_id": path.atom_id})
-            change_path = Path(record["change_path"])
-            body = change_path.read_text(encoding="utf-8") if change_path.is_file() else ""
             change = ChangeRequest(
                 change_id=change_id,
                 title=record["title"],

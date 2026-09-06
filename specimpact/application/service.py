@@ -526,6 +526,11 @@ def report_data(project: Project) -> dict[str, Any]:
     if host_coverage.exists():
         report["host_submission_coverage"] = json.loads(host_coverage.read_text(encoding="utf-8"))
     evidence = {item.evidence_id: item for item in store.read("evidence", Evidence)}
+    if report["specification_analysis"]:
+        from specimpact.semantic.repository import AnalysisRepository
+
+        snapshot, _, _ = AnalysisRepository(store.root).load(report["run_id"])
+        evidence = {item.evidence_id: item for item in snapshot.evidence}
     for group in ("must_review", "should_review", "may_review", "hidden"):
         for impact in report.get(group, []):
             impact["evidence"] = [

@@ -22,7 +22,7 @@
 
 ## 解決する課題
 
-仕様・制約・変更操作を中心とした再設計を進めています。
+仕様・制約・変更操作を中心とした分析カーネルを実装しました。
 [方針](docs/redesign_direction_ja.md)と[実装契約・段階別合格基準](docs/specs/specification-kernel.md)
 を公開し、段階ごとに既存互換性と検証結果を記録します。
 原典版付きの仕様主張と、文字・バイトを区別する変更モデルを追加しました。
@@ -32,6 +32,8 @@
 CLI・MCP・Admin Consoleの分析結果には共通カーネルの結果が添付されます。
 `specimpact analysis show`で仕様・変更操作・検証内訳・Coverageを確認し、
 `specimpact analysis replay`で保存時点の入力から再検証できます。
+[利用例と制約](docs/specification_kernel.md)・[原典からの動作例](examples/specification_kernel/README.md)
+も参照してください。型付き比較の初期範囲は最大長で、その他の変更は既存のレビュー支援を維持します。
 
 SIerの設計書では、同じ項目が画面、入力チェック、API、DB、外部IF、テスト仕様へ分散し、
 日本語名・camelCase・snake_caseも混在します。単純な全文検索では「見つかった箇所」は分かっても、

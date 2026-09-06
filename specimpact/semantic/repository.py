@@ -9,10 +9,10 @@ from uuid import uuid4
 
 from pydantic import Field
 
-from specimpact.application.security import ProjectWriteLock
 from specimpact.dirty_excel.models import DirtySheet
 from specimpact.extraction import AliasCatalog
 from specimpact.impact_management.change_atoms import ChangeAtom
+from specimpact.locking import ProjectWriteLock
 from specimpact.models import Artifact, Document, Entity, Evidence, Relation, utc_now
 from specimpact.semantic.extraction import operation_from_atom
 from specimpact.semantic.kernel import (

@@ -1,5 +1,17 @@
 # Phase Status
 
+## Specification kernel phase 5
+
+Status: complete (engineering delivery); independent enterprise/user evaluation remains open
+
+Golden source-to-analysis walkthrough, user/architecture/privacy/migration documentation,
+distribution checks and Git delivery. Independent enterprise/user-time evaluation remains open.
+Review: `docs/reviews/kernel-phase-5.md`.
+
+Final checks: pytest 292 passed / 1 skipped; ruff and compileall passed; release-check 21 cases
+passed; frontend TypeScript/build passed; wheel build and installed-wheel CLI walkthrough passed.
+The typed rule scope is maximum length. No general enterprise accuracy or review-time claim.
+
 ## Specification kernel phase 4
 
 Status: complete; pytest 288 passed / 1 skipped, ruff passed
